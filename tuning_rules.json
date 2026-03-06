@@ -1,1 +1,28 @@
-
+{
+  "FOLPD": {
+    "1": {
+      "method_name": "Ziegler-Nichols (Process Reaction)",
+      "objective": "Quarter decay ratio",
+      "Kc_formula": "(0.9 * T_m) / (K_m * tau_m)",
+      "Ti_formula": "3.33 * tau_m",
+      "max_ratio": 1.0,
+      "warning": "Aggressive response expected. Requires tau_m / T_m <= 1.0."
+    },
+    "2": {
+      "method_name": "Cohen-Coon",
+      "objective": "Quarter decay ratio",
+      "Kc_formula": "(1 / K_m) * (0.9 * (T_m / tau_m) + 0.083)",
+      "Ti_formula": "T_m * (3.33 * (tau_m / T_m) + 0.3 * (tau_m / T_m)**2) / (1 + 2.22 * (tau_m / T_m))",
+      "max_ratio": 2.0,
+      "warning": "Optimized for fast response to load changes."
+    },
+    "3": {
+      "method_name": "ITAE (Murrill - Regulator Tuning)",
+      "objective": "Minimum Performance Index",
+      "Kc_formula": "(0.859 / K_m) * ((T_m / tau_m) ** 0.977)",
+      "Ti_formula": "(T_m / 0.674) * ((tau_m / T_m) ** 0.680)",
+      "max_ratio": 1.0,
+      "warning": "Optimized to minimize lingering errors. Valid for 0.1 <= tau_m / T_m <= 1.0."
+    }
+  }
+}
