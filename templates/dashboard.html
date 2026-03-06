@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced Boiler Control | Digital Consultant</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <style>
+        body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f0f4f8; display: flex; height: 100vh; color: #333; }
+        
+        .sidebar { width: 280px; background: white; border-right: 1px solid #e1e4e8; padding: 20px; display: flex; flex-direction: column; }
+        .logo { display: flex; align-items: center; gap: 10px; font-weight: bold; font-size: 16px; margin-bottom: 30px; }
+        .badge { background: #e0f2fe; color: #0284c7; padding: 3px 8px; border-radius: 12px; font-size: 12px; }
+        .nav-item { padding: 15px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; margin-bottom: 15px; cursor: pointer; }
+        .nav-item.active { border-left: 4px solid #16a34a; }
+        .status-box { margin-top: auto; padding: 15px; border-radius: 8px; border: 1px solid #e1e4e8; font-size: 14px; }
+        .status-ok { color: #16a34a; font-weight: bold; display: flex; justify-content: space-between; align-items: center; }
+
+        .main-content { flex-grow: 1; padding: 30px; overflow-y: auto; }
+        .header-title { font-size: 24px; font-weight: bold; margin-bottom: 20px; }
+        
+        .grid-container { display: grid; grid-template-columns: 300px 1fr; gap: 20px; }
+        
+        .panel { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.02); border: 1px solid #e1e4e8; }
+        .panel-title { font-size: 14px; font-weight: bold; color: #64748b; margin-bottom: 15px; display: flex; align-items: center; gap: 8px; }
+        
+        .input-group { margin-bottom: 15px; }
+        .input-group label { display: block; font-size: 13px; color: #475569; margin-bottom: 5px; }
+        .input-group input { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; }
+        
+        button { width: 100%; padding: 12px; background: #0284c7; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; margin-top: 10px; }
+        button:hover { background: #0369a1; }
+
+        .tabs { display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 1px solid #e1e4e8; padding-bottom: 10px; }
+        .tab { padding: 8px 16px; cursor: pointer; font-size: 14px; color: #64748b; border-radius: 20px; }
+        .tab.active { background: #f1f5f9; color: #0f172a; font-weight: bold; }
+        
+        .output-data { font-family: monospace; font-size: 14px; line-height: 1.5; background: #f8fafc; padding: 15px; border-radius: 6px; }
+        .feedback-btn { background: #ef4444; margin-top: 10px; }
+    </style>
+</head>
+<body>
+
+    <div class="sidebar">
+        <div class="logo">
+            <div style="width:24px; height:24px; background:#0ea5e9; border-radius:4px;"></div>
+            DIGITAL CONSULTANT <span class="badge">DCS</span>
+        </div>
+        <div class="nav-item active">
+            <strong>Design & Implementation</strong><br>
+            <span style="font-size:12px; color:#64748b;">Greenfield architecture and compliance.</span>
+        </div>
+        <div class="status-box">
+            <div class="status-ok">Online - AI Core <span>OK</span></div>
+            <p style="font-size: 12px; color: #64748b; margin-top: 10px;">AI Safety Note: Always validate generated parameters against OEM constraints.</p>
+        </div>
+    </div>
+
+    <div class="main-content">
+        <div class="header-title">Installation Consultant — Controls Blueprint</div>
+        
+        <div class="grid-container">
+            <div class="panel">
+                <div class="panel-title">✏️ Process Inputs (FOLPD)</div>
+                <div class="input-group">
+                    <label>Process Gain (Km) - Expressions allowed</label>
+                    <input type="text" id="km" placeholder="e.g. 1.5 or 3/2">
+                </div>
+                <div class="input-group">
+                    <label>Time Constant (Tm)</label>
+                    <input type="text" id="tm" placeholder="10">
+                </div>
+                <div class="input-group">
+                    <label>Dead Time (Taum)</label>
+                    <input type="text" id="taum" placeholder="2">
+                </div>
+                <button onclick="runAIAnalysis()">Generate Blueprint & Tuning</button>
+            </div>
+
+            <div class="panel">
+                <div class="tabs">
+                    <div class="tab active" id="tab-tuning" onclick="switchTab('tuning')">Control Strategy</div>
+                    <div class="tab" id="tab-pid" onclick="switchTab('pid')">P&ID Blueprint</div>
+                </div>
+
+                <div id="tuning-view">
+                    <div class="output-data" id="ai-output">
+                        System ready. Awaiting parameters to query O'Dwyer database.
+                    </div>
+                </div>
+
+                <div id="pid-view" style="display:none;">
+                    <div class="mermaid">
+                        flowchart LR
+                        A[Boiler Furnace] --> B[Steam Drum]
+                        B --> C[Superheater]
+                        F((Steam Flow FT)) --> G[Feedwater Controller]
+                        H((Drum Level LT)) --> G
+                        G --> J[Feedwater Valve]
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        mermaid.initialize({ startOnLoad: true });
+
+        function switchTab(tabId) {
+            document.getElementById('tuning-view').style.display = tabId === 'tuning' ? 'block' : 'none';
+            document.getElementById('pid-view').style.display = tabId === 'pid' ? 'block' : 'none';
+            
+            document.getElementById('tab-tuning').classList.toggle('active', tabId === 'tuning');
+            document.getElementById('tab-pid').classList.toggle('active', tabId === 'pid');
+        }
+
+        async function runAIAnalysis() {
+            const km = document.getElementById('km').value;
+            const tm = document.getElementById('tm').value;
+            const taum = document.getElementById('taum').value;
+            const output = document.getElementById('ai-output');
+
+            if (!km || !tm || !taum) {
+                output.innerHTML = `<span style="color:#ef4444">Error: Please provide all process parameters.</span>`;
+                return;
+            }
+
+            output.innerHTML = "Processing mathematical expressions and traversing database...";
+
+            try {
+                const response = await fetch('/api/analyze', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ km, tm, taum })
+                });
+                
+                const data = await response.json();
+                
+                if(data.status === "error") {
+                    output.innerHTML = `<span style="color:#ef4444">${data.message}</span>`;
+                    return;
+                }
+
+                let html = `<strong>Controllability Ratio (L/Tau):</strong> ${data.ratio}<br><br>`;
+                html += `<strong>Applicable Tuning Rules:</strong><br><br>`;
+                
+                data.rules.forEach(rule => {
+                    html += `> <strong>${rule.name}</strong><br>`;
+                    html += `Kc: ${rule.kc} | Ti: ${rule.ti}<br>`;
+                    html += `Note: ${rule.advantage}<br>`;
+                    html += `<button class="feedback-btn" onclick="reportFailure('${rule.name}', ${data.ratio})">Report Instability (Teach AI)</button><br><br>`;
+                });
+
+                output.innerHTML = html;
+
+            } catch (err) {
+                output.innerHTML = `<span style="color:#ef4444">Connection to AI core failed.</span>`;
+            }
+        }
+
+        async function reportFailure(ruleName, ratio) {
+            try {
+                await fetch('/api/learn', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ rule_name: ruleName, ratio: ratio })
+                });
+                alert("Feedback recorded in AI memory database. Priority updated.");
+            } catch (err) {
+                alert("Error recording feedback to memory.");
+            }
+        }
+    </script>
+</body>
+</html>
