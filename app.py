@@ -1,60 +1,73 @@
 from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
 import json
-import math
+import sqlite3
+import sympy as sp
 
 app = Flask(__name__)
 CORS(app)
 
-# Load the exact O'Dwyer symbolic rules database
+def init_memory():
+    conn = sqlite3.connect('ai_memory.db')
+    c = conn.cursor()
+    c.execute('''CREATE TABLE IF NOT EXISTS feedback 
+                 (rule_name TEXT, ratio REAL, status TEXT)''')
+    conn.commit()
+    conn.close()
+
+init_memory()
+
 with open('tuning_rules.json', 'r') as file:
     RULES_DB = json.load(file)
 
 @app.route('/')
 def home():
-    # Serve the frontend UI
-    return render_template('index.html')
+    # Notice this now points to dashboard.html
+    return render_template('dashboard.html')
 
-@app.route('/api/calculate', methods=['POST'])
-def calculate_tuning():
+@app.route('/api/analyze', methods=['POST'])
+def analyze_process():
     data = request.json
-    
     try:
-        km = float(data.get('km'))
-        tm = float(data.get('tm'))
-        taum = float(data.get('taum'))
-        objective = str(data.get('objective')) 
+        km = float(sp.sympify(data.get('km')))
+        tm = float(sp.sympify(data.get('tm')))
+        taum = float(sp.sympify(data.get('taum')))
         
-        # 1. Map to the correct rule in the dataset
-        rule = RULES_DB["FOLPD"].get(objective)
-        if not rule:
-            return jsonify({"reply": "Error: Objective not found in the database."})
-
-        # 2. Check the Controllability Ratio (Physics Guardrail)
         ratio = taum / tm
-        if ratio > rule["max_ratio"]:
-            return jsonify({
-                "reply": f"⚠️ **CRITICAL WARNING:** Your dead-time ratio (L/Tau = {round(ratio,2)}) exceeds the safe mathematical limit for {rule['method_name']}. The standard math will fail here."
-            })
+        valid_rules = []
 
-        # 3. Deterministic Symbolic Execution
-        local_vars = {"K_m": km, "T_m": tm, "tau_m": taum}
-        kc = eval(rule["Kc_formula"], {"__builtins__": None, "math": math}, local_vars)
-        ti = eval(rule["Ti_formula"], {"__builtins__": None, "math": math}, local_vars)
-        
-        # 4. Format the final output
-        response = (
-            f"✅ **Tuning Complete**\n\n"
-            f"**Method Selected:** {rule['method_name']}\n"
-            f"**Objective:** {rule['objective']}\n"
-            f"• **Proportional Gain (Kc):** {round(kc, 3)}\n"
-            f"• **Integral Time (Ti):** {round(ti, 3)} seconds\n\n"
-            f"💡 *Consultant Note:* {rule['warning']}"
-        )
-        return jsonify({"reply": response})
+        for key, rule in RULES_DB["FOLPD"].items():
+            if ratio <= rule["max_ratio"]:
+                local_vars = {"K_m": km, "T_m": tm, "tau_m": taum}
+                kc = eval(rule["Kc_formula"], {"__builtins__": None}, local_vars)
+                ti = eval(rule["Ti_formula"], {"__builtins__": None}, local_vars)
+                
+                valid_rules.append({
+                    "name": rule["method_name"],
+                    "kc": round(kc, 3),
+                    "ti": round(ti, 3),
+                    "advantage": rule["advantage"]
+                })
+
+        return jsonify({
+            "status": "success",
+            "ratio": round(ratio, 3),
+            "rules": valid_rules
+        })
 
     except Exception as e:
-        return jsonify({"reply": f"Mathematical mapping error: {str(e)}"})
+        return jsonify({"status": "error", "message": f"Parsing error: {str(e)}"})
+
+@app.route('/api/learn', methods=['POST'])
+def learn_from_mistake():
+    data = request.json
+    conn = sqlite3.connect('ai_memory.db')
+    c = conn.cursor()
+    c.execute("INSERT INTO feedback VALUES (?, ?, ?)", 
+              (data['rule_name'], data['ratio'], 'FAILED'))
+    conn.commit()
+    conn.close()
+    return jsonify({"message": "Memory updated. I will adjust future recommendations."})
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
