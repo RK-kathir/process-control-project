@@ -1,28 +1,70 @@
 {
   "FOLPD": {
-    "1": {
-      "method_name": "Ziegler-Nichols (Process Reaction)",
-      "objective": "Quarter decay ratio",
-      "Kc_formula": "(0.9 * T_m) / (K_m * tau_m)",
-      "Ti_formula": "3.33 * tau_m",
+    "zn_pi": {
+      "name": "Ziegler and Nichols [8] - Process reaction (Page 23)",
+      "controller": "PI",
+      "kc_eq": "(0.90 * T_m) / (K_m * tau_m)",
+      "ti_eq": "3.33 * tau_m",
+      "td_eq": "0.0",
+      "min_ratio": 0.1,
       "max_ratio": 1.0,
-      "warning": "Aggressive response expected. Requires tau_m / T_m <= 1.0."
+      "advantages": "Simple to calculate, ideal for heavily lag-dominant processes. Provides highly aggressive setpoint tracking.",
+      "disadvantages": "Designed for a quarter-decay ratio, inherently causing ~25% overshoot. Highly unstable if the dead-time ratio approaches 1.0."
     },
-    "2": {
-      "method_name": "Cohen-Coon",
-      "objective": "Quarter decay ratio",
-      "Kc_formula": "(1 / K_m) * (0.9 * (T_m / tau_m) + 0.083)",
-      "Ti_formula": "T_m * (3.33 * (tau_m / T_m) + 0.3 * (tau_m / T_m)**2) / (1 + 2.22 * (tau_m / T_m))",
+    "cc_pi": {
+      "name": "Cohen and Coon [11] - process reaction (Page 23)",
+      "controller": "PI",
+      "kc_eq": "(1.0 / K_m) * (0.9 * (T_m / tau_m) + 0.083)",
+      "ti_eq": "T_m * (3.33 * (tau_m / T_m) + 0.3 * (tau_m / T_m)**2) / (1.0 + 2.22 * (tau_m / T_m))",
+      "td_eq": "0.0",
+      "min_ratio": 0.1,
       "max_ratio": 2.0,
-      "warning": "Optimized for fast response to load changes."
+      "advantages": "Incorporates dead time directly into the mathematical structure. Better load rejection for processes where delay is significant.",
+      "disadvantages": "High proportional gain leads to aggressive valve action and unavoidable mechanical oscillation."
     },
-    "3": {
-      "method_name": "ITAE (Murrill - Regulator Tuning)",
-      "objective": "Minimum Performance Index",
-      "Kc_formula": "(0.859 / K_m) * ((T_m / tau_m) ** 0.977)",
-      "Ti_formula": "(T_m / 0.674) * ((tau_m / T_m) ** 0.680)",
+    "chien_reg_0": {
+      "name": "Chien et al. [10] - regulator (Page 23)",
+      "controller": "PI",
+      "kc_eq": "(0.60 * T_m) / (K_m * tau_m)",
+      "ti_eq": "4.0 * tau_m",
+      "td_eq": "0.0",
+      "min_ratio": 0.11,
       "max_ratio": 1.0,
-      "warning": "Optimized to minimize lingering errors. Valid for 0.1 <= tau_m / T_m <= 1.0."
+      "advantages": "Optimized specifically to reject load disturbances without causing the process to overshoot the setpoint (0% overshoot).",
+      "disadvantages": "The conservative mathematics result in a slightly more sluggish recovery time compared to heuristic methods."
+    },
+    "itae_reg": {
+      "name": "Minimum ITAE - Murrill [13] (Page 25)",
+      "controller": "PI",
+      "kc_eq": "(0.859 / K_m) * ((T_m / tau_m) ** 0.977)",
+      "ti_eq": "(T_m / 0.674) * ((tau_m / T_m) ** 0.680)",
+      "td_eq": "0.0",
+      "min_ratio": 0.1,
+      "max_ratio": 1.0,
+      "advantages": "Mathematically minimizes the Integral of Time-weighted Absolute Error for load changes. Eliminates slow, rolling oscillations.",
+      "disadvantages": "Complex exponential math requires precise modeling. Very sensitive to inaccuracies in the initial process parameters."
+    },
+    "zn_pid": {
+      "name": "Ziegler and Nichols [8] - Process reaction (Page 69)",
+      "controller": "PID",
+      "kc_eq": "(1.20 * T_m) / (K_m * tau_m)",
+      "ti_eq": "2.0 * tau_m",
+      "td_eq": "0.5 * tau_m",
+      "min_ratio": 0.1,
+      "max_ratio": 1.0,
+      "advantages": "Fastest heuristic response available. Uses derivative action to dampen the oscillations caused by aggressive proportional settings.",
+      "disadvantages": "Highly sensitive to sensor noise. High derivative gain can cause severe valve wear and chatter. Still prone to overshoot."
+    },
+    "cc_pid": {
+      "name": "Cohen and Coon [11] - process reaction (Page 69)",
+      "controller": "PID",
+      "kc_eq": "(1.0 / K_m) * (1.35 * (T_m / tau_m) + 0.25)",
+      "ti_eq": "T_m * (2.5 * (tau_m / T_m) + 0.46 * (tau_m / T_m)**2) / (1.0 + 0.61 * (tau_m / T_m))",
+      "td_eq": "(0.37 * tau_m) / (1.0 + 0.2 * (tau_m / T_m))",
+      "min_ratio": 0.1,
+      "max_ratio": 2.0,
+      "advantages": "Excellent load rejection for processes with significant delay, combining dead-time logic with predictive derivative action.",
+      "disadvantages": "Generates a very active control signal. Can lead to aggressive valve action and wear on mechanical components."
     }
   }
 }
