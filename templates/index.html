@@ -1,106 +1,31 @@
 <!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Process Control Tuner</title>
-    <style>
-        body { font-family: Arial, sans-serif; background-color: #f3f4f6; margin: 0; padding: 20px; display: flex; justify-content: center; }
-        .chat-container { width: 100%; max-width: 600px; background: white; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); overflow: hidden; display: flex; flex-direction: column; height: 80vh; }
-        .chat-box { flex: 1; padding: 20px; overflow-y: auto; border-bottom: 1px solid #e5e7eb; }
-        .message { margin-bottom: 15px; padding: 10px 15px; border-radius: 8px; max-width: 80%; line-height: 1.4; }
-        .bot-msg { background: #e0f2fe; align-self: flex-start; }
-        .user-msg { background: #3b82f6; color: white; align-self: flex-end; margin-left: auto; }
-        .input-area { display: flex; padding: 10px; background: #f9fafb; }
-        input { flex: 1; padding: 10px; border: 1px solid #d1d5db; border-radius: 4px; outline: none; }
-        button { padding: 10px 20px; background: #3b82f6; color: white; border: none; border-radius: 4px; margin-left: 10px; cursor: pointer; }
-        button:hover { background: #2563eb; }
-    </style>
-</head>
-<body>
-
-<div class="chat-container">
-    <div class="chat-box" id="chatBox"></div>
-    <div class="input-area">
-        <input type="text" id="userInput" placeholder="Describe your process problem or enter data..." onkeypress="handleEnter(event)">
-        <button onclick="processInput()">Send</button>
+<html>
+<head><title>AI Tuner</title></head>
+<body style="font-family: Arial; padding: 20px; background: #f4f4f4;">
+    <div style="max-width: 600px; margin: auto; background: white; padding: 20px; border-radius: 8px;">
+        <h2>Process Control AI</h2>
+        <input type="text" id="req" placeholder="E.g., I want a smooth response..." style="width: 100%; padding: 10px; margin-bottom: 10px;"><br>
+        <input type="number" id="km" placeholder="Km" style="width: 30%; padding: 10px;">
+        <input type="number" id="tm" placeholder="Tm" style="width: 30%; padding: 10px;">
+        <input type="number" id="taum" placeholder="Tau_m" style="width: 30%; padding: 10px;">
+        <button onclick="analyze()" style="padding: 10px 20px; margin-top: 10px; background: #007bff; color: white; border: none;">Analyze</button>
+        <div id="output" style="margin-top: 20px; line-height: 1.5;"></div>
     </div>
-</div>
-
-<script>
-    const chatBox = document.getElementById('chatBox');
-    const userInput = document.getElementById('userInput');
-    
-    let state = 'ASK_INTENT';
-    let processData = { km: null, tm: null, taum: null };
-    let selectedRuleId = null;
-
-    function addMsg(text, sender) {
-        const div = document.createElement('div');
-        div.className = `message ${sender}-msg`;
-        div.innerHTML = text;
-        chatBox.appendChild(div);
-        chatBox.scrollTop = chatBox.scrollHeight;
-    }
-
-    // Initial Greeting
-    setTimeout(() => {
-        addMsg("Hello! Describe how you want your process to behave (e.g., 'I want a really fast response' or 'I need to reject a load disturbance safely').", 'bot');
-    }, 500);
-
-    function handleEnter(e) { if (e.key === 'Enter') processInput(); }
-
-    async function processInput() {
-        const text = userInput.value.trim();
-        if (!text) return;
-        
-        addMsg(text, 'user');
-        userInput.value = '';
-
-        if (state === 'ASK_INTENT') {
-            addMsg("<i>Analyzing your request with AI...</i>", 'bot');
-            const res = await fetch('/api/chat', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ message: text })
-            });
-            const data = await res.json();
-            
-            selectedRuleId = data.rule_id;
-            addMsg(`<b>AI Diagnosis:</b><br><span style="color:#059669">${data.explanation}</span><br><br><b>Selected Rule:</b> ${data.rule_name}<br><br>${data.next_step}`, 'bot');
-            state = 'ASK_KM';
-        } 
-        else if (state === 'ASK_KM') {
-            processData.km = text;
-            addMsg(`Recorded K_m = ${text}. Now, enter the Time Constant (T_m):`, 'bot');
-            state = 'ASK_TM';
-        } 
-        else if (state === 'ASK_TM') {
-            processData.tm = text;
-            addMsg(`Recorded T_m = ${text}. Finally, enter the Dead Time (tau_m):`, 'bot');
-            state = 'ASK_TAUM';
-        } 
-        else if (state === 'ASK_TAUM') {
-            processData.taum = text;
-            addMsg(`<i>Calculating parameters...</i>`, 'bot');
-            
-            const res = await fetch('/api/calculate', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ rule_id: selectedRuleId, ...processData })
+    <script>
+        async function analyze() {
+            const data = {
+                text: document.getElementById('req').value,
+                km: document.getElementById('km').value,
+                tm: document.getElementById('tm').value,
+                taum: document.getElementById('taum').value
+            };
+            document.getElementById('output').innerHTML = "<i>AI is thinking...</i>";
+            const res = await fetch('/api/analyze', {
+                method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data)
             });
             const result = await res.json();
-            
-            addMsg(`<b>Results for ${result.rule_name}:</b><br>Proportional Gain (Kc): <b>${result.kc}</b><br>Integral Time (Ti): <b>${result.ti}</b><br><br><i>Type anything to start a new calculation.</i>`, 'bot');
-            state = 'RESET';
+            document.getElementById('output').innerHTML = result.explanation;
         }
-        else if (state === 'RESET') {
-            state = 'ASK_INTENT';
-            processData = { km: null, tm: null, taum: null };
-            addMsg("Describe your next process control goal:", 'bot');
-        }
-    }
-</script>
-
+    </script>
 </body>
 </html>
