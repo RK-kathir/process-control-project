@@ -1,54 +1,46 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Process Expert Pro</title>
+    <title>Process AI Expert</title>
     <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
     <style>
-        body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; margin: 0; display: flex; justify-content: center; }
-        #container { width: 100%; max-width: 800px; height: 95vh; background: white; margin: 10px; border-radius: 12px; display: flex; flex-direction: column; box-shadow: 0 5px 20px rgba(0,0,0,0.1); }
-        #chat { flex: 1; overflow-y: auto; padding: 20px; }
-        .msg { margin-bottom: 20px; padding: 15px; border-radius: 10px; line-height: 1.6; }
-        .bot { background: #f8f9fa; border: 1px solid #dee2e6; width: 90%; }
+        body { font-family: 'Segoe UI', sans-serif; background: #f4f7f9; margin: 0; display: flex; justify-content: center; }
+        #app { width: 100%; max-width: 650px; height: 95vh; background: white; margin: 15px; border-radius: 12px; display: flex; flex-direction: column; box-shadow: 0 8px 30px rgba(0,0,0,0.1); }
+        #chat { flex: 1; overflow-y: auto; padding: 25px; scroll-behavior: smooth; }
+        .msg { margin-bottom: 20px; padding: 15px; border-radius: 15px; line-height: 1.6; max-width: 85%; }
+        .bot { background: #f0f2f5; align-self: flex-start; border: 1px solid #e0e0e0; color: #333; }
         .user { background: #007bff; color: white; align-self: flex-end; margin-left: auto; }
-        #chart-area { width: 100%; height: 250px; margin-top: 10px; border-radius: 8px; overflow: hidden; }
         #input-area { padding: 20px; border-top: 1px solid #eee; display: flex; gap: 10px; }
-        input { flex: 1; padding: 12px; border: 1px solid #ddd; border-radius: 25px; outline: none; }
-        button { background: #007bff; color: white; border: none; padding: 10px 25px; border-radius: 25px; cursor: pointer; }
-        table { margin-top: 10px; border-top: 1px solid #eee; }
-        th, td { text-align: left; padding: 5px; border-bottom: 1px solid #f0f0f0; }
+        input { flex: 1; padding: 12px 20px; border: 1px solid #ddd; border-radius: 30px; outline: none; font-size: 15px; }
+        button { background: #007bff; color: white; border: none; padding: 10px 25px; border-radius: 30px; cursor: pointer; font-weight: bold; }
     </style>
 </head>
 <body>
-    <div id="container">
-        <div id="chat" id="messages">
-            <div class="msg bot"><b>Welcome to Process Expert Pro</b><br>Give me your Km, Tm, and Tau. <i>New: Paste raw data like [0, 1.2, 2.5, 3.8] to identify model!</i></div>
+    <div id="app">
+        <div id="chat">
+            <div class="msg bot">Hello! Give me your <b>Km, Tm, and Tau</b>. <br><br><i>Tip: You can also paste data like [0, 0.5, 1.2, 3.1, 5.0] to let me identify the model!</i></div>
         </div>
         <div id="input-area">
-            <input type="text" id="userInput" placeholder="Type here..." onkeypress="if(event.key==='Enter') send()">
+            <input type="text" id="userIn" placeholder="Type here..." onkeypress="if(event.key==='Enter') send()">
             <button onclick="send()">Send</button>
         </div>
     </div>
     <script>
         async function send() {
-            const input = document.getElementById('userInput');
+            const input = document.getElementById('userIn');
             const text = input.value; if(!text) return;
             addMsg(text, 'user'); input.value = '';
-            
             const res = await fetch('/api/chat', {
                 method: 'POST', headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({text: text})
             });
             const data = await res.json();
-            
-            let botMsg = addMsg(data.response, 'bot');
-            
+            const botDiv = addMsg(data.response, 'bot');
             if(data.chart) {
                 const chartDiv = document.createElement('div');
-                chartDiv.id = 'chart-' + Date.now();
-                chartDiv.style.height = '300px';
-                botMsg.appendChild(chartDiv);
-                const plotData = JSON.parse(data.chart);
-                Plotly.newPlot(chartDiv.id, plotData.data, plotData.layout);
+                chartDiv.id = 'plot-' + Date.now();
+                botDiv.appendChild(chartDiv);
+                Plotly.newPlot(chartDiv.id, JSON.parse(data.chart).data, JSON.parse(data.chart).layout);
             }
         }
         function addMsg(t, s) {
