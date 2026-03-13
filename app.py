@@ -1,18 +1,60 @@
 from flask import Flask, request, jsonify, render_template
-from flask_cors import CORS
-import json, pickle, re
+import json, pickle, re, numpy as np
+from scipy import signal
+import plotly.graph_objects as go
+import plotly.utils
 
 app = Flask(__name__)
-CORS(app)
 
-# Load AI and Rules
 with open('tuning_rules.json', 'r') as f:
     RULES_DB = json.load(f)
 with open('ai_brain.pkl', 'rb') as f:
     ai_model = pickle.load(f)
 
-# Memory for the current session
 mem = {"km": None, "tm": None, "taum": None}
+
+# --- FEATURE 1: Step Response Simulator ---
+def simulate_step(km, tm, taum, kc, ti):
+    t = np.linspace(0, (tm + taum) * 5, 500)
+    dt = t[1] - t[0]
+    pv = np.zeros_like(t)
+    error_sum = 0
+    delay_steps = int(taum / dt)
+    mv_history = np.zeros_like(t)
+    
+    for i in range(1, len(t)):
+        error = 1.0 - pv[i-1] # Step input = 1.0
+        error_sum += error * dt
+        mv = kc * (error + (1/ti) * error_sum)
+        mv = max(0, min(100, mv)) # Valve limits 0-100%
+        mv_history[i] = mv
+        
+        # Apply process with delay
+        delayed_idx = i - delay_steps
+        delayed_mv = mv_history[delayed_idx] if delayed_idx >= 0 else 0
+        
+        # FOPDT Differential Equation: Tm*dpv/dt + pv = Km*MV(t-L)
+        dpv = (km * delayed_mv - pv[i-1]) / tm
+        pv[i] = pv[i-1] + dpv * dt
+        
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=t, y=pv, name="Process Value (PV)", line=dict(color='#007bff', width=3)))
+    fig.add_hline(y=1.0, line_dash="dash", line_color="red", annotation_text="Setpoint")
+    fig.update_layout(title="Closed-Loop Step Response", xaxis_title="Time (s)", yaxis_title="Output", margin=dict(l=20, r=20, t=40, b=20))
+    return json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
+
+# --- FEATURE 3: Model Identification (Tangent Method) ---
+def identify_fopdt(times, values):
+    try:
+        km = max(values) - min(values)
+        # Find 28.3% and 63.2% points (Smith's Method)
+        t28 = times[np.where(values >= 0.283 * km)[0][0]]
+        t63 = times[np.where(values >= 0.632 * km)[0][0]]
+        tm = 1.5 * (t63 - t28)
+        taum = t63 - tm
+        return round(km, 2), round(tm, 2), round(max(0.1, taum), 2)
+    except:
+        return None
 
 def extract_params(text):
     found = {"km": None, "tm": None, "taum": None}
@@ -25,56 +67,64 @@ def extract_params(text):
     return found
 
 @app.route('/')
-def home(): 
-    return render_template('index.html')
-
-@app.route('/api/reset', methods=['POST'])
-def reset():
-    global mem
-    mem = {"km": None, "tm": None, "taum": None}
-    return jsonify({"status": "success"})
+def home(): return render_template('index.html')
 
 @app.route('/api/chat', methods=['POST'])
 def chat():
     global mem
     text = request.json.get('text', '').lower()
     
-    # 1. Update memory
+    # Check for raw data (Feature 3)
+    raw_data = re.findall(r"\[(\d.*?)\]", text) # Looks for [0,1,2...]
+    if raw_data:
+        vals = [float(x) for x in raw_data[0].split(',')]
+        times = list(range(len(vals)))
+        res = identify_fopdt(times, vals)
+        if res:
+            mem["km"], mem["tm"], mem["taum"] = res
+            return jsonify({"response": f"🔎 <b>Model Identified!</b> I've estimated <b>Km={res[0]}, Tm={res[1]}, Tau={res[2]}</b> from your data. What style of response do you need?"})
+
     updates = extract_params(text)
     for key in updates:
         if updates[key] is not None: mem[key] = updates[key]
 
-    # 2. Extract Intent
-    intent_val, intent_str = 1, "Balanced"
-    if any(w in text for w in ["fast", "aggressive", "quick", "ise"]): 
-        intent_val, intent_str = 0, "Fast & Responsive"
-    elif any(w in text for w in ["smooth", "stable", "flat", "itae"]): 
-        intent_val, intent_str = 2, "Smooth & Stable"
-
-    # 3. Decision Logic
     if all(mem[v] is not None for v in ["km", "tm", "taum"]):
         ratio = round(mem["taum"] / mem["tm"], 3)
-        rule_key = ai_model.predict([[mem["km"], mem["tm"], mem["taum"], intent_val]])[0]
+        intent = 0 if any(x in text for x in ["fast", "agg"]) else 2 if any(x in text for x in ["smooth", "stab"]) else 1
+        rule_key = ai_model.predict([[mem["km"], mem["tm"], mem["taum"], intent]])[0]
         
         if rule_key == "uncontrollable":
-            return jsonify({"response": f"⚠️ <b>Caution:</b> Your Delay-to-Lag ratio is <b>{ratio}</b>. This process is very difficult to control. Standard rules might fail here."})
+            return jsonify({"response": "⚠️ Ratio too high (>2.0). Process is unstable for PI."})
+
+        # --- FEATURE 4: Comparison Mode ---
+        comparison = []
+        for k, v in RULES_DB.items():
+            try:
+                ckc = round(eval(v["kc_math"], {"km": mem["km"], "tm": mem["tm"], "taum": mem["taum"]}), 2)
+                cti = round(eval(v["ti_math"], {"km": mem["km"], "tm": mem["tm"], "taum": mem["taum"]}), 2)
+                comparison.append({"name": v["name"], "kc": ckc, "ti": cti})
+            except: continue
 
         r = RULES_DB[rule_key]
         kc = round(eval(r["kc_math"], {"km": mem["km"], "tm": mem["tm"], "taum": mem["taum"]}), 3)
         ti = round(eval(r["ti_math"], {"km": mem["km"], "tm": mem["tm"], "taum": mem["taum"]}), 3)
         
-        # Neat, Symbol-Free Response
-        resp = f"✅ <b>Calculations Complete!</b><br><br>"
-        resp += f"For your process with <b>Gain {mem['km']}</b>, <b>Lag {mem['tm']}</b>, and <b>Delay {mem['taum']}</b>:<br><br>"
-        resp += f"<b>Recommended Rule:</b> {r['name']}<br>"
-        resp += f"<b>Proportional Gain (Kc):</b> {kc}<br>"
-        resp += f"<b>Integral Time (Ti):</b> {ti} seconds<br><br>"
-        resp += f"🌟 <b>Next Step:</b> Apply these values to your controller. If the response is too 'bouncy', try asking me for a <b>'smoother'</b> result!"
+        # --- FEATURE 2: Stability Analysis ---
+        stability = "Stable" if ratio < 0.5 else "Aggressive" if ratio < 1.0 else "Critical"
         
-        return jsonify({"response": resp})
-    
-    missing = [k.upper() for k, v in mem.items() if v is None]
-    return jsonify({"response": f"I've updated the model with what you provided. To finish, I still need: <b>{', '.join(missing)}</b>."})
+        chart_json = simulate_step(mem["km"], mem["tm"], mem["taum"], kc, ti)
 
-if __name__ == '__main__': 
-    app.run(host='0.0.0.0', port=5000)
+        resp = f"✅ <b>Best Choice: {r['name']}</b><br>"
+        resp += f"Settings: <b>Kc: {kc}, Ti: {ti}s</b><br>"
+        resp += f"Stability Status: <b style='color:{'green' if stability=='Stable' else 'orange'}'>{stability}</b> (Ratio: {ratio})<br><br>"
+        resp += "<b>Rule Comparison:</b><table style='width:100%; font-size:12px; border-collapse:collapse;'>"
+        resp += "<tr><th>Rule</th><th>Kc</th><th>Ti</th></tr>"
+        for c in comparison[:3]:
+            resp += f"<tr><td>{c['name']}</td><td>{c['kc']}</td><td>{c['ti']}</td></tr>"
+        resp += "</table><br><b>Next Step:</b> View the response graph below!"
+        
+        return jsonify({"response": resp, "chart": chart_json})
+    
+    return jsonify({"response": "I'm listening. Please provide Km, Tm, and Tau."})
+
+if __name__ == '__main__': app.run(host='0.0.0.0', port=5000)
