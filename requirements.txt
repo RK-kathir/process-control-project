@@ -1,8 +1,8 @@
 Flask==3.0.0
 flask-cors==4.0.0
 gunicorn==21.2.0
-numpy
-scipy
-scikit-learn
-pandas
-plotly
+numpy==2.4.3
+scipy==1.17.1
+scikit-learn==1.8.0
+pandas==2.3.3
+plotly==5.22.0
