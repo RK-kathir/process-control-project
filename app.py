@@ -1,99 +1,67 @@
 from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
-import google.generativeai as genai
 import json
-import os
+import pickle
 
 app = Flask(__name__)
 CORS(app)
 
-with open('tuning_rules.json', 'r') as file:
-    RULES_DB = json.load(file)
+with open('tuning_rules.json', 'r') as f:
+    RULES_DB = json.load(f)
 
-# SECURELY LOAD API KEY FROM RENDER ENVIRONMENT
-api_key = os.environ.get("GEMINI_API_KEY")
-if api_key:
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel('gemini-1.5-flash')
-else:
-    print("WARNING: GEMINI_API_KEY environment variable not set.")
-
-def get_ai_tuning_recommendation(user_text):
-    prompt = f"""
-    You are a specialized mathematical router for a Process Control Chatbot.
-    Your ONLY job is to read the user's natural language request and match it to the best PI tuning rule from Aidan O'Dwyer's handbook.
-    
-    Here is your ONLY allowed database of tuning rules for the FOLPD model:
-    {json.dumps(RULES_DB["FOLPD"], indent=2)}
-
-    USER REQUEST: "{user_text}"
-
-    REASONING STEPS:
-    1. Does the user want disturbance rejection (Regulator) or setpoint tracking (Servo)?
-    2. Do they want aggressive speed (ISE), balanced response (IAE), or perfectly flat stability (ITAE)?
-    
-    INSTRUCTIONS:
-    Select the single most appropriate rule_id from the database above.
-    You MUST respond ONLY with a raw JSON object. Do not use Markdown, backticks, or write any other text.
-    
-    FORMAT:
-    {{
-        "rule_id": "the_id_you_selected",
-        "reasoning": "A 2-sentence explanation directly to the user explaining why you chose this rule based on their words."
-    }}
-    """
-    try:
-        response = model.generate_content(prompt)
-        clean_text = response.text.strip().strip('`').replace('json\n', '')
-        ai_decision = json.loads(clean_text)
-        return ai_decision["rule_id"], ai_decision["reasoning"]
-    except Exception as e:
-        print(f"AI Error: {e}")
-        return "rovira_iae_servo", "I could not fully determine your intent. Defaulting to a balanced IAE response."
+with open('ai_brain.pkl', 'rb') as f:
+    ai_model = pickle.load(f)
 
 @app.route('/')
 def home():
     return render_template('index.html')
 
-@app.route('/api/chat', methods=['POST'])
-def chat():
+@app.route('/api/analyze', methods=['POST'])
+def analyze():
     data = request.json
-    user_message = data.get('message')
-    
-    rule_id, reasoning = get_ai_tuning_recommendation(user_message)
-    selected_rule = RULES_DB["FOLPD"].get(rule_id)
-    
-    return jsonify({
-        "status": "success",
-        "rule_id": rule_id,
-        "rule_name": selected_rule["name"],
-        "explanation": reasoning,
-        "next_step": f"To calculate the parameters for the {selected_rule['name']}, please enter your Process Gain (K_m):"
-    })
-
-@app.route('/api/calculate', methods=['POST'])
-def calculate():
-    data = request.json
-    rule_id = data.get('rule_id')
+    user_text = data.get('text', '').lower()
     km, tm, taum = float(data['km']), float(data['tm']), float(data['taum'])
-    
-    rule = RULES_DB["FOLPD"].get(rule_id)
-    if not rule:
-        return jsonify({"error": "Rule not found"})
+    ratio = taum / tm
 
-    # Evaluate the math strings from the JSON
-    try:
-        kc = eval(rule['kc_math'], {"km": km, "tm": tm, "taum": taum})
-        ti = eval(rule['ti_math'], {"km": km, "tm": tm, "taum": taum})
-        
-        return jsonify({
-            "status": "success",
-            "rule_name": rule["name"],
-            "kc": round(kc, 4),
-            "ti": round(ti, 4)
-        })
-    except Exception as e:
-        return jsonify({"error": str(e)})
+    # 1. NLP: Determine Intent
+    intent_val = 1 # Default neutral
+    intent_str = "neutral"
+    if any(w in user_text for w in ["fast", "aggressive", "quick"]):
+        intent_val = 0
+        intent_str = "fast"
+    elif any(w in user_text for w in ["smooth", "stable", "flat"]):
+        intent_val = 2
+        intent_str = "smooth"
+
+    # 2. Ask the trained AI Model
+    predicted_rule_key = ai_model.predict([[km, tm, taum, intent_val]])[0]
+
+    if predicted_rule_key == "uncontrollable":
+        return jsonify({"explanation": f"L/tau ratio is {ratio:.2f}. This process delay is too massive. PI control will fail."})
+
+    # 3. Calculate Math
+    rule = RULES_DB[predicted_rule_key]
+    kc = round(eval(rule["kc_math"], {"km": km, "tm": tm, "taum": taum}), 3)
+    ti = round(eval(rule["ti_math"], {"km": km, "tm": tm, "taum": taum}), 3)
+
+    # 4. Determine other valid options for the explanation
+    other_options = []
+    if 0.1 <= ratio <= 1.0:
+        opts = ["ziegler_nichols", "zhuang_ise_servo", "rovira_iae_servo", "rovira_itae_servo"]
+        other_options = [RULES_DB[r]["name"] for r in opts if r != predicted_rule_key]
+
+    alt_text = f"Other valid options for this ratio: {', '.join(other_options)}." if other_options else "No other standard rules recommended for this ratio."
+
+    explanation = f"""
+    <b>AI Analysis:</b> You requested a {intent_str} response. The L/tau ratio is {ratio:.2f}.<br>
+    The neural network selected the <b>{rule['name']}</b>.<br><br>
+    <i>{alt_text}</i><br><br>
+    <b>Controller Parameters:</b><br>
+    • <b>Kc = {kc}:</b> Proportional action. For every 1% error, the valve moves {kc}%.<br>
+    • <b>Ti = {ti}s:</b> Integral action. Repeats the proportional move every {ti} seconds to kill steady-state error.
+    """
+
+    return jsonify({"explanation": explanation})
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)

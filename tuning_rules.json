@@ -1,70 +1,7 @@
 {
-  "FOLPD": {
-    "zn_pi": {
-      "name": "Ziegler and Nichols - Process reaction (Page 23)",
-      "controller": "PI",
-      "kc_eq": "(0.90 * T_m) / (K_m * tau_m)",
-      "ti_eq": "3.33 * tau_m",
-      "td_eq": "0.0",
-      "min_ratio": 0.1,
-      "max_ratio": 1.0,
-      "advantages": "Simple to calculate, ideal for heavily lag-dominant processes. Provides highly aggressive setpoint tracking.",
-      "disadvantages": "Designed for a quarter-decay ratio, inherently causing ~25% overshoot. Highly unstable if the dead-time ratio approaches 1.0."
-    },
-    "cc_pi": {
-      "name": "Cohen and Coon - Process reaction (Page 23)",
-      "controller": "PI",
-      "kc_eq": "(1.0 / K_m) * (0.9 * (T_m / tau_m) + 0.083)",
-      "ti_eq": "T_m * (3.33 * (tau_m / T_m) + 0.3 * (tau_m / T_m)**2) / (1.0 + 2.22 * (tau_m / T_m))",
-      "td_eq": "0.0",
-      "min_ratio": 0.1,
-      "max_ratio": 2.0,
-      "advantages": "Incorporates dead time directly into the mathematical structure. Better load rejection for processes where delay is significant.",
-      "disadvantages": "High proportional gain leads to aggressive valve action and unavoidable mechanical oscillation."
-    },
-    "murrill_itae_reg": {
-      "name": "Performance Index Minimisation (Regulator) - Minimum ITAE Murrill (Page 25)",
-      "controller": "PI",
-      "kc_eq": "(0.859 / K_m) * ((T_m / tau_m) ** 0.977)",
-      "ti_eq": "(T_m / 0.674) * ((tau_m / T_m) ** 0.680)",
-      "td_eq": "0.0",
-      "min_ratio": 0.1,
-      "max_ratio": 1.0,
-      "advantages": "Mathematically minimizes the Integral of Time-weighted Absolute Error for load disturbances. Eliminates slow, rolling oscillations.",
-      "disadvantages": "Complex exponential math requires precise modeling. Less effective for tracking new setpoint changes."
-    },
-    "rovira_itae_servo": {
-      "name": "Performance Index Minimisation (Servo) - Minimum ITAE Rovira (Page 26)",
-      "controller": "PI",
-      "kc_eq": "(0.586 / K_m) * ((T_m / tau_m) ** 0.916)",
-      "ti_eq": "T_m / (1.030 - 0.165 * (tau_m / T_m))",
-      "td_eq": "0.0",
-      "min_ratio": 0.1,
-      "max_ratio": 1.0,
-      "advantages": "Optimized specifically for setpoint changes (servo tuning). Smoothly tracks new targets with minimal time-weighted absolute error.",
-      "disadvantages": "Slower initial response time compared to heuristic methods. Degrades if the process dead-time shifts during operation."
-    },
-    "rovira_iae_servo": {
-      "name": "Performance Index Minimisation (Servo) - Minimum IAE Rovira (Page 26)",
-      "controller": "PI",
-      "kc_eq": "(0.758 / K_m) * ((T_m / tau_m) ** 0.861)",
-      "ti_eq": "T_m / (1.020 - 0.323 * (tau_m / T_m))",
-      "td_eq": "0.0",
-      "min_ratio": 0.1,
-      "max_ratio": 1.0,
-      "advantages": "Minimizes the Integral of Absolute Error for servo tracking. Provides a faster initial rise time than the ITAE method.",
-      "disadvantages": "Because it doesn't penalize time as heavily, it allows slightly more initial oscillation than ITAE before settling."
-    },
-    "zhuang_ise_servo": {
-      "name": "Performance Index Minimisation (Servo) - Minimum ISE Zhuang & Atherton (Page 26)",
-      "controller": "PI",
-      "kc_eq": "(0.980 / K_m) * ((T_m / tau_m) ** 0.892)",
-      "ti_eq": "T_m / (0.690 - 0.155 * (tau_m / T_m))",
-      "td_eq": "0.0",
-      "min_ratio": 0.1,
-      "max_ratio": 1.0,
-      "advantages": "Minimizes squared errors, heavily penalizing large initial deviations from the setpoint.",
-      "disadvantages": "Can result in aggressive initial control action, potentially causing valve wear."
-    }
-  }
+  "ziegler_nichols": {"name": "Ziegler-Nichols", "kc_math": "(1/km)*(tm/taum)", "ti_math": "3.33*taum"},
+  "cohen_coon": {"name": "Cohen-Coon", "kc_math": "(1/km)*(tm/taum)*(0.9+(taum/(12*tm)))", "ti_math": "taum*((30*tm+3*taum)/(9*tm+20*taum))"},
+  "rovira_iae_servo": {"name": "Rovira Minimum IAE", "kc_math": "(0.758/km)*((tm/taum)**0.861)", "ti_math": "tm/(1.02-0.323*(taum/tm))"},
+  "rovira_itae_servo": {"name": "Rovira Minimum ITAE", "kc_math": "(0.586/km)*((tm/taum)**0.916)", "ti_math": "tm/(1.03-0.165*(taum/tm))"},
+  "zhuang_ise_servo": {"name": "Zhuang & Atherton ISE", "kc_math": "(0.980/km)*((tm/taum)**0.892)", "ti_math": "tm/(0.690-0.155*(taum/tm))"}
 }
