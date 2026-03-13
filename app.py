@@ -11,7 +11,7 @@ with open('tuning_rules.json', 'r') as file:
     RULES_DB = json.load(file)
 
 # SECURELY LOAD API KEY FROM RENDER ENVIRONMENT
-api_key = os.environ.get("AIzaSyCu95bgTUxCLFJf-5wpptM48-qCZMDgrcg")
+api_key = os.environ.get("GEMINI_API_KEY")
 if api_key:
     genai.configure(api_key=api_key)
     model = genai.GenerativeModel('gemini-1.5-flash')
