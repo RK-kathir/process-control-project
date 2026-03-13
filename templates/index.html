@@ -1,30 +1,57 @@
 <!DOCTYPE html>
 <html>
-<head><title>AI Tuner</title></head>
-<body style="font-family: Arial; padding: 20px; background: #f4f4f4;">
-    <div style="max-width: 600px; margin: auto; background: white; padding: 20px; border-radius: 8px;">
-        <h2>Process Control AI</h2>
-        <input type="text" id="req" placeholder="E.g., I want a smooth response..." style="width: 100%; padding: 10px; margin-bottom: 10px;"><br>
-        <input type="number" id="km" placeholder="Km" style="width: 30%; padding: 10px;">
-        <input type="number" id="tm" placeholder="Tm" style="width: 30%; padding: 10px;">
-        <input type="number" id="taum" placeholder="Tau_m" style="width: 30%; padding: 10px;">
-        <button onclick="analyze()" style="padding: 10px 20px; margin-top: 10px; background: #007bff; color: white; border: none;">Analyze</button>
-        <div id="output" style="margin-top: 20px; line-height: 1.5;"></div>
+<head>
+    <title>Process AI Chat</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; margin: 0; display: flex; justify-content: center; }
+        #chat-container { width: 100%; max-width: 700px; height: 90vh; background: white; margin-top: 20px; display: flex; flex-direction: column; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        #messages { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; }
+        .msg { margin-bottom: 15px; padding: 12px 18px; border-radius: 18px; max-width: 80%; line-height: 1.5; }
+        .bot { background: #e7f3ff; align-self: flex-start; color: #1c1e21; }
+        .user { background: #0084ff; color: white; align-self: flex-end; }
+        #input-area { padding: 20px; border-top: 1px solid #ddd; display: flex; }
+        input { flex: 1; padding: 12px; border: 1px solid #ccc; border-radius: 25px; outline: none; padding-left: 20px; }
+        button { background: #0084ff; color: white; border: none; padding: 10px 20px; border-radius: 25px; margin-left: 10px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <div id="chat-container">
+        <div id="messages">
+            <div class="msg bot">Hello! I am your Process Control AI. You can give me your $K_m$, $T_m$, and $\tau_m$ values, and I'll help you find the best O'Dwyer tuning rules.</div>
+        </div>
+        <div id="input-area">
+            <input type="text" id="userInput" placeholder="Type your message here..." onkeypress="if(event.key==='Enter') sendMessage()">
+            <button onclick="sendMessage()">Send</button>
+        </div>
     </div>
+
     <script>
-        async function analyze() {
-            const data = {
-                text: document.getElementById('req').value,
-                km: document.getElementById('km').value,
-                tm: document.getElementById('tm').value,
-                taum: document.getElementById('taum').value
-            };
-            document.getElementById('output').innerHTML = "<i>AI is thinking...</i>";
-            const res = await fetch('/api/analyze', {
-                method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data)
+        async function sendMessage() {
+            const input = document.getElementById('userInput');
+            const text = input.value.trim();
+            if(!text) return;
+
+            // Add user message to UI
+            addMessage(text, 'user');
+            input.value = '';
+
+            const res = await fetch('/api/chat', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({text: text})
             });
-            const result = await res.json();
-            document.getElementById('output').innerHTML = result.explanation;
+            const data = await res.json();
+            addMessage(data.response, 'bot');
+        }
+
+        function addMessage(text, sender) {
+            const div = document.createElement('div');
+            div.className = `msg ${sender}`;
+            div.innerHTML = text;
+            const container = document.getElementById('messages');
+            container.appendChild(div);
+            container.scrollTop = container.scrollHeight;
         }
     </script>
 </body>
