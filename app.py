@@ -109,13 +109,16 @@ def simulate_step(kc, ti, km, tm, taum):
     return json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder), round(overshoot, 1)
 
 # --- Serve Frontend directly from Flask ---
+# --- Serve Frontend directly from Flask ---
 @app.route('/')
 def home():
     try:
-        with open(os.path.join(current_dir, 'index.html'), 'r') as f:
+        # We added 'templates' right here in the path!
+        file_path = os.path.join(current_dir, 'templates', 'index.html')
+        with open(file_path, 'r') as f:
             return render_template_string(f.read())
     except FileNotFoundError:
-        return "Error: index.html not found! Please make sure it is uploaded to GitHub.", 404
+        return "Error: index.html not found inside the 'templates' folder! Please check your GitHub repository.", 404
 
 # --- API Route ---
 @app.route('/api/chat', methods=['POST'])
