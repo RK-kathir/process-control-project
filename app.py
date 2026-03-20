@@ -102,16 +102,41 @@ def simulate_step(kc, ti, km, tm, taum):
         dpv = ((km * d_mv) - pv[i-1]) / tm
         pv[i] = pv[i-1] + dpv * dt
         
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(x=t, y=pv, name="Process Output", line=dict(color='#007bff', width=3)))
-    fig.add_hline(y=1.0, line_dash="dash", line_color="red", name="Setpoint")
-    fig.update_layout(
-        title="Step Response Simulation", xaxis_title="Time (seconds)", yaxis_title="Process Value",
-        margin=dict(l=20, r=20, t=40, b=20), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)'
-    )
-    
     max_pv = np.max(pv)
     overshoot = max(0, (max_pv - 1.0) * 100)
+    
+    # 100% BULLETPROOF RAW JSON EXPORT
+    # Bypasses Render's Plotly encoder bugs by using raw Python lists
+    graph_data = {
+        "data": [
+            {
+                "x": t.tolist(), 
+                "y": pv.tolist(), 
+                "type": "scatter", 
+                "mode": "lines",
+                "name": "Process Output", 
+                "line": {"color": "#007bff", "width": 3}
+            },
+            {
+                "x": [t[0], t[-1]], 
+                "y": [1.0, 1.0], 
+                "type": "scatter", 
+                "mode": "lines",
+                "name": "Setpoint", 
+                "line": {"color": "red", "dash": "dash", "width": 2}
+            }
+        ],
+        "layout": {
+            "title": "Step Response Simulation", 
+            "xaxis": {"title": "Time (seconds)"}, 
+            "yaxis": {"title": "Process Value"},
+            "margin": {"l": 20, "r": 20, "t": 40, "b": 20}, 
+            "paper_bgcolor": "rgba(0,0,0,0)", 
+            "plot_bgcolor": "rgba(0,0,0,0)"
+        }
+    }
+    
+    return json.dumps(graph_data), round(overshoot, 1)
     
     # Actually Bulletproof Plotly Export
     return json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder), round(overshoot, 1)
