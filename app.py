@@ -4,6 +4,8 @@ import random
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
+import plotly.utils
+import json
 from flask import Flask, request, jsonify, render_template_string
 from flask_cors import CORS
 from sklearn.ensemble import RandomForestClassifier
@@ -15,7 +17,7 @@ CORS(app)
 current_dir = os.path.dirname(os.path.abspath(__file__))
 
 # =====================================================================
-# 1. BOT MEMORY (This fixes the amnesia!)
+# 1. BOT MEMORY
 # =====================================================================
 bot_memory = {
     "km": None,
@@ -111,8 +113,8 @@ def simulate_step(kc, ti, km, tm, taum):
     max_pv = np.max(pv)
     overshoot = max(0, (max_pv - 1.0) * 100)
     
-    # Bulletproof Plotly Export
-    return fig.to_json(), round(overshoot, 1)
+    # Actually Bulletproof Plotly Export
+    return json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder), round(overshoot, 1)
 
 @app.route('/')
 def home():
@@ -163,7 +165,7 @@ def chat():
         if km == 0 or tm == 0 or taum == 0:
             return jsonify({"reply": "Error: Process parameters (Km, Tm, Tau) cannot be absolute zero.", "chart": None})
 
-        # Ask the AI Brain (Safely converting to numpy array to prevent warnings)
+        # Ask the AI Brain
         rule_key = ai_model.predict(np.array([[km, tm, taum, intent]]))[0]
         
         if rule_key == "uncontrollable":
@@ -181,9 +183,6 @@ def chat():
             
         chart_json, overshoot = simulate_step(kc, ti, km, tm, taum)
         
-        # Optional: You can wipe the memory here if you want it to reset after a graph, 
-        # but leaving it lets you say "now change km to 12" and it will instantly redraw!
-        
         reply_text = (f"Based on your parameters and request, I selected the **{rule_name}** tuning method.\n\n"
                       f"• Controller Gain (Kc): **{round(kc, 3)}**\n"
                       f"• Integral Time (Ti): **{round(ti, 3)}** seconds\n"
@@ -192,7 +191,6 @@ def chat():
         return jsonify({"reply": reply_text, "chart": chart_json})
         
     except Exception as e:
-        # If the server crashes, instead of throwing a 500 error, it will text you the exact python error!
         error_trace = traceback.format_exc()
         return jsonify({"reply": f"SYSTEM CRASH:\n{str(e)}\n\nCheck logs for details.", "chart": None})
 
