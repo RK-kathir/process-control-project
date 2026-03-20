@@ -48,107 +48,44 @@
             padding: 20px 40px;
             font-weight: 800;
             letter-spacing: 2px;
-            background: transparent;
         }
 
         .theme-toggle {
-            background: none;
-            border: none;
-            font-size: 1.5rem;
-            cursor: pointer;
-            color: var(--text-color);
+            background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-color);
         }
 
         .chat-container {
-            flex: 1;
-            overflow-y: auto;
-            padding: 20px;
-            max-width: 900px;
-            margin: 0 auto;
-            width: 100%;
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-            padding-bottom: 120px; /* Space for floating input */
+            flex: 1; overflow-y: auto; padding: 20px; max-width: 900px; margin: 0 auto; width: 100%;
+            display: flex; flex-direction: column; gap: 15px; padding-bottom: 120px;
         }
 
         .bubble {
-            max-width: 80%;
-            padding: 15px 20px;
-            border-radius: 20px;
-            line-height: 1.5;
-            font-size: 1rem;
+            max-width: 80%; padding: 15px 20px; border-radius: 20px; line-height: 1.5; font-size: 1rem;
             animation: fadeIn 0.3s ease-in-out;
         }
 
         .user { align-self: flex-end; background-color: var(--user-bubble); color: white; border-bottom-right-radius: 4px; }
-        .bot { align-self: flex-start; background-color: var(--bot-bubble); color: var(--bot-text); border-bottom-left-radius: 4px; }
+        .bot { align-self: flex-start; background-color: var(--bot-bubble); color: var(--bot-text); border-bottom-left-radius: 4px; white-space: pre-wrap;}
 
         .graph-wrapper {
-            margin-top: 15px;
-            border: 1px solid var(--graph-border);
-            border-radius: 12px;
-            overflow: hidden;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-            background: white; /* Keeps Plotly background clean */
+            margin-top: 15px; border: 1px solid var(--graph-border); border-radius: 12px;
+            overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.1); background: white;
         }
 
-        /* Gemini / GTA VI Style Floating Pill Input */
         .input-area {
-            position: fixed;
-            bottom: 40px;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 90%;
-            max-width: 800px;
-            background: var(--input-bg);
-            backdrop-filter: blur(12px);
-            border: 1px solid var(--graph-border);
-            border-radius: 50px;
-            display: flex;
-            padding: 8px 15px;
-            box-shadow: 0 8px 32px var(--border-glow);
-            transition: box-shadow 0.3s, background 0.3s;
+            position: fixed; bottom: 40px; left: 50%; transform: translateX(-50%); width: 90%; max-width: 800px;
+            background: var(--input-bg); backdrop-filter: blur(12px); border: 1px solid var(--graph-border);
+            border-radius: 50px; display: flex; padding: 8px 15px; box-shadow: 0 8px 32px var(--border-glow);
+            transition: box-shadow 0.3s;
         }
 
-        .input-area:focus-within {
-            box-shadow: 0 8px 32px var(--user-bubble);
-        }
+        .input-area:focus-within { box-shadow: 0 8px 32px var(--user-bubble); }
 
-        input {
-            flex: 1;
-            background: transparent;
-            border: none;
-            padding: 15px;
-            font-size: 1rem;
-            color: var(--text-color);
-            outline: none;
-        }
-
-        button.send-btn {
-            background-color: var(--user-bubble);
-            color: white;
-            border: none;
-            border-radius: 50px;
-            padding: 0 25px;
-            font-weight: bold;
-            cursor: pointer;
-            transition: transform 0.2s;
-        }
-
+        input { flex: 1; background: transparent; border: none; padding: 15px; font-size: 1rem; color: var(--text-color); outline: none; }
+        button.send-btn { background-color: var(--user-bubble); color: white; border: none; border-radius: 50px; padding: 0 25px; font-weight: bold; cursor: pointer; }
         button.send-btn:active { transform: scale(0.95); }
 
-        footer {
-            position: fixed;
-            bottom: 10px;
-            width: 100%;
-            text-align: center;
-            font-size: 0.8rem;
-            font-weight: bold;
-            letter-spacing: 1px;
-            color: var(--text-color);
-            opacity: 0.6;
-        }
+        footer { position: fixed; bottom: 10px; width: 100%; text-align: center; font-size: 0.8rem; font-weight: bold; letter-spacing: 1px; color: var(--text-color); opacity: 0.6; }
 
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
     </style>
@@ -172,14 +109,9 @@
     <footer>BUILT WITH ❤️ BY KATHIRVEL R</footer>
 
     <script>
-        // Light/Dark Mode Toggle
         function toggleTheme() {
             const body = document.body;
-            if (body.getAttribute('data-theme') === 'dark') {
-                body.removeAttribute('data-theme');
-            } else {
-                body.setAttribute('data-theme', 'dark');
-            }
+            body.getAttribute('data-theme') === 'dark' ? body.removeAttribute('data-theme') : body.setAttribute('data-theme', 'dark');
         }
 
         function handleEnter(e) { if(e.key === 'Enter') sendMessage(); }
@@ -193,14 +125,12 @@
             input.value = '';
 
             try {
-                // Keep your existing fetch route!
                 const res = await fetch('/api/chat', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ message: message })
                 });
                 const data = await res.json();
-                
                 addBubble(data.reply, 'bot', data.chart);
             } catch (err) {
                 addBubble("Error connecting to server.", 'bot');
@@ -218,11 +148,9 @@
                 chartDiv.id = 'plot_' + Date.now();
                 chartDiv.className = 'graph-wrapper';
                 div.appendChild(chartDiv);
-                
                 chat.appendChild(div);
                 
                 const plotData = JSON.parse(chartData);
-                // Plotly draws inside our beautiful new wrapper
                 Plotly.newPlot(chartDiv.id, plotData.data, plotData.layout, {responsive: true});
             } else {
                 chat.appendChild(div);
