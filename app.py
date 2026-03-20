@@ -209,10 +209,10 @@ def chat():
         l_tau_ratio = taum / tm
         
         reply_text = (f"Based on your parameters and request, I selected the **{rule_name}** tuning method.\n\n"
-                      f"• L/τ Ratio (Dead Time / Lag): **{round(l_tau_ratio, 3)}**\n"
-                      f"• Controller Gain (Kc): **{round(kc, 3)}**\n"
-                      f"• Integral Time (Ti): **{round(ti, 3)}** seconds\n"
-                      f"• Simulated Overshoot: **{overshoot}%**")
+                      f"• L/τ Ratio (Dead Time / Lag): {round(l_tau_ratio, 3)}\n"
+                      f"• Controller Gain (Kc): {round(kc, 3)}\n"
+                      f"• Integral Time (Ti): {round(ti, 3)} seconds\n"
+                      f"• Simulated Overshoot: {overshoot}%")
         
         return jsonify({"reply": reply_text, "chart": chart_json})
         
