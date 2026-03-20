@@ -4,10 +4,10 @@ import random
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
-import plotly.utils
 from flask import Flask, request, jsonify, render_template_string
 from flask_cors import CORS
 from sklearn.ensemble import RandomForestClassifier
+import traceback
 
 app = Flask(__name__)
 CORS(app)
@@ -15,10 +15,19 @@ CORS(app)
 current_dir = os.path.dirname(os.path.abspath(__file__))
 
 # =====================================================================
-# 1. BUILD THE AI BRAIN & RULES IN MEMORY ON STARTUP
-# This completely bypasses the pickle version mismatch error on Render.
+# 1. BOT MEMORY (This fixes the amnesia!)
 # =====================================================================
-print("🧠 Training the AI Brain in memory...")
+bot_memory = {
+    "km": None,
+    "tm": None,
+    "taum": None,
+    "intent": 1 # Default to Neutral
+}
+
+# =====================================================================
+# 2. BUILD THE AI BRAIN IN MEMORY 
+# =====================================================================
+print("🧠 Training the AI Brain...")
 data = []
 for _ in range(5000):
     _km = round(random.uniform(0.1, 5.0), 2)
@@ -41,11 +50,9 @@ df = pd.DataFrame(data, columns=['km', 'tm', 'taum', 'intent', 'rule'])
 X = df[['km', 'tm', 'taum', 'intent']] 
 y = df['rule']                         
 
-# Train the model instantly on boot
 ai_model = RandomForestClassifier(n_estimators=100, random_state=42)
 ai_model.fit(X.values, y)
 
-# Define the rules directly in the code
 rules_db = {
     "ziegler_nichols": {"name": "Ziegler-Nichols", "kc_math": "(0.9 * tm) / (km * taum)", "ti_math": "3.33 * taum"},
     "cohen_coon": {"name": "Cohen-Coon", "kc_math": "(tm / (km * taum)) * (0.9 + (taum / (12 * tm)))", "ti_math": "taum * ((30 + 3 * (taum / tm)) / (9 + 20 * (taum / tm)))"},
@@ -53,9 +60,6 @@ rules_db = {
     "rovira": {"name": "Rovira (Smooth)", "kc_math": "((0.985 * tm) / (km * taum)) * ((taum / tm)**-0.086)", "ti_math": "tm / (0.608 * (taum / tm)**-0.707)"},
     "hazebroek": {"name": "Hazebroek & Van der Waerden (Disturbance)", "kc_math": "SPECIAL", "ti_math": "SPECIAL"}
 }
-print("✅ AI Brain and Rules successfully loaded!")
-# =====================================================================
-
 
 # --- Hazebroek Lookup Logic ---
 def calculate_hazebroek(km, tm, taum):
@@ -106,60 +110,91 @@ def simulate_step(kc, ti, km, tm, taum):
     
     max_pv = np.max(pv)
     overshoot = max(0, (max_pv - 1.0) * 100)
-    return json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder), round(overshoot, 1)
+    
+    # Bulletproof Plotly Export
+    return fig.to_json(), round(overshoot, 1)
 
-# --- Serve Frontend directly from Flask ---
-# --- Serve Frontend directly from Flask ---
 @app.route('/')
 def home():
     try:
-        # We added 'templates' right here in the path!
-        file_path = os.path.join(current_dir, 'templates', 'index.html')
-        with open(file_path, 'r') as f:
+        with open(os.path.join(current_dir, 'templates', 'index.html'), 'r') as f:
             return render_template_string(f.read())
     except FileNotFoundError:
-        return "Error: index.html not found inside the 'templates' folder! Please check your GitHub repository.", 404
+        return "Error: index.html not found inside the 'templates' folder!", 404
 
-# --- API Route ---
 @app.route('/api/chat', methods=['POST'])
 def chat():
-    user_msg = request.json.get('message', '').lower()
-    numbers = re.findall(r"[-+]?\d*\.\d+|\d+", user_msg)
+    global bot_memory
     
-    if len(numbers) < 3:
-        return jsonify({"reply": "I need three numbers to tune this: Process Gain (Km), Lag Time (Tm), and Dead Time (Tau).", "chart": None})
-    
-    km, tm, taum = float(numbers[0]), float(numbers[1]), float(numbers[2])
-    
-    if any(word in user_msg for word in ["fast", "quick", "aggressive"]): intent = 0
-    elif any(word in user_msg for word in ["smooth", "stable", "safe"]): intent = 2
-    elif any(word in user_msg for word in ["disturbance", "rejection", "outside", "reject"]): intent = 3
-    else: intent = 1 
+    try:
+        user_msg = request.json.get('message', '').lower()
         
-    # Ask the AI Brain
-    rule_key = ai_model.predict([[km, tm, taum, intent]])[0]
-    
-    if rule_key == "uncontrollable":
-        return jsonify({"reply": f"Warning: Your Dead Time ({taum}s) is too high compared to Lag ({tm}s). This is delay-dominant and cannot be safely controlled by standard PI tuning.", "chart": None})
-    
-    rule_data = rules_db[rule_key]
-    rule_name = rule_data['name']
-    
-    if rule_key == "hazebroek":
-        kc, ti = calculate_hazebroek(km, tm, taum)
-    else:
-        variables = {"km": km, "tm": tm, "taum": taum}
-        kc = eval(rule_data['kc_math'], {}, variables)
-        ti = eval(rule_data['ti_math'], {}, variables)
+        # 1. SMART REGEX: Actively search for specific labels
+        km_match = re.search(r'(?:km|gain)\s*(?:is|=|\:)?\s*([-+]?\d*\.\d+|\d+)', user_msg)
+        tm_match = re.search(r'(?:tm|lag)\s*(?:is|=|\:)?\s*([-+]?\d*\.\d+|\d+)', user_msg)
+        tau_match = re.search(r'(?:tau|dead\s*time|taum)\s*(?:is|=|\:)?\s*([-+]?\d*\.\d+|\d+)', user_msg)
         
-    chart_json, overshoot = simulate_step(kc, ti, km, tm, taum)
-    
-    reply_text = (f"Based on your parameters and request, I selected the **{rule_name}** tuning method.\n\n"
-                  f"• Controller Gain (Kc): **{round(kc, 3)}**\n"
-                  f"• Integral Time (Ti): **{round(ti, 3)}** seconds\n"
-                  f"• Simulated Overshoot: **{overshoot}%**")
-    
-    return jsonify({"reply": reply_text, "chart": chart_json})
+        # Update memory if found
+        if km_match: bot_memory['km'] = float(km_match.group(1))
+        if tm_match: bot_memory['tm'] = float(tm_match.group(1))
+        if tau_match: bot_memory['taum'] = float(tau_match.group(1))
+        
+        # Determine intent and update memory
+        if any(word in user_msg for word in ["fast", "quick", "aggressive"]): bot_memory['intent'] = 0
+        elif any(word in user_msg for word in ["smooth", "stable", "safe"]): bot_memory['intent'] = 2
+        elif any(word in user_msg for word in ["disturbance", "rejection", "outside", "reject"]): bot_memory['intent'] = 3
+        
+        # 2. CHECK MEMORY
+        missing = []
+        if bot_memory['km'] is None: missing.append("Km (Gain)")
+        if bot_memory['tm'] is None: missing.append("Tm (Lag)")
+        if bot_memory['taum'] is None: missing.append("Tau (Dead Time)")
+        
+        if missing:
+            return jsonify({"reply": f"Got it. But I still need: **{', '.join(missing)}**. \n\n(Current memory: Km={bot_memory['km']}, Tm={bot_memory['tm']}, Tau={bot_memory['taum']})", "chart": None})
+            
+        # 3. IF WE HAVE ALL NUMBERS, DO THE MATH
+        km = bot_memory['km']
+        tm = bot_memory['tm']
+        taum = bot_memory['taum']
+        intent = bot_memory['intent']
+        
+        # Prevent division by zero mathematically
+        if km == 0 or tm == 0 or taum == 0:
+            return jsonify({"reply": "Error: Process parameters (Km, Tm, Tau) cannot be absolute zero.", "chart": None})
+
+        # Ask the AI Brain (Safely converting to numpy array to prevent warnings)
+        rule_key = ai_model.predict(np.array([[km, tm, taum, intent]]))[0]
+        
+        if rule_key == "uncontrollable":
+            return jsonify({"reply": f"Warning: Your Dead Time ({taum}s) is too high compared to Lag ({tm}s). This is delay-dominant and cannot be safely controlled by standard PI tuning.", "chart": None})
+        
+        rule_data = rules_db[rule_key]
+        rule_name = rule_data['name']
+        
+        if rule_key == "hazebroek":
+            kc, ti = calculate_hazebroek(km, tm, taum)
+        else:
+            variables = {"km": km, "tm": tm, "taum": taum}
+            kc = eval(rule_data['kc_math'], {}, variables)
+            ti = eval(rule_data['ti_math'], {}, variables)
+            
+        chart_json, overshoot = simulate_step(kc, ti, km, tm, taum)
+        
+        # Optional: You can wipe the memory here if you want it to reset after a graph, 
+        # but leaving it lets you say "now change km to 12" and it will instantly redraw!
+        
+        reply_text = (f"Based on your parameters and request, I selected the **{rule_name}** tuning method.\n\n"
+                      f"• Controller Gain (Kc): **{round(kc, 3)}**\n"
+                      f"• Integral Time (Ti): **{round(ti, 3)}** seconds\n"
+                      f"• Simulated Overshoot: **{overshoot}%**")
+        
+        return jsonify({"reply": reply_text, "chart": chart_json})
+        
+    except Exception as e:
+        # If the server crashes, instead of throwing a 500 error, it will text you the exact python error!
+        error_trace = traceback.format_exc()
+        return jsonify({"reply": f"SYSTEM CRASH:\n{str(e)}\n\nCheck logs for details.", "chart": None})
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
