@@ -1,26 +1,61 @@
 import os
-from flask import Flask, request, jsonify, render_template_string
-from flask_cors import CORS
-import numpy as np
-import pickle
-import json
 import re
+import random
+import numpy as np
+import pandas as pd
 import plotly.graph_objects as go
 import plotly.utils
+from flask import Flask, request, jsonify, render_template_string
+from flask_cors import CORS
+from sklearn.ensemble import RandomForestClassifier
 
 app = Flask(__name__)
 CORS(app)
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 
-# --- Load the AI Brain and Rulebook ---
-try:
-    with open(os.path.join(current_dir, 'ai_brain.pkl'), 'rb') as f:
-        ai_model = pickle.load(f)
-    with open(os.path.join(current_dir, 'tuning_rules.json'), 'r') as f:
-        rules_db = json.load(f)
-except FileNotFoundError:
-    print("❌ ERROR: Please run 'python train_ai.py' first!")
+# =====================================================================
+# 1. BUILD THE AI BRAIN & RULES IN MEMORY ON STARTUP
+# This completely bypasses the pickle version mismatch error on Render.
+# =====================================================================
+print("🧠 Training the AI Brain in memory...")
+data = []
+for _ in range(5000):
+    _km = round(random.uniform(0.1, 5.0), 2)
+    _tm = round(random.uniform(1.0, 50.0), 2)
+    _taum = round(random.uniform(0.1, 20.0), 2)
+    _intent = random.choice([0, 1, 2, 3]) 
+    _ratio = _taum / _tm
+    
+    if _ratio > 2.0: _rule = "uncontrollable" 
+    elif _ratio > 1.0: _rule = "cohen_coon"     
+    else:
+        if _intent == 0: _rule = "zhuang_atherton" 
+        elif _intent == 2: _rule = "rovira"          
+        elif _intent == 3: _rule = "hazebroek" 
+        else: _rule = "ziegler_nichols" 
+            
+    data.append([_km, _tm, _taum, _intent, _rule])
+
+df = pd.DataFrame(data, columns=['km', 'tm', 'taum', 'intent', 'rule'])
+X = df[['km', 'tm', 'taum', 'intent']] 
+y = df['rule']                         
+
+# Train the model instantly on boot
+ai_model = RandomForestClassifier(n_estimators=100, random_state=42)
+ai_model.fit(X.values, y)
+
+# Define the rules directly in the code
+rules_db = {
+    "ziegler_nichols": {"name": "Ziegler-Nichols", "kc_math": "(0.9 * tm) / (km * taum)", "ti_math": "3.33 * taum"},
+    "cohen_coon": {"name": "Cohen-Coon", "kc_math": "(tm / (km * taum)) * (0.9 + (taum / (12 * tm)))", "ti_math": "taum * ((30 + 3 * (taum / tm)) / (9 + 20 * (taum / tm)))"},
+    "zhuang_atherton": {"name": "Zhuang & Atherton (Fast)", "kc_math": "((1.048 * tm) / (km * taum)) * ((taum / tm)**-0.227)", "ti_math": "tm / (1.195 - 0.368 * (taum / tm))"},
+    "rovira": {"name": "Rovira (Smooth)", "kc_math": "((0.985 * tm) / (km * taum)) * ((taum / tm)**-0.086)", "ti_math": "tm / (0.608 * (taum / tm)**-0.707)"},
+    "hazebroek": {"name": "Hazebroek & Van der Waerden (Disturbance)", "kc_math": "SPECIAL", "ti_math": "SPECIAL"}
+}
+print("✅ AI Brain and Rules successfully loaded!")
+# =====================================================================
+
 
 # --- Hazebroek Lookup Logic ---
 def calculate_hazebroek(km, tm, taum):
@@ -73,12 +108,14 @@ def simulate_step(kc, ti, km, tm, taum):
     overshoot = max(0, (max_pv - 1.0) * 100)
     return json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder), round(overshoot, 1)
 
-# --- Serve Frontend directly from Flask (Optional but easier for local testing) ---
+# --- Serve Frontend directly from Flask ---
 @app.route('/')
 def home():
-    # If index.html is in the same folder, this will serve it.
-    with open(os.path.join(current_dir, 'index.html'), 'r') as f:
-        return render_template_string(f.read())
+    try:
+        with open(os.path.join(current_dir, 'index.html'), 'r') as f:
+            return render_template_string(f.read())
+    except FileNotFoundError:
+        return "Error: index.html not found! Please make sure it is uploaded to GitHub.", 404
 
 # --- API Route ---
 @app.route('/api/chat', methods=['POST'])
@@ -96,6 +133,7 @@ def chat():
     elif any(word in user_msg for word in ["disturbance", "rejection", "outside", "reject"]): intent = 3
     else: intent = 1 
         
+    # Ask the AI Brain
     rule_key = ai_model.predict([[km, tm, taum, intent]])[0]
     
     if rule_key == "uncontrollable":
