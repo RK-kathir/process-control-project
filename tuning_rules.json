@@ -1,7 +1,27 @@
 {
-  "ziegler_nichols": {"name": "Ziegler-Nichols", "kc_math": "(1/km)*(tm/taum)", "ti_math": "3.33*taum"},
-  "cohen_coon": {"name": "Cohen-Coon", "kc_math": "(1/km)*(tm/taum)*(0.9+(taum/(12*tm)))", "ti_math": "taum*((30*tm+3*taum)/(9*tm+20*taum))"},
-  "rovira_iae_servo": {"name": "Rovira Minimum IAE", "kc_math": "(0.758/km)*((tm/taum)**0.861)", "ti_math": "tm/(1.02-0.323*(taum/tm))"},
-  "rovira_itae_servo": {"name": "Rovira Minimum ITAE", "kc_math": "(0.586/km)*((tm/taum)**0.916)", "ti_math": "tm/(1.03-0.165*(taum/tm))"},
-  "zhuang_ise_servo": {"name": "Zhuang & Atherton ISE", "kc_math": "(0.980/km)*((tm/taum)**0.892)", "ti_math": "tm/(0.690-0.155*(taum/tm))"}
+    "ziegler_nichols": {
+        "name": "Ziegler-Nichols",
+        "kc_math": "(0.9 * tm) / (km * taum)",
+        "ti_math": "3.33 * taum"
+    },
+    "cohen_coon": {
+        "name": "Cohen-Coon",
+        "kc_math": "(tm / (km * taum)) * (0.9 + (taum / (12 * tm)))",
+        "ti_math": "taum * ((30 + 3 * (taum / tm)) / (9 + 20 * (taum / tm)))"
+    },
+    "zhuang_atherton": {
+        "name": "Zhuang & Atherton (Fast)",
+        "kc_math": "((1.048 * tm) / (km * taum)) * ((taum / tm)**-0.227)",
+        "ti_math": "tm / (1.195 - 0.368 * (taum / tm))"
+    },
+    "rovira": {
+        "name": "Rovira (Smooth)",
+        "kc_math": "((0.985 * tm) / (km * taum)) * ((taum / tm)**-0.086)",
+        "ti_math": "tm / (0.608 * (taum / tm)**-0.707)"
+    },
+    "hazebroek": {
+        "name": "Hazebroek & Van der Waerden (Disturbance)",
+        "kc_math": "SPECIAL_LOOKUP",
+        "ti_math": "SPECIAL_LOOKUP"
+    }
 }
