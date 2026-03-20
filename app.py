@@ -3,8 +3,6 @@ import re
 import random
 import numpy as np
 import pandas as pd
-import plotly.graph_objects as go
-import plotly.utils
 import json
 from flask import Flask, request, jsonify, render_template_string
 from flask_cors import CORS
@@ -17,7 +15,7 @@ CORS(app)
 current_dir = os.path.dirname(os.path.abspath(__file__))
 
 # =====================================================================
-# 1. BOT MEMORY
+# 1. BOT MEMORY (Fixes the amnesia)
 # =====================================================================
 bot_memory = {
     "km": None,
@@ -27,7 +25,7 @@ bot_memory = {
 }
 
 # =====================================================================
-# 2. BUILD THE AI BRAIN IN MEMORY 
+# 2. BUILD THE AI BRAIN IN MEMORY (Fixes the Render 500 error)
 # =====================================================================
 print("🧠 Training the AI Brain...")
 data = []
@@ -63,7 +61,9 @@ rules_db = {
     "hazebroek": {"name": "Hazebroek & Van der Waerden (Disturbance)", "kc_math": "SPECIAL", "ti_math": "SPECIAL"}
 }
 
-# --- Hazebroek Lookup Logic ---
+# =====================================================================
+# 3. HAZEBROEK LOGIC
+# =====================================================================
 def calculate_hazebroek(km, tm, taum):
     ratio = taum / tm
     ratios = [0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2.0, 2.2, 2.4, 2.6, 2.8, 3.0, 3.2, 3.4]
@@ -81,7 +81,9 @@ def calculate_hazebroek(km, tm, taum):
     ti = taum * beta
     return kc, ti
 
-# --- Physics Simulator ---
+# =====================================================================
+# 4. PHYSICS SIMULATOR (100% Bulletproof Raw JSON Graph)
+# =====================================================================
 def simulate_step(kc, ti, km, tm, taum):
     t = np.linspace(0, (tm + taum) * 6, 400)
     dt = t[1] - t[0]
@@ -105,8 +107,7 @@ def simulate_step(kc, ti, km, tm, taum):
     max_pv = np.max(pv)
     overshoot = max(0, (max_pv - 1.0) * 100)
     
-    # 100% BULLETPROOF RAW JSON EXPORT
-    # Bypasses Render's Plotly encoder bugs by using raw Python lists
+    # Manually building the JSON dictionary forces Render to play nice
     graph_data = {
         "data": [
             {
@@ -137,10 +138,10 @@ def simulate_step(kc, ti, km, tm, taum):
     }
     
     return json.dumps(graph_data), round(overshoot, 1)
-    
-    # Actually Bulletproof Plotly Export
-    return json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder), round(overshoot, 1)
 
+# =====================================================================
+# 5. FLASK ROUTES
+# =====================================================================
 @app.route('/')
 def home():
     try:
@@ -156,22 +157,20 @@ def chat():
     try:
         user_msg = request.json.get('message', '').lower()
         
-        # 1. SMART REGEX: Actively search for specific labels
+        # Smart Regex parsing
         km_match = re.search(r'(?:km|gain)\s*(?:is|=|\:)?\s*([-+]?\d*\.\d+|\d+)', user_msg)
         tm_match = re.search(r'(?:tm|lag)\s*(?:is|=|\:)?\s*([-+]?\d*\.\d+|\d+)', user_msg)
         tau_match = re.search(r'(?:tau|dead\s*time|taum)\s*(?:is|=|\:)?\s*([-+]?\d*\.\d+|\d+)', user_msg)
         
-        # Update memory if found
         if km_match: bot_memory['km'] = float(km_match.group(1))
         if tm_match: bot_memory['tm'] = float(tm_match.group(1))
         if tau_match: bot_memory['taum'] = float(tau_match.group(1))
         
-        # Determine intent and update memory
         if any(word in user_msg for word in ["fast", "quick", "aggressive"]): bot_memory['intent'] = 0
         elif any(word in user_msg for word in ["smooth", "stable", "safe"]): bot_memory['intent'] = 2
         elif any(word in user_msg for word in ["disturbance", "rejection", "outside", "reject"]): bot_memory['intent'] = 3
         
-        # 2. CHECK MEMORY
+        # Check Memory
         missing = []
         if bot_memory['km'] is None: missing.append("Km (Gain)")
         if bot_memory['tm'] is None: missing.append("Tm (Lag)")
@@ -180,17 +179,15 @@ def chat():
         if missing:
             return jsonify({"reply": f"Got it. But I still need: **{', '.join(missing)}**. \n\n(Current memory: Km={bot_memory['km']}, Tm={bot_memory['tm']}, Tau={bot_memory['taum']})", "chart": None})
             
-        # 3. IF WE HAVE ALL NUMBERS, DO THE MATH
+        # Execute Math
         km = bot_memory['km']
         tm = bot_memory['tm']
         taum = bot_memory['taum']
         intent = bot_memory['intent']
         
-        # Prevent division by zero mathematically
         if km == 0 or tm == 0 or taum == 0:
             return jsonify({"reply": "Error: Process parameters (Km, Tm, Tau) cannot be absolute zero.", "chart": None})
 
-        # Ask the AI Brain
         rule_key = ai_model.predict(np.array([[km, tm, taum, intent]]))[0]
         
         if rule_key == "uncontrollable":
@@ -208,7 +205,11 @@ def chat():
             
         chart_json, overshoot = simulate_step(kc, ti, km, tm, taum)
         
+        # The new L/Tau ratio calculation
+        l_tau_ratio = taum / tm
+        
         reply_text = (f"Based on your parameters and request, I selected the **{rule_name}** tuning method.\n\n"
+                      f"• L/τ Ratio (Dead Time / Lag): **{round(l_tau_ratio, 3)}**\n"
                       f"• Controller Gain (Kc): **{round(kc, 3)}**\n"
                       f"• Integral Time (Ti): **{round(ti, 3)}** seconds\n"
                       f"• Simulated Overshoot: **{overshoot}%**")
