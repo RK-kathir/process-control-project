@@ -14,7 +14,7 @@ app = Flask(__name__)
 CORS(app)
 genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
 generation_config = {"response_mime_type": "application/json"}
-llm_model = genai.GenerativeModel("gemini-1.5-flash", generation_config=generation_config)
+llm_model = genai.GenerativeModel("gemini-1.5-flash-latest", generation_config=generation_config)
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 
