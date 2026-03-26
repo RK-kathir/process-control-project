@@ -13,8 +13,8 @@ import traceback
 app = Flask(__name__)
 CORS(app)
 genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
-llm_model = genai.GenerativeModel("gemini-pro")
-current_dir = os.path.dirname(os.path.abspath(__file__))
+generation_config = {"response_mime_type": "application/json"}
+llm_model = genai.GenerativeModel("gemini-2.5-flash", generation_config=generation_config)
 
 # =====================================================================
 # 1. BOT MEMORY
