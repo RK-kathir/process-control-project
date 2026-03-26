@@ -12,6 +12,9 @@ import traceback
 
 app = Flask(__name__)
 CORS(app)
+genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
+generation_config = {"response_mime_type": "application/json"}
+llm_model = genai.GenerativeModel("gemini-1.5-flash", generation_config=generation_config)
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 
@@ -152,74 +155,31 @@ def home():
         return "Error: index.html not found inside the 'templates' folder!", 404
 
 @app.route('/api/chat', methods=['POST'])
-def chat():
-    global bot_memory
-    
-    try:
-        user_msg = request.json.get('message', '').lower()
+user_msg = request.json.get('message', '')
         
-        # Smart Regex parsing
-        km_match = re.search(r'(?:km|gain)\s*(?:is|=|\:)?\s*([-+]?\d*\.\d+|\d+)', user_msg)
-        tm_match = re.search(r'(?:tm|lag)\s*(?:is|=|\:)?\s*([-+]?\d*\.\d+|\d+)', user_msg)
-        tau_match = re.search(r'(?:tau|dead\s*time|taum)\s*(?:is|=|\:)?\s*([-+]?\d*\.\d+|\d+)', user_msg)
-        
-        if km_match: bot_memory['km'] = float(km_match.group(1))
-        if tm_match: bot_memory['tm'] = float(tm_match.group(1))
-        if tau_match: bot_memory['taum'] = float(tau_match.group(1))
-        
-        if any(word in user_msg for word in ["fast", "quick", "aggressive"]): bot_memory['intent'] = 0
-        elif any(word in user_msg for word in ["smooth", "stable", "safe"]): bot_memory['intent'] = 2
-        elif any(word in user_msg for word in ["disturbance", "rejection", "outside", "reject"]): bot_memory['intent'] = 3
-        
-        # Check Memory
-        missing = []
-        if bot_memory['km'] is None: missing.append("Km (Gain)")
-        if bot_memory['tm'] is None: missing.append("Tm (Lag)")
-        if bot_memory['taum'] is None: missing.append("Tau (Dead Time)")
-        
-        if missing:
-            return jsonify({"reply": f"Got it. But I still need: **{', '.join(missing)}**. \n\n(Current memory: Km={bot_memory['km']}, Tm={bot_memory['tm']}, Tau={bot_memory['taum']})", "chart": None})
-            
-        # Execute Math
-        km = bot_memory['km']
-        tm = bot_memory['tm']
-        taum = bot_memory['taum']
-        intent = bot_memory['intent']
-        
-        if km == 0 or tm == 0 or taum == 0:
-            return jsonify({"reply": "Error: Process parameters (Km, Tm, Tau) cannot be absolute zero.", "chart": None})
+        # THE AI TRANSLATOR
+        # This tells Gemini to act as a data extractor
+        ai_prompt = f"""
+        You are a process control engineering assistant. Read the user input and extract the tuning parameters.
+        Map physical descriptions to the correct variables:
+        - km: Process Gain (sensitivity, output per unit input)
+        - tm: Lag Time (time constant, tank fill time, pipe length delay)
+        - taum: Dead Time (sensor delay, transport delay, pure delay)
+        - intent: 0 for fast/aggressive, 1 for neutral, 2 for smooth/safe, 3 for disturbance rejection
 
-        rule_key = ai_model.predict(np.array([[km, tm, taum, intent]]))[0]
-        
-        if rule_key == "uncontrollable":
-            return jsonify({"reply": f"Warning: Your Dead Time ({taum}s) is too high compared to Lag ({tm}s). This is delay-dominant and cannot be safely controlled by standard PI tuning.", "chart": None})
-        
-        rule_data = rules_db[rule_key]
-        rule_name = rule_data['name']
-        
-        if rule_key == "hazebroek":
-            kc, ti = calculate_hazebroek(km, tm, taum)
-        else:
-            variables = {"km": km, "tm": tm, "taum": taum}
-            kc = eval(rule_data['kc_math'], {}, variables)
-            ti = eval(rule_data['ti_math'], {}, variables)
-            
-        chart_json, overshoot = simulate_step(kc, ti, km, tm, taum)
-        
-        # The new L/Tau ratio calculation
-        l_tau_ratio = taum / tm
-        
-        reply_text = (f"Based on your parameters and request, I selected the **{rule_name}** tuning method.\n\n"
-                      f"• L/τ Ratio (Dead Time / Lag): {round(l_tau_ratio, 3)}\n"
-                      f"• Controller Gain (Kc): {round(kc, 3)}\n"
-                      f"• Integral Time (Ti): {round(ti, 3)} seconds\n"
-                      f"• Simulated Overshoot: {overshoot}%")
-        
-        return jsonify({"reply": reply_text, "chart": chart_json})
-        
-    except Exception as e:
-        error_trace = traceback.format_exc()
-        return jsonify({"reply": f"SYSTEM CRASH:\n{str(e)}\n\nCheck logs for details.", "chart": None})
+        User Input: "{user_msg}"
 
-if __name__ == '__main__':
+        Return ONLY a raw JSON object with these exact keys. If a value is missing, use null.
+        Example: {{"km": 2.5, "tm": 10.0, "taum": null, "intent": 1}}
+        """
+        
+        # Ask Gemini to read the text and return the JSON
+        response = llm_model.generate_content(ai_prompt)
+        extracted_data = json.loads(response.text)
+        
+        # Update the bot memory with what Gemini found
+        if extracted_data.get('km') is not None: bot_memory['km'] = float(extracted_data['km'])
+        if extracted_data.get('tm') is not None: bot_memory['tm'] = float(extracted_data['tm'])
+        if extracted_data.get('taum') is not None: bot_memory['taum'] = float(extracted_data['taum'])
+        if extracted_data.get('intent') is not None: bot_memory['intent'] = int(extracted_data['intent'])
     app.run(debug=True, port=5000)
