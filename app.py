@@ -1,5 +1,6 @@
 import os
 import re
+import google.generativeai as genai
 import random
 import numpy as np
 import pandas as pd
