@@ -1,5 +1,4 @@
 import os
-import re
 import google.generativeai as genai
 import random
 import numpy as np
@@ -16,19 +15,18 @@ genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
 generation_config = {"response_mime_type": "application/json"}
 llm_model = genai.GenerativeModel("gemini-2.5-flash", generation_config=generation_config)
 
-# =====================================================================
-# 1. BOT MEMORY
-# =====================================================================
+current_dir = os.path.dirname(os.path.abspath(__file__))
+
+# 1. BOT MEMORY (Now with History)
 bot_memory = {
     "km": None,
     "tm": None,
     "taum": None,
-    "intent": 1 # Default to Neutral
+    "intent": 1,
+    "history": [] 
 }
 
-# =====================================================================
-# 2. BUILD THE AI BRAIN IN MEMORY 
-# =====================================================================
+# 2. TRAIN THE AI BRAIN
 print("Training the AI Brain...")
 data = []
 for _ in range(5000):
@@ -60,12 +58,10 @@ rules_db = {
     "cohen_coon": {"name": "Cohen-Coon", "kc_math": "(tm / (km * taum)) * (0.9 + (taum / (12 * tm)))", "ti_math": "taum * ((30 + 3 * (taum / tm)) / (9 + 20 * (taum / tm)))"},
     "zhuang_atherton": {"name": "Zhuang & Atherton (Fast)", "kc_math": "((1.048 * tm) / (km * taum)) * ((taum / tm)**-0.227)", "ti_math": "tm / (1.195 - 0.368 * (taum / tm))"},
     "rovira": {"name": "Rovira (Smooth)", "kc_math": "((0.985 * tm) / (km * taum)) * ((taum / tm)**-0.086)", "ti_math": "tm / (0.608 * (taum / tm)**-0.707)"},
-    "hazebroek": {"name": "Hazebroek & Van der Waerden (Disturbance)", "kc_math": "SPECIAL", "ti_math": "SPECIAL"}
+    "hazebroek": {"name": "Hazebroek (Disturbance)", "kc_math": "SPECIAL", "ti_math": "SPECIAL"}
 }
 
-# =====================================================================
 # 3. HAZEBROEK LOGIC
-# =====================================================================
 def calculate_hazebroek(km, tm, taum):
     ratio = taum / tm
     ratios = [0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2.0, 2.2, 2.4, 2.6, 2.8, 3.0, 3.2, 3.4]
@@ -83,9 +79,7 @@ def calculate_hazebroek(km, tm, taum):
     ti = taum * beta
     return kc, ti
 
-# =====================================================================
 # 4. PHYSICS SIMULATOR
-# =====================================================================
 def simulate_step(kc, ti, km, tm, taum):
     t = np.linspace(0, (tm + taum) * 6, 400)
     dt = t[1] - t[0]
@@ -111,45 +105,17 @@ def simulate_step(kc, ti, km, tm, taum):
     
     graph_data = {
         "data": [
-            {
-                "x": t.tolist(), 
-                "y": pv.tolist(), 
-                "type": "scatter", 
-                "mode": "lines",
-                "name": "Process Output", 
-                "line": {"color": "#007bff", "width": 3}
-            },
-            {
-                "x": [t[0], t[-1]], 
-                "y": [1.0, 1.0], 
-                "type": "scatter", 
-                "mode": "lines",
-                "name": "Setpoint", 
-                "line": {"color": "red", "dash": "dash", "width": 2}
-            }
+            {"x": t.tolist(), "y": pv.tolist(), "type": "scatter", "mode": "lines", "name": "Process Output", "line": {"color": "#007bff", "width": 3}},
+            {"x": [t[0], t[-1]], "y": [1.0, 1.0], "type": "scatter", "mode": "lines", "name": "Setpoint", "line": {"color": "red", "dash": "dash", "width": 2}}
         ],
-        "layout": {
-            "title": "Step Response Simulation", 
-            "xaxis": {"title": "Time (seconds)"}, 
-            "yaxis": {"title": "Process Value"},
-            "margin": {"l": 20, "r": 20, "t": 40, "b": 20}, 
-            "paper_bgcolor": "rgba(0,0,0,0)", 
-            "plot_bgcolor": "rgba(0,0,0,0)"
-        }
+        "layout": {"title": "Step Response Simulation", "xaxis": {"title": "Time (seconds)"}, "yaxis": {"title": "Process Value"}, "paper_bgcolor": "rgba(0,0,0,0)", "plot_bgcolor": "rgba(0,0,0,0)"}
     }
-    
     return json.dumps(graph_data), round(overshoot, 1)
 
-# =====================================================================
 # 5. FLASK ROUTES
-# =====================================================================
 @app.route('/')
 def home():
-    try:
-        with open(os.path.join(current_dir, 'templates', 'index.html'), 'r') as f:
-            return render_template_string(f.read())
-    except FileNotFoundError:
-        return "Error: index.html not found inside the 'templates' folder!", 404
+    return "API is running. UI is hosted on GitHub Pages.", 200
 
 @app.route('/api/chat', methods=['POST'])
 def chat():
@@ -158,82 +124,112 @@ def chat():
     try:
         user_msg = request.json.get('message', '')
         
-        # THE AI TRANSLATOR
+        # Save to memory
+        bot_memory['history'].append(f"User: {user_msg}")
+        if len(bot_memory['history']) > 8:
+            bot_memory['history'] = bot_memory['history'][-8:]
+            
+        history_text = "\n".join(bot_memory['history'])
+        
+        # ADVANCED NLP PROMPT
         ai_prompt = f"""
-        You are a process control engineering assistant. Read the user input and extract the tuning parameters.
-        Map physical descriptions to the correct variables:
-        - km: Process Gain (sensitivity, output per unit input)
-        - tm: Lag Time (time constant, tank fill time, pipe length delay)
-        - taum: Dead Time (sensor delay, transport delay, pure delay)
-        - intent: 0 for fast/aggressive, 1 for neutral, 2 for smooth/safe, 3 for disturbance rejection
-
-        User Input: "{user_msg}"
-
-        Return ONLY a raw JSON object with these exact keys. If a value is missing, use null.
-        Example: {{"km": 2.5, "tm": 10.0, "taum": null, "intent": 1}}
+        You are an advanced industrial Process Control Engineering Assistant. Talk to the user naturally.
+        
+        YOUR SYSTEM KNOWLEDGE:
+        If the user asks about the rules or ranges you use, explain these clearly:
+        - Ziegler-Nichols (Used for Default/Neutral intent)
+        - Cohen-Coon (Used when Dead Time to Lag ratio is > 1.0)
+        - Zhuang & Atherton (Used for Fast intent, Ratio <= 1.0)
+        - Rovira (Used for Smooth intent, Ratio <= 1.0)
+        - Hazebroek & Van der Waerden (Used for Disturbance rejection, Ratio <= 1.0)
+        - Uncontrollable (If Ratio is > 2.0, the delay is too high for safe PI control)
+        
+        CURRENT KNOWN PARAMETERS: Km={bot_memory['km']}, Tm={bot_memory['tm']}, Tau={bot_memory['taum']}
+        
+        CHAT HISTORY:
+        {history_text}
+        
+        USER MESSAGE: "{user_msg}"
+        
+        Read the user message. Return a JSON object with these EXACT keys:
+        - "action": Use "reset" if they ask to clear memory/start over. Use "chat" for questions or greetings.
+        - "km": extract Process Gain if mentioned (float), else null
+        - "tm": extract Lag Time if mentioned (float), else null
+        - "taum": extract Dead Time if mentioned (float), else null
+        - "intent": 0 (fast), 1 (neutral), 2 (smooth), 3 (disturbance), else null
+        - "ai_reply": Your human-like, conversational response. Answer their questions about rules/ranges if asked. Acknowledge greetings.
         """
         
-        # Ask Gemini to read the text and return the JSON
         response = llm_model.generate_content(ai_prompt)
-        
-        # Clean the response to ensure it is raw JSON
         clean_text = response.text.replace('```json', '').replace('```', '').strip()
         extracted_data = json.loads(clean_text)
         
-        # Update the bot memory with what Gemini found
+        action = extracted_data.get('action', 'chat')
+        ai_reply = extracted_data.get('ai_reply', 'Understood.')
+        
+        # HANDLE RESET
+        if action == "reset":
+            bot_memory['km'] = None
+            bot_memory['tm'] = None
+            bot_memory['taum'] = None
+            bot_memory['intent'] = 1
+            bot_memory['history'].append(f"Bot: {ai_reply}")
+            return jsonify({"reply": ai_reply, "chart": None})
+            
+        # UPDATE PARAMETERS
         if extracted_data.get('km') is not None: bot_memory['km'] = float(extracted_data['km'])
         if extracted_data.get('tm') is not None: bot_memory['tm'] = float(extracted_data['tm'])
         if extracted_data.get('taum') is not None: bot_memory['taum'] = float(extracted_data['taum'])
         if extracted_data.get('intent') is not None: bot_memory['intent'] = int(extracted_data['intent'])
         
-        # Check Memory
         missing = []
-        if bot_memory['km'] is None: missing.append("Km (Gain)")
-        if bot_memory['tm'] is None: missing.append("Tm (Lag)")
-        if bot_memory['taum'] is None: missing.append("Tau (Dead Time)")
+        if bot_memory['km'] is None: missing.append("Process Gain (Km)")
+        if bot_memory['tm'] is None: missing.append("Lag Time (Tm)")
+        if bot_memory['taum'] is None: missing.append("Dead Time (Tau)")
         
-        if missing:
-            return jsonify({"reply": f"Got it. But I still need: {', '.join(missing)}. \n\n(Current memory: Km={bot_memory['km']}, Tm={bot_memory['tm']}, Tau={bot_memory['taum']})", "chart": None})
+        # IF STILL CHATTING OR MISSING DATA
+        if missing or action == "chat":
+            if not missing and action == "chat":
+                pass # Proceed to math if everything is here but they were just chatting
+            else:
+                bot_memory['history'].append(f"Bot: {ai_reply}")
+                return jsonify({"reply": ai_reply, "chart": None})
             
-        # Execute Math
-        km = bot_memory['km']
-        tm = bot_memory['tm']
-        taum = bot_memory['taum']
-        intent = bot_memory['intent']
+        # EXECUTE MATH
+        km, tm, taum, intent = bot_memory['km'], bot_memory['tm'], bot_memory['taum'], bot_memory['intent']
         
         if km == 0 or tm == 0 or taum == 0:
-            return jsonify({"reply": "Error: Process parameters (Km, Tm, Tau) cannot be absolute zero.", "chart": None})
+            err_msg = "Error: Process parameters cannot be zero."
+            return jsonify({"reply": err_msg, "chart": None})
 
         rule_key = ai_model.predict(np.array([[km, tm, taum, intent]]))[0]
         
         if rule_key == "uncontrollable":
-            return jsonify({"reply": f"Warning: Your Dead Time ({taum}s) is too high compared to Lag ({tm}s). This is delay-dominant and cannot be safely controlled by standard PI tuning.", "chart": None})
+            warn_msg = f"{ai_reply}\n\nWarning: Your Dead Time ({taum}s) is too high compared to Lag ({tm}s). This cannot be safely controlled by standard PI tuning."
+            bot_memory['history'].append(f"Bot: Issued uncontrollable warning.")
+            return jsonify({"reply": warn_msg, "chart": None})
         
         rule_data = rules_db[rule_key]
-        rule_name = rule_data['name']
         
-        if rule_key == "hazebroek":
-            kc, ti = calculate_hazebroek(km, tm, taum)
+        if rule_key == "hazebroek": kc, ti = calculate_hazebroek(km, tm, taum)
         else:
-            variables = {"km": km, "tm": tm, "taum": taum}
-            kc = eval(rule_data['kc_math'], {}, variables)
-            ti = eval(rule_data['ti_math'], {}, variables)
+            kc = eval(rule_data['kc_math'], {}, {"km": km, "tm": tm, "taum": taum})
+            ti = eval(rule_data['ti_math'], {}, {"km": km, "tm": tm, "taum": taum})
             
         chart_json, overshoot = simulate_step(kc, ti, km, tm, taum)
-        
         l_tau_ratio = taum / tm
         
-        reply_text = (f"Based on your parameters and request, I selected the {rule_name} tuning method.\n\n"
-                      f"L/τ Ratio (Dead Time / Lag): {round(l_tau_ratio, 3)}\n"
+        final_reply = (f"{ai_reply}\n\nI ran the numbers. The Random Forest selected the {rule_data['name']} tuning method.\n"
+                      f"L/τ Ratio: {round(l_tau_ratio, 3)}\n"
                       f"Controller Gain (Kc): {round(kc, 3)}\n"
                       f"Integral Time (Ti): {round(ti, 3)} seconds\n"
                       f"Simulated Overshoot: {overshoot}%")
-        
-        return jsonify({"reply": reply_text, "chart": chart_json})
+                      
+        bot_memory['history'].append(f"Bot: Simulated successfully.")
+        return jsonify({"reply": final_reply, "chart": chart_json})
         
     except Exception as e:
-        error_trace = traceback.format_exc()
-        return jsonify({"reply": f"SYSTEM CRASH:\n{str(e)}\n\nCheck logs for details.", "chart": None})
+        return jsonify({"reply": f"SYSTEM CRASH: {str(e)}", "chart": None})
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
