@@ -17,7 +17,7 @@ llm_model = genai.GenerativeModel("gemini-2.5-flash", generation_config=generati
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 
-# 1. BOT MEMORY (Now with History)
+# 1. BOT MEMORY
 bot_memory = {
     "km": None,
     "tm": None,
@@ -133,10 +133,10 @@ def chat():
         
         # ADVANCED NLP PROMPT
         ai_prompt = f"""
-        You are an advanced industrial Process Control Engineering Assistant. Talk to the user naturally.
+        You are an advanced industrial Process Control Engineering Assistant. Talk to the user naturally like a human engineer.
         
         YOUR SYSTEM KNOWLEDGE:
-        If the user asks about the rules or ranges you use, explain these clearly:
+        If the user asks about the rules or ranges you use, explain these clearly in a conversational way:
         - Ziegler-Nichols (Used for Default/Neutral intent)
         - Cohen-Coon (Used when Dead Time to Lag ratio is > 1.0)
         - Zhuang & Atherton (Used for Fast intent, Ratio <= 1.0)
@@ -152,7 +152,7 @@ def chat():
         USER MESSAGE: "{user_msg}"
         
         Read the user message. Return a JSON object with these EXACT keys:
-        - "action": Use "reset" if they ask to clear memory/start over. Use "chat" for questions or greetings.
+        - "action": Use "reset" if they ask to clear memory/start over. Use "chat" for general questions, greetings, or asking about rules. Use "update" ONLY if they are giving you new numbers to run a calculation.
         - "km": extract Process Gain if mentioned (float), else null
         - "tm": extract Lag Time if mentioned (float), else null
         - "taum": extract Dead Time if mentioned (float), else null
@@ -167,7 +167,7 @@ def chat():
         action = extracted_data.get('action', 'chat')
         ai_reply = extracted_data.get('ai_reply', 'Understood.')
         
-        # HANDLE RESET
+        # 1. HANDLE RESET
         if action == "reset":
             bot_memory['km'] = None
             bot_memory['tm'] = None
@@ -176,7 +176,12 @@ def chat():
             bot_memory['history'].append(f"Bot: {ai_reply}")
             return jsonify({"reply": ai_reply, "chart": None})
             
-        # UPDATE PARAMETERS
+        # 2. HANDLE GENERAL CHAT (Stop here, do not draw a graph)
+        if action == "chat":
+            bot_memory['history'].append(f"Bot: {ai_reply}")
+            return jsonify({"reply": ai_reply, "chart": None})
+            
+        # 3. HANDLE PARAMETER UPDATES
         if extracted_data.get('km') is not None: bot_memory['km'] = float(extracted_data['km'])
         if extracted_data.get('tm') is not None: bot_memory['tm'] = float(extracted_data['tm'])
         if extracted_data.get('taum') is not None: bot_memory['taum'] = float(extracted_data['taum'])
@@ -187,15 +192,12 @@ def chat():
         if bot_memory['tm'] is None: missing.append("Lag Time (Tm)")
         if bot_memory['taum'] is None: missing.append("Dead Time (Tau)")
         
-        # IF STILL CHATTING OR MISSING DATA
-        if missing or action == "chat":
-            if not missing and action == "chat":
-                pass # Proceed to math if everything is here but they were just chatting
-            else:
-                bot_memory['history'].append(f"Bot: {ai_reply}")
-                return jsonify({"reply": ai_reply, "chart": None})
+        # If we still need numbers, ask for them and stop
+        if missing:
+            bot_memory['history'].append(f"Bot: {ai_reply}")
+            return jsonify({"reply": ai_reply, "chart": None})
             
-        # EXECUTE MATH
+        # 4. EXECUTE MATH (Only happens if action is 'update' and all numbers are present)
         km, tm, taum, intent = bot_memory['km'], bot_memory['tm'], bot_memory['taum'], bot_memory['intent']
         
         if km == 0 or tm == 0 or taum == 0:
@@ -233,4 +235,3 @@ def chat():
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
-
