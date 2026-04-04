@@ -3,221 +3,248 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Process Control Tuning Bot</title>
-    
+    <title>Tuning SLM</title>
     <script src="https://cdn.plot.ly/plotly-2.24.1.min.js"></script>
-    
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            background-color: #f4f7f6;
-            margin: 0;
-            padding: 20px;
-            display: flex;
-            justify-content: center;
+        :root {
+            --bg-color: #f4f7f6;
+            --sidebar-bg: #2c3e50;
+            --chat-bg: #ffffff;
+            --text-color: #333333;
+            --bot-bubble: #f1f3f5;
+            --bot-text: #333333;
+            --user-bubble: #007bff;
+            --user-text: #ffffff;
+            --accent: #007bff;
         }
-        .chat-container {
-            width: 100%;
-            max-width: 800px;
-            background: white;
-            border-radius: 10px;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+
+        [data-theme="dark"] {
+            --bg-color: #121212;
+            --sidebar-bg: #1e1e1e;
+            --chat-bg: #1e1e1e;
+            --text-color: #e0e0e0;
+            --bot-bubble: #333333;
+            --bot-text: #e0e0e0;
+            --user-bubble: #0056b3;
+            --accent: #00aaff;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            display: flex;
+            height: 100vh;
+            transition: background 0.3s, color 0.3s;
+        }
+
+        /* SIDEBAR */
+        #sidebar {
+            width: 250px;
+            background-color: var(--sidebar-bg);
+            color: white;
             display: flex;
             flex-direction: column;
-            overflow: hidden;
-            height: 90vh; /* Keeps it fitted to the screen */
+            transition: transform 0.3s;
         }
-        .header {
-            background-color: #007bff;
-            color: white;
-            padding: 15px;
-            text-align: center;
+        .sidebar-header {
+            padding: 20px;
             font-size: 1.2em;
             font-weight: bold;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
         }
-        #chat-box {
-            flex: 1;
-            padding: 20px;
-            overflow-y: auto;
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
+        .menu-btn {
+            background: transparent; border: 1px solid rgba(255,255,255,0.5); color: white;
+            padding: 10px; margin: 15px; border-radius: 5px; cursor: pointer; text-align: left;
+        }
+        .menu-btn:hover { background: rgba(255,255,255,0.1); }
+        .history-list { flex: 1; padding: 15px; overflow-y: auto; font-size: 0.9em; color: #aaa; }
+
+        /* MAIN CHAT AREA */
+        #main-content {
+            flex: 1; display: flex; flex-direction: column; background: var(--bg-color);
+        }
+        .top-nav {
+            padding: 15px 20px; background: var(--chat-bg); display: flex; 
+            justify-content: space-between; align-items: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .theme-toggle {
+            cursor: pointer; background: var(--accent); color: white; border: none; 
+            padding: 8px 15px; border-radius: 20px; font-weight: bold;
+        }
+
+        #chat-container {
+            flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 15px;
+        }
+
+        .user-msg, .bot-msg {
+            padding: 12px 18px; border-radius: 15px; max-width: 80%; word-wrap: break-word;
         }
         .user-msg {
-            align-self: flex-end;
-            background-color: #007bff;
-            color: white;
-            padding: 12px 18px;
-            border-radius: 15px 15px 0 15px;
-            max-width: 80%;
-            word-wrap: break-word;
+            align-self: flex-end; background-color: var(--user-bubble); color: var(--user-text);
+            border-bottom-right-radius: 0;
         }
         .bot-msg {
-            align-self: flex-start;
-            background-color: #f1f3f5;
-            color: #333;
-            padding: 12px 18px;
-            border-radius: 15px 15px 15px 0;
-            max-width: 80%;
-            white-space: pre-wrap; /* Ensures the Python line breaks format correctly */
-            word-wrap: break-word;
+            align-self: flex-start; background-color: var(--bot-bubble); color: var(--bot-text);
+            border-bottom-left-radius: 0; white-space: pre-wrap;
         }
+
+        /* INPUT AREA */
         .input-area {
-            display: flex;
-            padding: 15px;
-            background: #fff;
-            border-top: 1px solid #ddd;
+            display: flex; padding: 20px; background: var(--chat-bg); border-top: 1px solid rgba(0,0,0,0.1);
         }
         input[type="text"] {
-            flex: 1;
-            padding: 12px;
-            border: 1px solid #ccc;
-            border-radius: 5px;
-            font-size: 1em;
-            outline: none;
+            flex: 1; padding: 15px; border: 1px solid #ccc; border-radius: 25px;
+            background: var(--bg-color); color: var(--text-color); font-size: 1em; outline: none;
         }
-        input[type="text"]:focus {
-            border-color: #007bff;
-        }
-        button {
-            padding: 12px 24px;
-            margin-left: 10px;
-            background-color: #007bff;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 1em;
-            font-weight: bold;
-            transition: background 0.3s;
-        }
-        button:hover {
-            background-color: #0056b3;
-        }
-        #chart-container {
-            width: 100%;
-            margin-top: 15px;
-            background: white;
-            border-radius: 8px;
-            padding: 10px;
-            box-sizing: border-box;
+        .send-btn {
+            background: var(--accent); color: white; border: none; padding: 0 25px; 
+            margin-left: 10px; border-radius: 25px; cursor: pointer; font-weight: bold;
         }
     </style>
 </head>
 <body>
 
-<div class="chat-container">
-    <div class="header">TUNING BOT</div>
-    
-    <div id="chat-box">
-        <div class="bot-msg"><b>Bot:</b> Welcome to Tuning Bot. Enter your process parameters (Km, Tm, Tau) and let me know your industrial scenario to get started.</div>
+    <div id="sidebar">
+        <div class="sidebar-header">⚙️ Process SLM</div>
+        <button class="menu-btn" onclick="startNewChat()">+ New Chat</button>
+        <div class="history-list" id="history-list">
+            <p>Session Active.</p>
+        </div>
     </div>
 
-    <div class="input-area">
-        <input type="text" id="chat-input" placeholder="Type your message here..." onkeypress="handleEnter(event)">
-        <button onclick="sendMessage()">Send</button>
+    <div id="main-content">
+        <div class="top-nav">
+            <strong style="color: var(--text-color);">Tuning Assistant</strong>
+            <button class="theme-toggle" onclick="toggleTheme()">🌙 Dark Mode</button>
+        </div>
+        
+        <div id="chat-container"></div>
+
+        <div class="input-area">
+         <input type="text" id="chat-input" placeholder="Enter parameters (Km, Tm, Tau) or ask about tuning rules..." onkeypress="handleEnter(event)">            <button class="send-btn" onclick="sendMessage()">Send</button>
+        </div>
     </div>
-</div>
 
 <script>
-    // 1. Allows pressing "Enter" on the keyboard to trigger the Send button
+    // --- UI & LocalStorage Logic ---
+    document.addEventListener("DOMContentLoaded", () => {
+        const savedTheme = localStorage.getItem("theme");
+        if (savedTheme === "dark") toggleTheme();
+        
+        // Load chat history if it exists
+        const savedChat = localStorage.getItem("chatHistory");
+        if (savedChat) {
+            document.getElementById('chat-container').innerHTML = savedChat;
+            scrollToBottom();
+        } else {
+            addMessageToChat('Bot', "Hello! I am your SLM Tuning Assistant. Give me parameters (Km, Tm, Tau), ask about rules, or just say 'Give me a demo process' to see how I work!");
+        }
+    });
+
+    function toggleTheme() {
+        const body = document.body;
+        const btn = document.querySelector('.theme-toggle');
+        if (body.getAttribute("data-theme") === "dark") {
+            body.removeAttribute("data-theme");
+            btn.innerText = "🌙 Dark Mode";
+            localStorage.setItem("theme", "light");
+        } else {
+            body.setAttribute("data-theme", "dark");
+            btn.innerText = "☀️ Light Mode";
+            localStorage.setItem("theme", "dark");
+        }
+    }
+
+    function scrollToBottom() {
+        const chatBox = document.getElementById('chat-container');
+        chatBox.scrollTop = chatBox.scrollHeight;
+    }
+
+    function saveChat() {
+        const chatBoxHTML = document.getElementById('chat-container').innerHTML;
+        localStorage.setItem("chatHistory", chatBoxHTML);
+    }
+
+    // --- Communication Logic ---
     function handleEnter(event) {
-        if (event.key === 'Enter') {
-            sendMessage();
-        }
+        if (event.key === 'Enter') sendMessage();
     }
 
-    // 2. Creates the visual chat bubbles on the screen
     function addMessageToChat(sender, text) {
-        const chatBox = document.getElementById('chat-box'); 
-        if (!chatBox) return;
-        
-        const messageDiv = document.createElement('div');
-        messageDiv.className = sender === 'User' ? 'user-msg' : 'bot-msg'; 
-        
-        // Clean up the text so we don't accidentally print "Bot: Bot:" 
-        let cleanText = text;
-        if (sender === 'Bot') {
-            cleanText = cleanText.replace(/^Bot:\s*/, '');
-        }
-        
-        messageDiv.innerHTML = `<b>${sender}:</b> ${cleanText}`;
-        chatBox.appendChild(messageDiv);
-        
-        // Auto-scroll to the bottom of the chat
-        chatBox.scrollTop = chatBox.scrollHeight; 
+        const chatBox = document.getElementById('chat-container'); 
+        const msgDiv = document.createElement('div');
+        msgDiv.className = sender === 'User' ? 'user-msg' : 'bot-msg'; 
+        msgDiv.innerHTML = `<b>${sender}:</b> ${text.replace(/^Bot:\s*/, '')}`;
+        chatBox.appendChild(msgDiv);
+        scrollToBottom();
+        saveChat();
     }
 
-    // 3. Uses Plotly to draw the step response graph
     function drawChart(chartData) {
-        let chartDiv = document.getElementById('chart-container');
+        const chatBox = document.getElementById('chat-container');
+        const chartId = 'chart-' + Date.now();
+        const chartDiv = document.createElement('div');
+        chartDiv.id = chartId;
+        chartDiv.style.width = "100%";
+        chartDiv.style.height = "300px";
+        chartDiv.style.marginTop = "10px";
+        chartDiv.style.background = "white"; // Plotly needs white bg for contrast usually
+        chartDiv.style.borderRadius = "10px";
         
-        // If the chart container doesn't exist yet, build it
-        if (!chartDiv) {
-            chartDiv = document.createElement('div');
-            chartDiv.id = 'chart-container';
-            document.getElementById('chat-box').appendChild(chartDiv);
-        }
-        
-        // Tell Plotly to draw the graph
-        Plotly.newPlot(chartDiv.id, chartData.data, chartData.layout);
-        
-        // Scroll down so the user can see the new graph
-        document.getElementById('chat-box').scrollTop = document.getElementById('chat-box').scrollHeight;
+        chatBox.appendChild(chartDiv);
+        Plotly.newPlot(chartId, chartData.data, chartData.layout);
+        scrollToBottom();
+        saveChat();
     }
 
-    // 4. The Main Engine: Sends data to Render and waits for the reply
+    async function startNewChat() {
+        // Clear screen and local storage
+        document.getElementById('chat-container').innerHTML = "";
+        localStorage.removeItem("chatHistory");
+        
+        // Send reset command to server
+        addMessageToChat('Bot', "<i>Resetting server memory...</i>");
+        try {
+            await fetch('https://process-control-project.onrender.com/api/chat', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: "reset" })
+            });
+        } catch(e) {}
+        
+        document.getElementById('chat-container').innerHTML = "";
+        addMessageToChat('Bot', "Memory cleared. New session started. How can I help you?");
+    }
+
     async function sendMessage() {
         const input = document.getElementById('chat-input');
-        if (!input) return;
-
         const message = input.value.trim();
         if (!message) return;
 
-        // Display the user's message and clear the text box
         addMessageToChat('User', message);
         input.value = '';
 
-        // Create a temporary "Thinking..." bubble
-        const chatBox = document.getElementById('chat-box');
-        const typingDiv = document.createElement('div');
-        typingDiv.className = 'bot-msg';
-        typingDiv.id = 'typing-indicator';
-        typingDiv.innerHTML = `<i>Thinking...</i>`;
-        chatBox.appendChild(typingDiv);
-        chatBox.scrollTop = chatBox.scrollHeight;
+        const typingId = "typing-" + Date.now();
+        addMessageToChat('Bot', `<span id="${typingId}"><i>Thinking...</i></span>`);
 
         try {
-            // POST request to your Render Python server
             const response = await fetch('https://process-control-project.onrender.com/api/chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ message: message })
             });
-
             const data = await response.json();
             
-            // Remove the "Thinking..." indicator
-            const indicator = document.getElementById('typing-indicator');
-            if (indicator) indicator.remove(); 
+            document.getElementById(typingId).parentElement.remove(); 
 
-            // Display the text reply from Python
-            if (data.reply) {
-                addMessageToChat('Bot', data.reply);
-            }
-            
-            // If Python attached graph data, draw it
-            if (data.chart) {
-                drawChart(JSON.parse(data.chart));
-            }
+            if (data.reply) addMessageToChat('Bot', data.reply);
+            if (data.chart) drawChart(JSON.parse(data.chart));
 
         } catch (error) {
-            // If the server fails or is asleep, remove the thinking indicator and show an error
-            const indicator = document.getElementById('typing-indicator');
-            if (indicator) indicator.remove(); 
-            
-            console.error("Fetch Error:", error);
-            addMessageToChat('Bot', '<span style="color:red;">Network error. The Render server might be waking up or offline. Please wait 60 seconds and try again.</span>');
+            document.getElementById(typingId).parentElement.remove(); 
+            addMessageToChat('Bot', 'Error connecting to server. Please try again.');
         }
     }
 </script>
