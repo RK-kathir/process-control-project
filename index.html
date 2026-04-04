@@ -114,16 +114,52 @@
             body.getAttribute('data-theme') === 'dark' ? body.removeAttribute('data-theme') : body.setAttribute('data-theme', 'dark');
         }
 
-        function handleEnter(e) { if(e.key === 'Enter') sendMessage(); }
+       async function sendMessage() {
+    // 1. Find your input box (We will use querySelector to find the text box no matter what ID you gave it!)
+    const input = document.querySelector('input[type="text"]') || document.querySelector('textarea');
+    const message = input.value.trim();
+    if (!message) return;
 
-        async function sendMessage() {
-            const input = document.getElementById('userInput');
-            const message = input.value;
-            if(!message) return;
+    // 2. Show User Message
+    addMessageToChat('User', message);
+    input.value = '';
 
-            addBubble(message, 'user');
-            input.value = '';
+    // 3. Create a temporary "Bot is typing..." message directly in the chat history
+    addMessageToChat('Bot', '<span id="typing-indicator" style="color: gray; font-style: italic;">Thinking...</span>');
 
+    try {
+        // 4. Send to Render
+        const response = await fetch('https://process-control-project.onrender.com/api/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: message })
+        });
+
+        const data = await response.json();
+        
+        // 5. Remove the "Thinking..." message
+        const typingIndicator = document.getElementById('typing-indicator');
+        if (typingIndicator) {
+            // This removes the entire bubble that held the typing indicator
+            typingIndicator.parentElement.remove(); 
+        }
+
+        // 6. Show the real Bot Reply
+        addMessageToChat('Bot', data.reply);
+        
+        // 7. Draw Chart if exists
+        if (data.chart) {
+            drawChart(JSON.parse(data.chart));
+        }
+
+    } catch (error) {
+        // Remove the typing indicator on error
+        const typingIndicator = document.getElementById('typing-indicator');
+        if (typingIndicator) typingIndicator.parentElement.remove();
+        
+        addMessageToChat('Bot', 'Network error. Please try again.');
+    }
+}
             try {
                 // Notice the URL changed here to point directly to Render!
                 const res = await fetch('https://process-control-project.onrender.com/api/chat', {
