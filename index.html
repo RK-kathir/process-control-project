@@ -3,44 +3,221 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>O'Dwyer Expert SLM</title>
+    <title>Tuning Bot</title>
     <script src="https://cdn.plot.ly/plotly-2.24.1.min.js"></script>
     <style>
-        :root { --bg: #1e1e1e; --side: #121212; --msg-user: #007bff; --msg-bot: #2c2c2c; --text: #e0e0e0; }
-        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); margin: 0; display: flex; height: 100vh; }
-        
-        #sidebar { width: 260px; background: var(--side); display: flex; flex-direction: column; border-right: 1px solid #333; }
-        .side-head { padding: 20px; font-weight: bold; font-size: 1.1em; color: white; border-bottom: 1px solid #333; }
-        .new-btn { margin: 15px; padding: 12px; background: transparent; border: 1px solid #555; color: white; border-radius: 5px; cursor: pointer; }
-        .new-btn:hover { background: #333; }
-        #history-list { flex: 1; overflow-y: auto; padding: 10px; }
-        .history-item { padding: 10px; margin-bottom: 5px; background: #222; border-radius: 5px; cursor: pointer; font-size: 0.9em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .history-item:hover { background: #333; }
+        /* Modern LLM Color Palette */
+        :root {
+            --bg-main: #212121;
+            --bg-sidebar: #171717;
+            --bg-input: #2f2f2f;
+            --text-main: #ececec;
+            --text-muted: #b4b4b4;
+            --accent: #10a37f; /* AI Green */
+            --accent-hover: #1a7f64;
+            --user-bubble: #2f2f2f;
+        }
 
-        #main { flex: 1; display: flex; flex-direction: column; }
-        #chat-box { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 15px; }
-        .msg { padding: 12px 18px; border-radius: 10px; max-width: 80%; line-height: 1.5; }
-        .user-msg { background: var(--msg-user); color: white; align-self: flex-end; }
-        .bot-msg { background: var(--msg-bot); color: var(--text); align-self: flex-start; border: 1px solid #444; }
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-main);
+            color: var(--text-main);
+            margin: 0;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* SIDEBAR (Sleek & Minimal) */
+        #sidebar {
+            width: 260px;
+            background-color: var(--bg-sidebar);
+            display: flex;
+            flex-direction: column;
+            transition: all 0.3s ease;
+        }
+        .sidebar-header {
+            padding: 20px;
+            font-size: 1.2em;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .new-chat-btn {
+            margin: 0 15px 15px 15px;
+            padding: 12px;
+            background-color: transparent;
+            border: 1px solid rgba(255,255,255,0.2);
+            color: white;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.95em;
+            transition: all 0.2s ease;
+            text-align: left;
+        }
+        .new-chat-btn:hover {
+            background-color: rgba(255,255,255,0.05);
+        }
+        #history-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 0 15px;
+        }
+        .history-item {
+            padding: 12px;
+            margin-bottom: 5px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.9em;
+            color: var(--text-muted);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            transition: background 0.2s;
+        }
+        .history-item:hover {
+            background-color: rgba(255,255,255,0.05);
+            color: white;
+        }
+
+        /* MAIN CHAT AREA */
+        #main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
         
-        .input-area { padding: 20px; background: var(--bg); border-top: 1px solid #333; display: flex; }
-        input { flex: 1; padding: 15px; background: #2c2c2c; border: 1px solid #444; color: white; border-radius: 20px; outline: none; }
-        button.send { padding: 0 25px; margin-left: 10px; background: #007bff; color: white; border: none; border-radius: 20px; cursor: pointer; font-weight: bold; }
+        #chat-box {
+            flex: 1;
+            padding: 40px 20%; /* Centers the chat like ChatGPT */
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 25px;
+            scroll-behavior: smooth;
+            padding-bottom: 120px; /* Space for the floating input */
+        }
+
+        /* MESSAGE ANIMATIONS & STYLING */
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(15px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .msg-container {
+            display: flex;
+            flex-direction: column;
+            animation: slideUp 0.4s ease-out forwards;
+            line-height: 1.6;
+            font-size: 1rem;
+        }
+
+        .user-msg {
+            align-self: flex-end;
+            background-color: var(--user-bubble);
+            padding: 12px 20px;
+            border-radius: 18px;
+            max-width: 80%;
+        }
+
+        .bot-msg {
+            align-self: flex-start;
+            max-width: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .bot-label {
+            font-weight: 600;
+            margin-bottom: 5px;
+            color: var(--accent);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* THE FLOATING PROMPT BAR */
+        .input-container {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 60%;
+            max-width: 800px;
+            background-color: var(--bg-input);
+            border-radius: 15px;
+            box-shadow: 0 0 15px rgba(0,0,0,0.5);
+            display: flex;
+            align-items: center;
+            padding: 5px 10px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        input[type="text"] {
+            flex: 1;
+            padding: 15px;
+            background: transparent;
+            border: none;
+            color: white;
+            font-size: 1rem;
+            outline: none;
+        }
+        
+        input[type="text"]::placeholder {
+            color: #888;
+        }
+
+        button.send {
+            background-color: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            padding: 10px 15px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        button.send:hover {
+            background-color: var(--accent-hover);
+        }
+
+        /* TYPING INDICATOR */
+        .typing-dots::after {
+            content: '.';
+            animation: dots 1.5s steps(5, end) infinite;
+        }
+        @keyframes dots {
+            0%, 20% { color: rgba(0,0,0,0); text-shadow: .25em 0 0 rgba(0,0,0,0), .5em 0 0 rgba(0,0,0,0); }
+            40% { color: white; text-shadow: .25em 0 0 rgba(0,0,0,0), .5em 0 0 rgba(0,0,0,0); }
+            60% { text-shadow: .25em 0 0 white, .5em 0 0 rgba(0,0,0,0); }
+            80%, 100% { text-shadow: .25em 0 0 white, .5em 0 0 white; }
+        }
     </style>
 </head>
 <body>
 
 <div id="sidebar">
-    <div class="side-head">🏭 Industrial SLM</div>
-    <button class="new-btn" onclick="startNewChat()">+ New Process Tuning</button>
+    <div class="sidebar-header">
+        ⚙️ Tuning Bot
+    </div>
+    <button class="new-chat-btn" onclick="startNewChat()">+ New Tuning Session</button>
     <div id="history-list"></div>
 </div>
 
 <div id="main">
     <div id="chat-box"></div>
-    <div class="input-area">
-        <input type="text" id="chat-input" placeholder="Enter Km, Tm, Tau or ask about O'Dwyer rules..." onkeypress="if(event.key==='Enter') sendMessage()">
-        <button class="send" onclick="sendMessage()">Send</button>
+    
+    <div class="input-container">
+        <input type="text" id="chat-input" placeholder="Message Tuning Bot... (e.g., Km=2, Tm=10, Tau=2)" onkeypress="if(event.key==='Enter') sendMessage()">
+        <button class="send" onclick="sendMessage()">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+        </button>
     </div>
 </div>
 
@@ -59,7 +236,7 @@
 
     function startNewChat() {
         currentId = Date.now();
-        sessions.unshift({ id: currentId, title: "New Tuning Session", html: `<div class="msg bot-msg"><b>System:</b> Connected to O'Dwyer Expert SLM. Ready for parameters.</div>` });
+        sessions.unshift({ id: currentId, title: "New Tuning Session", html: `<div class="msg-container bot-msg"><div class="bot-label">⚙️ Tuning Bot</div><div>Hello! I am ready to calculate tuning parameters. Provide your Km, Tm, and Tau.</div></div>` });
         saveData();
         renderSidebar();
         loadSession(currentId);
@@ -70,7 +247,7 @@
         currentId = id;
         const session = sessions.find(s => s.id === id);
         document.getElementById('chat-box').innerHTML = session.html;
-        document.getElementById('chat-box').scrollTop = document.getElementById('chat-box').scrollHeight;
+        scrollToBottom();
     }
 
     function renderSidebar() {
@@ -93,12 +270,10 @@
         }
     }
 
-    // Auto-generate title based on user input
     function updateTitle(userText) {
         const session = sessions.find(s => s.id === currentId);
         if (session.title === "New Tuning Session") {
-            // Grab the first few words as the title
-            session.title = userText.substring(0, 20) + "...";
+            session.title = userText.substring(0, 25) + "...";
             renderSidebar();
         }
     }
@@ -112,9 +287,13 @@
         input.value = '';
 
         const chatBox = document.getElementById('chat-box');
-        chatBox.innerHTML += `<div class="msg user-msg"><b>User:</b> ${text}</div>`;
+        
+        // Add User Message
+        chatBox.insertAdjacentHTML('beforeend', `<div class="msg-container user-msg">${text}</div>`);
+        
+        // Add Loading Indicator
         const tempId = "typ-" + Date.now();
-        chatBox.innerHTML += `<div class="msg bot-msg" id="${tempId}"><i>Calculating...</i></div>`;
+        chatBox.insertAdjacentHTML('beforeend', `<div class="msg-container bot-msg" id="${tempId}"><div class="bot-label">⚙️ Tuning Bot</div><div class="typing-dots">Analyzing</div></div>`);
         scrollToBottom();
 
         try {
@@ -125,16 +304,30 @@
             const data = await res.json();
             
             document.getElementById(tempId).remove();
-            if(data.reply) chatBox.innerHTML += `<div class="msg bot-msg"><b>Bot:</b><br>${data.reply.replace(/\n/g, "<br>")}</div>`;
             
+            // Add Bot Reply
+            if(data.reply) {
+                chatBox.insertAdjacentHTML('beforeend', `<div class="msg-container bot-msg"><div class="bot-label">⚙️ Tuning Bot</div><div>${data.reply.replace(/\n/g, "<br>")}</div></div>`);
+            }
+            
+            // Draw Chart with Dark Mode Forcing
             if(data.chart) {
                 const cId = 'chart-' + Date.now();
-                chatBox.innerHTML += `<div id="${cId}" style="width:100%;height:300px;background:white;border-radius:5px;margin-top:10px;"></div>`;
-                Plotly.newPlot(cId, JSON.parse(data.chart).data, JSON.parse(data.chart).layout);
+                chatBox.insertAdjacentHTML('beforeend', `<div id="${cId}" style="width:100%; height:350px; margin-top:15px; border-radius:10px; overflow:hidden;"></div>`);
+                
+                let chartData = JSON.parse(data.chart);
+                // Force Plotly into Dark Mode to match the UI!
+                chartData.layout.paper_bgcolor = 'transparent';
+                chartData.layout.plot_bgcolor = 'transparent';
+                chartData.layout.font = { color: '#ececec' };
+                chartData.layout.xaxis.gridcolor = '#444';
+                chartData.layout.yaxis.gridcolor = '#444';
+                
+                Plotly.newPlot(cId, chartData.data, chartData.layout);
             }
         } catch(e) {
             document.getElementById(tempId).remove();
-            chatBox.innerHTML += `<div class="msg bot-msg" style="color:#ff4444;">Error connecting to Render API.</div>`;
+            chatBox.insertAdjacentHTML('beforeend', `<div class="msg-container bot-msg"><div class="bot-label" style="color:#ff4444;">⚠️ System Error</div><div style="color:#ff4444;">Could not connect to the Render API. Please try again.</div></div>`);
         }
         
         scrollToBottom();
