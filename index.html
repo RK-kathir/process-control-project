@@ -6,75 +6,38 @@
     <title>TUNING BOT</title>
     <script src="https://cdn.plot.ly/plotly-2.24.1.min.js"></script>
     <style>
-        :root { 
-            --bg-main: #121212; 
-            --bg-side: #0a0a0a; 
-            --bg-input: #1e1e1e;
-            --text-main: #f0f0f0; 
-            --text-muted: #888888;
-            --accent: #0ea5e9; 
-            --accent-hover: #0284c7;
-            --msg-user: #0ea5e9; 
-            --msg-bot: #1e1e1e;
-            --border: #2a2a2a;
-        }
-
-        body.light-mode {
-            --bg-main: #f9fafb; 
-            --bg-side: #ffffff; 
-            --bg-input: #ffffff;
-            --text-main: #111827; 
-            --text-muted: #6b7280;
-            --accent: #0284c7; 
-            --msg-user: #0284c7; 
-            --msg-bot: #ffffff;
-            --border: #e5e7eb;
-        }
-
-        body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg-main); color: var(--text-main); margin: 0; display: flex; height: 100vh; overflow: hidden; transition: background 0.3s, color 0.3s; }
+        :root { --bg-main: #121212; --bg-side: #0a0a0a; --bg-input: #1e1e1e; --text-main: #f0f0f0; --text-muted: #888888; --accent: #0ea5e9; --accent-hover: #0284c7; --msg-user: #0ea5e9; --msg-bot: #1e1e1e; --border: #2a2a2a; }
+        body.light-mode { --bg-main: #f9fafb; --bg-side: #ffffff; --bg-input: #ffffff; --text-main: #111827; --text-muted: #6b7280; --accent: #0284c7; --msg-user: #0284c7; --msg-bot: #ffffff; --border: #e5e7eb; }
+        body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg-main); color: var(--text-main); margin: 0; display: flex; height: 100vh; overflow: hidden; }
         
-        #sidebar { width: 260px; background: var(--bg-side); display: flex; flex-direction: column; border-right: 1px solid var(--border); transition: background 0.3s; z-index: 10; }
+        #sidebar { width: 260px; background: var(--bg-side); display: flex; flex-direction: column; border-right: 1px solid var(--border); z-index: 10; }
         .side-head { padding: 25px 20px; font-weight: 800; font-size: 1.1em; color: var(--text-main); letter-spacing: 1.5px; }
-        .action-btn { margin: 0 15px 15px 15px; padding: 12px; background: transparent; border: 1px solid var(--border); color: var(--text-main); border-radius: 8px; cursor: pointer; font-weight: 500; transition: 0.2s; display: flex; align-items: center; justify-content: center; }
+        .action-btn { margin: 0 15px 15px 15px; padding: 12px; background: transparent; border: 1px solid var(--border); color: var(--text-main); border-radius: 8px; cursor: pointer; font-weight: 500; }
         .action-btn:hover { background: var(--border); }
-        
-        #history-list { flex: 1; overflow-y: auto; padding: 0 15px; }
-        .history-item { padding: 12px; margin-bottom: 5px; border-radius: 6px; cursor: pointer; font-size: 0.9em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-muted); transition: 0.2s; }
-        .history-item:hover { background: var(--border); color: var(--text-main); }
-
         .theme-toggle { margin: 15px; padding: 12px; text-align: center; cursor: pointer; background: var(--bg-input); border: 1px solid var(--border); border-radius: 8px; color: var(--text-main); font-weight: 600; font-size: 0.9em; }
         
         #main { flex: 1; display: flex; flex-direction: column; position: relative; }
         #chat-box { flex: 1; padding: 40px 15%; overflow-y: auto; display: flex; flex-direction: column; gap: 20px; padding-bottom: 150px; scroll-behavior: smooth; }
         
-        .msg { padding: 16px 20px; border-radius: 12px; max-width: 85%; line-height: 1.6; animation: fadeIn 0.3s ease-out; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
+        .msg { padding: 16px 20px; border-radius: 12px; max-width: 85%; line-height: 1.6; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
         .user-msg { background: var(--msg-user); color: #ffffff; align-self: flex-end; border-bottom-right-radius: 2px; }
         .bot-msg { background: var(--msg-bot); color: var(--text-main); align-self: flex-start; border: 1px solid var(--border); border-bottom-left-radius: 2px; width: 100%; }
         .bot-label { font-weight: 700; color: var(--accent); margin-bottom: 8px; font-size: 0.8em; text-transform: uppercase; letter-spacing: 1px; }
 
-        /* Modern Glassmorphism Input */
-        .input-wrapper { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(var(--bg-main), 0.8); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); padding: 20px 15% 30px 15%; display: flex; flex-direction: column; gap: 12px; }
-        
-        .suggestions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
-        .chip { padding: 8px 16px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 20px; font-size: 0.85em; cursor: pointer; color: var(--text-muted); transition: all 0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-        .chip:hover { border-color: var(--accent); color: var(--accent); transform: translateY(-1px); }
+        .options-container { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 15px; }
+        .option-btn { padding: 10px 18px; background: transparent; border: 1px solid var(--accent); color: var(--accent); border-radius: 20px; cursor: pointer; font-weight: 600; font-size: 0.85em; transition: 0.2s; }
+        .option-btn:hover { background: var(--accent); color: white; }
 
-        .input-container { display: flex; background: var(--bg-input); border: 1px solid var(--border); border-radius: 25px; box-shadow: 0 8px 20px rgba(0,0,0,0.08); padding: 6px 6px 6px 20px; }
+        .input-wrapper { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(var(--bg-main), 0.8); backdrop-filter: blur(12px); padding: 20px 15% 30px 15%; display: flex; flex-direction: column; gap: 12px; }
+        .input-container { display: flex; background: var(--bg-input); border: 1px solid var(--border); border-radius: 25px; padding: 6px 6px 6px 20px; }
         input { flex: 1; background: transparent; border: none; color: var(--text-main); font-size: 1em; outline: none; }
-        button.send { padding: 12px 28px; background: var(--accent); color: white; border: none; border-radius: 20px; cursor: pointer; font-weight: 600; transition: 0.2s; }
-        button.send:hover { background: var(--accent-hover); }
-
-        /* The Thinking Animation */
+        button.send { padding: 12px 28px; background: var(--accent); color: white; border: none; border-radius: 20px; cursor: pointer; font-weight: 600; }
+        
         .typing-indicator { display: flex; gap: 5px; padding: 5px 0; align-items: center; }
         .dot { width: 8px; height: 8px; background: var(--accent); border-radius: 50%; animation: bounce 1.4s infinite ease-in-out both; }
         .dot:nth-child(1) { animation-delay: -0.32s; }
         .dot:nth-child(2) { animation-delay: -0.16s; }
-        
-        @keyframes bounce { 
-            0%, 80%, 100% { transform: scale(0); opacity: 0.5; } 
-            40% { transform: scale(1); opacity: 1; } 
-        }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes bounce { 0%, 80%, 100% { transform: scale(0); opacity: 0.5; } 40% { transform: scale(1); opacity: 1; } }
     </style>
 </head>
 <body class="dark-mode">
@@ -82,19 +45,13 @@
 <div id="sidebar">
     <div class="side-head">TUNING BOT</div>
     <button class="action-btn" onclick="startNewChat()">New Session</button>
-    <div id="history-list"></div>
+    <div style="flex:1"></div>
     <div class="theme-toggle" onclick="toggleTheme()">Toggle Light/Dark</div>
 </div>
 
 <div id="main">
     <div id="chat-box"></div>
-    
     <div class="input-wrapper">
-        <div class="suggestions">
-            <div class="chip" onclick="sendChip('What tuning rules do you have?')">What rules do you have?</div>
-            <div class="chip" onclick="sendChip('Km=2, Tm=10, Tau=2 for IAE')">Tune for IAE</div>
-            <div class="chip" onclick="sendChip('Km=1.5, Tm=8, Tau=3 for fast response')">Fast Response</div>
-        </div>
         <div class="input-container">
             <input type="text" id="chat-input" placeholder="Message TUNING BOT..." onkeypress="if(event.key==='Enter') sendMessage()">
             <button class="send" onclick="sendMessage()">Send</button>
@@ -103,105 +60,51 @@
 </div>
 
 <script>
-    let sessions = JSON.parse(localStorage.getItem("tb_sessions")) || [];
-    let currentId = null;
-
     window.onload = () => {
-        if(localStorage.getItem('tb_theme') === 'light') { document.body.className = 'light-mode'; }
-        renderSidebar();
-        if (sessions.length > 0) { loadSession(sessions[0].id); } 
-        else { startNewChat(); }
+        if(localStorage.getItem('tb_theme') === 'light') document.body.className = 'light-mode';
+        startNewChat();
     };
 
     function toggleTheme() {
-        const body = document.body;
-        if(body.className === 'light-mode') {
-            body.className = 'dark-mode';
-            localStorage.setItem('tb_theme', 'dark');
-        } else {
-            body.className = 'light-mode';
-            localStorage.setItem('tb_theme', 'light');
-        }
+        document.body.className = document.body.className === 'light-mode' ? 'dark-mode' : 'light-mode';
+        localStorage.setItem('tb_theme', document.body.className === 'light-mode' ? 'light' : 'dark');
     }
 
     function startNewChat() {
-        currentId = Date.now();
-        const initialMsg = `<div class="msg bot-msg"><div class="bot-label">TUNING BOT</div>Hello. I am ready to calculate tuning parameters. Enter your process variables to begin.</div>`;
-        sessions.unshift({ id: currentId, title: "New Session", html: initialMsg });
-        
-        saveData();
-        renderSidebar();
-        loadSession(currentId);
-        fetch('https://process-control-project.onrender.com/api/chat', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({message: "reset"}) }).catch(e=>console.log(e));
+        document.getElementById('chat-box').innerHTML = "";
+        fetch('https://process-control-project.onrender.com/api/chat', { 
+            method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({message: "reset"}) 
+        }).then(res => res.json()).then(data => renderBotReply(data.reply, data.options, data.chart));
     }
 
-    function loadSession(id) {
-        currentId = id;
-        const session = sessions.find(s => s.id === id);
-        if(session) {
-            document.getElementById('chat-box').innerHTML = session.html;
-            scrollToBottom();
-        }
-    }
-
-    function renderSidebar() {
-        const list = document.getElementById('history-list');
-        list.innerHTML = "";
-        sessions.forEach(s => {
-            let div = document.createElement('div');
-            div.className = "history-item";
-            div.innerText = s.title;
-            div.onclick = () => loadSession(s.id);
-            list.appendChild(div);
-        });
-    }
-
-    function saveData() {
-        const session = sessions.find(s => s.id === currentId);
-        if (session) {
-            session.html = document.getElementById('chat-box').innerHTML;
-            localStorage.setItem("tb_sessions", JSON.stringify(sessions));
-        }
-    }
-
-    function updateTitle(userText) {
-        const session = sessions.find(s => s.id === currentId);
-        if (session && session.title === "New Session") {
-            session.title = userText.substring(0, 20) + "...";
-            renderSidebar();
-        }
-    }
-
-    function sendChip(text) {
-        document.getElementById('chat-input').value = text;
-        sendMessage();
+    function sendOption(label, val) {
+        document.getElementById('chat-box').innerHTML += `<div class="msg user-msg">${label}</div>`;
+        scrollToBottom();
+        fetch('https://process-control-project.onrender.com/api/chat', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({message: "", action_data: {key: val.split(":")[0], val: val}})
+        }).then(res => res.json()).then(data => renderBotReply(data.reply, data.options, data.chart));
     }
 
     function drawChart(chartData) {
-        const chatBox = document.getElementById('chat-box');
-        const chartId = 'chart-' + Date.now(); 
-        
-        const chartDiv = document.createElement('div');
-        chartDiv.id = chartId;
-        chartDiv.style.width = "100%";
-        chartDiv.style.height = "350px";
-        chartDiv.style.marginTop = "15px";
-        chartDiv.style.borderRadius = "8px";
-        chartDiv.style.border = "1px solid var(--border)";
-        chatBox.appendChild(chartDiv);
-        
-        try {
-            let parsedData = typeof chartData === 'string' ? JSON.parse(chartData) : chartData;
-            
-            const isLight = document.body.className === 'light-mode';
-            parsedData.layout.font = { color: isLight ? '#333' : '#e0e0e0' };
-            parsedData.layout.xaxis.gridcolor = isLight ? '#e5e7eb' : '#333';
-            parsedData.layout.yaxis.gridcolor = isLight ? '#e5e7eb' : '#333';
+        const cId = 'chart-' + Date.now();
+        document.getElementById('chat-box').innerHTML += `<div id="${cId}" style="width:100%; height:350px; margin-top:15px; border-radius:8px; border:1px solid var(--border)"></div>`;
+        let parsed = typeof chartData === 'string' ? JSON.parse(chartData) : chartData;
+        const isLight = document.body.className === 'light-mode';
+        parsed.layout.font = { color: isLight ? '#333' : '#e0e0e0' };
+        parsed.layout.xaxis.gridcolor = isLight ? '#e5e7eb' : '#333';
+        parsed.layout.yaxis.gridcolor = isLight ? '#e5e7eb' : '#333';
+        Plotly.newPlot(cId, parsed.data, parsed.layout);
+        scrollToBottom();
+    }
 
-            Plotly.newPlot(chartId, parsedData.data, parsedData.layout);
-        } catch (error) {
-            chatBox.innerHTML += `<div style="color:red; margin-top:10px;">Graph Error: ${error.message}</div>`;
+    function renderBotReply(replyText, options = [], chart = null) {
+        let optsHtml = "";
+        if (options && options.length > 0) {
+            optsHtml = `<div class="options-container">` + options.map(o => `<button class="option-btn" onclick="sendOption('${o.label}', '${o.val}')">${o.label}</button>`).join('') + `</div>`;
         }
+        document.getElementById('chat-box').innerHTML += `<div class="msg bot-msg"><div class="bot-label">TUNING BOT</div>${replyText.replace(/\n/g, "<br>")}${optsHtml}</div>`;
+        if (chart) drawChart(chart);
         scrollToBottom();
     }
 
@@ -209,47 +112,24 @@
         const input = document.getElementById('chat-input');
         const text = input.value.trim();
         if (!text) return;
-
-        updateTitle(text);
         input.value = '';
 
-        const chatBox = document.getElementById('chat-box');
-        chatBox.innerHTML += `<div class="msg user-msg">${text}</div>`;
-        
-        // Brand New Thinking Animation
+        document.getElementById('chat-box').innerHTML += `<div class="msg user-msg">${text}</div>`;
         const tempId = "typ-" + Date.now();
-        chatBox.innerHTML += `
-            <div class="msg bot-msg" id="${tempId}">
-                <div class="bot-label">TUNING BOT</div>
-                <div class="typing-indicator">
-                    <div class="dot"></div>
-                    <div class="dot"></div>
-                    <div class="dot"></div>
-                </div>
-            </div>`;
+        document.getElementById('chat-box').innerHTML += `<div class="msg bot-msg" id="${tempId}"><div class="bot-label">TUNING BOT</div><div class="typing-indicator"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div></div>`;
         scrollToBottom();
 
         try {
             const res = await fetch('https://process-control-project.onrender.com/api/chat', {
-                method: 'POST', headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({message: text})
+                method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({message: text})
             });
             const data = await res.json();
-            
             document.getElementById(tempId).remove();
-            
-            if(data.reply) {
-                chatBox.innerHTML += `<div class="msg bot-msg"><div class="bot-label">TUNING BOT</div>${data.reply.replace(/\n/g, "<br>")}</div>`;
-            }
-            if(data.chart) { drawChart(data.chart); }
-            
+            renderBotReply(data.reply, data.options, data.chart);
         } catch(e) {
             document.getElementById(tempId).remove();
-            chatBox.innerHTML += `<div class="msg bot-msg" style="color:#ef4444;">API Error: Connection failed.</div>`;
+            renderBotReply("API Error: Connection failed.");
         }
-        
-        scrollToBottom();
-        saveData();
     }
 
     function scrollToBottom() {
@@ -257,6 +137,5 @@
         b.scrollTop = b.scrollHeight;
     }
 </script>
-
 </body>
 </html>
