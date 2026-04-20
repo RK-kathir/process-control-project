@@ -18,7 +18,6 @@ bot_memory = {
     "preference": None, "history": []
 }
 
-# EXACTLY THE 5 RULES YOU REQUESTED
 rules_db = {
     "ziegler_nichols": {
         "name": "Ziegler-Nichols", "min_ratio": 0.1, "max_ratio": 1.0, "tags": ["fast"],
@@ -49,10 +48,6 @@ def local_fallback_engine(user_msg):
     if "reset" in msg or "new chat" in msg:
         return {"action": "reset", "ai_reply": "Memory cleared for a new session."}
 
-    if "rules" in msg:
-        rules_list = ", ".join([r['name'] for r in rules_db.values()])
-        return {"action": "chat", "ai_reply": f"I can tune using the following rules: {rules_list}."}
-
     km_m = re.search(r'(km|gain)\s*=?\s*(\d+\.?\d*)', msg)
     tm_m = re.search(r'(tm|lag)\s*=?\s*(\d+\.?\d*)', msg)
     tau_m = re.search(r'(tau|dead)\s*=?\s*(\d+\.?\d*)', msg)
@@ -61,7 +56,6 @@ def local_fallback_engine(user_msg):
     if tm_m: ext["tm"] = float(tm_m.group(2))
     if tau_m: ext["taum"] = float(tau_m.group(2))
     
-    # Simple feature extraction
     if "fast" in msg or "ise" in msg: ext["preference"] = "ise"
     elif "smooth" in msg or "itae" in msg: ext["preference"] = "itae"
     elif "iae" in msg: ext["preference"] = "iae"
@@ -111,17 +105,18 @@ def chat():
     global bot_memory
     try:
         user_msg = request.json.get('message', '')
+        user_msg_lower = user_msg.lower()
+        
         bot_memory['history'].append(f"User: {user_msg}")
         if len(bot_memory['history']) > 8: bot_memory['history'] = bot_memory['history'][-8:]
         
-        # INJECTING AVAILABLE RULES SO IT DOES NOT HALLUCINATE
-        available_rules = [r['name'] for r in rules_db.values()]
-        
+        # BULLETPROOF HALLUCINATION INTERCEPTOR
+        if "rules" in user_msg_lower or "what do you have" in user_msg_lower:
+            rules_list = ", ".join([r['name'] for r in rules_db.values()])
+            return jsonify({"reply": f"I exclusively support the following tuning rules from the database: {rules_list}.", "chart": None})
+            
         ai_prompt = f"""
-        You are an AI Tuning Bot for Process Control.
-        CRITICAL RULES CONSTRAINT: You ONLY know the following rules: {available_rules}. 
-        If the user asks what rules you have, you MUST ONLY list these exact rules. Do NOT mention Cohen-Coon, IMC, Tyreus-Luyben, or any other rule.
-        
+        You are TUNING BOT for Process Control.
         CURRENT PARAMETERS: Km={bot_memory['km']}, Tm={bot_memory['tm']}, Tau={bot_memory['taum']}, Preference={bot_memory['preference']}
         USER: "{user_msg}"
         
@@ -129,7 +124,7 @@ def chat():
         - "action": "reset", "chat", or "update"
         - "km", "tm", "taum": float or null
         - "preference": "fast", "smooth", "iae", "ise", "itae", "disturbance", or null
-        - "ai_reply": Conversational reply. If parameters are given but preference is null, specifically ask the user what type of response they want (e.g., Fast, IAE, ISE, ITAE, Disturbance).
+        - "ai_reply": Plain conversational reply. DO NOT USE markdown like asterisks or hashtags. If parameters are given but preference is null, ask what type of response they want.
         """
         
         try:
@@ -140,7 +135,7 @@ def chat():
 
         if ext.get('action') == "reset":
             bot_memory.update({"km": None, "tm": None, "taum": None, "preference": None})
-            return jsonify({"reply": ext.get('ai_reply', "Ready for a new tuning session."), "chart": None})
+            return jsonify({"reply": ext.get('ai_reply', "Ready for a new tuning session.").replace('*', ''), "chart": None})
 
         if ext.get('action') == "update":
             for k in ["km", "tm", "taum", "preference"]:
@@ -148,26 +143,22 @@ def chat():
 
         km, tm, taum, pref = bot_memory['km'], bot_memory['tm'], bot_memory['taum'], bot_memory['preference']
         
-        # Check if we have numbers but no preference
         if all([km, tm, taum]) and not pref:
             return jsonify({"reply": "I have your parameters (Km, Tm, Tau). To select the best rule, what type of response do you want? (Options: Fast, Minimum IAE, Minimum ISE, Minimum ITAE, or Disturbance)", "chart": None})
 
-        # Check if we are missing parameters
         if not all([km, tm, taum]):
             missing = [m for m, v in zip(["Gain (Km)", "Lag (Tm)", "Dead Time (Tau)"], [km, tm, taum]) if v is None]
-            if len(missing) < 3: # Only ask if they've provided at least one
-                return jsonify({"reply": f"{ext.get('ai_reply','')} I still need: {', '.join(missing)}.", "chart": None})
-            return jsonify({"reply": ext.get('ai_reply', "How can I help you today?"), "chart": None})
+            if len(missing) < 3: 
+                return jsonify({"reply": f"{ext.get('ai_reply','').replace('*', '')} I still need: {', '.join(missing)}.", "chart": None})
+            return jsonify({"reply": ext.get('ai_reply', "How can I help you today?").replace('*', ''), "chart": None})
 
-        # WE HAVE EVERYTHING - SELECT RULE
         ratio = taum / tm
         valid_rules = [k for k, r in rules_db.items() if pref in r['tags']]
-        if not valid_rules: valid_rules = ["ziegler_nichols"] # Fallback
+        if not valid_rules: valid_rules = ["ziegler_nichols"]
         
         best_rule = valid_rules[0]
         r = rules_db[best_rule]
         
-        # HAZERBROEK SPECIAL LOOKUP
         if r['kc_math'] == "SPECIAL_LOOKUP":
             kc = (0.85 * tm) / (km * taum) 
             ti = 2.4 * taum
@@ -178,9 +169,10 @@ def chat():
         
         chart, os_val = simulate_step(kc, ti, km, tm, taum)
         
-        reply = f"{ext.get('ai_reply', '')}\n\n**Tuned using:** {r['name']}\n**Kc:** {round(kc,4)}\n**Ti:** {round(ti,4)}s\n**Estimated Overshoot:** {os_val}%"
+        # REMOVED ALL MARKDOWN SYMBOLS HERE
+        clean_ai_reply = ext.get('ai_reply', '').replace('*', '').replace('#', '')
+        reply = f"{clean_ai_reply}\n\nTuned using: {r['name']}\nKc: {round(kc,4)}\nTi: {round(ti,4)}s\nEstimated Overshoot: {os_val}%"
         
-        # Reset memory after plotting
         bot_memory.update({"km": None, "tm": None, "taum": None, "preference": None})
         return jsonify({"reply": reply, "chart": chart})
 
