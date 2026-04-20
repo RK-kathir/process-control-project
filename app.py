@@ -15,45 +15,43 @@ llm_model = genai.GenerativeModel("gemini-2.5-flash", generation_config=generati
 
 bot_memory = {
     "km": None, "tm": None, "taum": None, 
-    "intent": 1, "history": []
+    "preference": None, "history": []
 }
 
-# EXACTLY THE 5 RULES FROM YOUR SCREENSHOT
+# EXACTLY THE 5 RULES YOU REQUESTED
 rules_db = {
     "ziegler_nichols": {
-        "name": "Ziegler-Nichols", "min_ratio": 0.1, "max_ratio": 1.0, "tags": ["fast", "neutral"],
-        "kc_math": "(0.9 * tm) / (km * taum)",
-        "ti_math": "3.33 * taum"
-    },
-    "cohen_coon": {
-        "name": "Cohen-Coon", "min_ratio": 0.1, "max_ratio": 2.0, "tags": ["fast", "neutral"],
-        "kc_math": "(tm / (km * taum)) * (0.9 + (taum / (12 * tm)))",
-        "ti_math": "taum * ((30 + 3 * (taum / tm)) / (9 + 20 * (taum / tm)))"
-    },
-    "zhuang_atherton": {
-        "name": "Zhuang & Atherton (Fast)", "min_ratio": 0.1, "max_ratio": 3.0, "tags": ["fast"],
-        "kc_math": "((1.048 * tm) / (km * taum)) * ((taum / tm)**-0.227)",
-        "ti_math": "tm / (1.195 - 0.368 * (taum / tm))"
-    },
-    "rovira": {
-        "name": "Rovira (Smooth)", "min_ratio": 0.1, "max_ratio": 1.0, "tags": ["smooth", "neutral"],
-        "kc_math": "((0.985 * tm) / (km * taum)) * ((taum / tm)**-0.086)",
-        "ti_math": "tm / (0.608 * (taum / tm)**-0.707)"
+        "name": "Ziegler-Nichols", "min_ratio": 0.1, "max_ratio": 1.0, "tags": ["fast"],
+        "kc_math": "(0.9 * tm) / (km * taum)", "ti_math": "3.33 * taum"
     },
     "hazebroek": {
-        "name": "Hazebroek & Van der Waerden (Disturbance)", "min_ratio": 0.1, "max_ratio": 2.0, "tags": ["robust", "disturbance"],
-        "kc_math": "SPECIAL_LOOKUP",
-        "ti_math": "SPECIAL_LOOKUP"
+        "name": "Hazebroek & Van der Waerden", "min_ratio": 0.1, "max_ratio": 2.0, "tags": ["robust", "disturbance"],
+        "kc_math": "SPECIAL_LOOKUP", "ti_math": "SPECIAL_LOOKUP"
+    },
+    "rovira_iae": {
+        "name": "Rovira Minimum IAE", "min_ratio": 0.1, "max_ratio": 1.0, "tags": ["smooth", "iae"],
+        "kc_math": "((0.985 * tm) / (km * taum)) * ((taum / tm)**-0.086)", "ti_math": "tm / (0.608 * (taum / tm)**-0.707)"
+    },
+    "rovira_ise": {
+        "name": "Rovira Minimum ISE", "min_ratio": 0.1, "max_ratio": 1.0, "tags": ["fast", "ise"],
+        "kc_math": "((1.142 * tm) / (km * taum)) * ((taum / tm)**-0.089)", "ti_math": "tm / (0.540 * (taum / tm)**-0.640)"
+    },
+    "rovira_itae": {
+        "name": "Rovira Minimum ITAE", "min_ratio": 0.1, "max_ratio": 1.0, "tags": ["smooth", "itae"],
+        "kc_math": "((0.859 * tm) / (km * taum)) * ((taum / tm)**-0.097)", "ti_math": "tm / (0.674 * (taum / tm)**-0.680)"
     }
 }
-intent_map = {0: "fast", 1: "neutral", 2: "smooth", 3: "robust", 4: "disturbance"}
 
 def local_fallback_engine(user_msg):
     msg = user_msg.lower()
     ext = {"action": "chat", "ai_reply": ""}
     
     if "reset" in msg or "new chat" in msg:
-        return {"action": "reset", "ai_reply": "[Fallback] Memory cleared."}
+        return {"action": "reset", "ai_reply": "Memory cleared for a new session."}
+
+    if "rules" in msg:
+        rules_list = ", ".join([r['name'] for r in rules_db.values()])
+        return {"action": "chat", "ai_reply": f"I can tune using the following rules: {rules_list}."}
 
     km_m = re.search(r'(km|gain)\s*=?\s*(\d+\.?\d*)', msg)
     tm_m = re.search(r'(tm|lag)\s*=?\s*(\d+\.?\d*)', msg)
@@ -63,15 +61,18 @@ def local_fallback_engine(user_msg):
     if tm_m: ext["tm"] = float(tm_m.group(2))
     if tau_m: ext["taum"] = float(tau_m.group(2))
     
-    if "fast" in msg: ext["intent"] = 0
-    elif "smooth" in msg: ext["intent"] = 2
-    elif "disturbance" in msg or "hazebroek" in msg: ext["intent"] = 4
+    # Simple feature extraction
+    if "fast" in msg or "ise" in msg: ext["preference"] = "ise"
+    elif "smooth" in msg or "itae" in msg: ext["preference"] = "itae"
+    elif "iae" in msg: ext["preference"] = "iae"
+    elif "hazebroek" in msg or "disturbance" in msg: ext["preference"] = "disturbance"
+    elif "ziegler" in msg: ext["preference"] = "fast"
 
-    if any(k in ext for k in ["km", "tm", "taum", "intent"]):
+    if any(k in ext for k in ["km", "tm", "taum", "preference"]):
         ext["action"] = "update"
-        ext["ai_reply"] = "[Fallback SLM] Parameters received. "
+        ext["ai_reply"] = "Parameters received."
     else:
-        ext["ai_reply"] = "[Fallback SLM] API Quota Exceeded. Please provide parameters."
+        ext["ai_reply"] = "I am ready. Please provide Km, Tm, and Tau."
     return ext
 
 def simulate_step(kc, ti, km, tm, taum):
@@ -94,12 +95,13 @@ def simulate_step(kc, ti, km, tm, taum):
 
     graph_data = {
         "data": [
-            {"x": t.tolist(), "y": pv.tolist(), "type": "scatter", "name": "Process Output", "line": {"color": "#007bff", "width": 3}},
-            {"x": [t[0], t[-1]], "y": [1.0, 1.0], "type": "scatter", "name": "Setpoint", "line": {"color": "red", "dash": "dash"}}
+            {"x": t.tolist(), "y": pv.tolist(), "type": "scatter", "name": "Process Output", "line": {"color": "#0ea5e9", "width": 3}},
+            {"x": [t[0], t[-1]], "y": [1.0, 1.0], "type": "scatter", "name": "Setpoint", "line": {"color": "#ef4444", "dash": "dash"}}
         ],
         "layout": {
-            "title": "Step Response", "xaxis": {"title": "Time (s)"}, "yaxis": {"title": "Process Variable"}, 
-            "paper_bgcolor": "white", "plot_bgcolor": "white", "margin": {"l": 40, "r": 20, "t": 40, "b": 40}
+            "title": "Closed-Loop Step Response", "xaxis": {"title": "Time (s)", "gridcolor": "#444"}, "yaxis": {"title": "Process Variable", "gridcolor": "#444"}, 
+            "paper_bgcolor": "transparent", "plot_bgcolor": "transparent", "font": {"color": "#888"},
+            "margin": {"l": 40, "r": 20, "t": 40, "b": 40}
         }
     }
     return json.dumps(graph_data), round(max(0, (np.max(pv) - 1.0) * 100), 1)
@@ -111,54 +113,63 @@ def chat():
         user_msg = request.json.get('message', '')
         bot_memory['history'].append(f"User: {user_msg}")
         if len(bot_memory['history']) > 8: bot_memory['history'] = bot_memory['history'][-8:]
-            
+        
+        # INJECTING AVAILABLE RULES SO IT DOES NOT HALLUCINATE
+        available_rules = [r['name'] for r in rules_db.values()]
+        
         ai_prompt = f"""
-        You are a Process Control SLM.
-        CURRENT PARAMETERS: Km={bot_memory['km']}, Tm={bot_memory['tm']}, Tau={bot_memory['taum']}
-        HISTORY: {" ".join(bot_memory['history'])}
+        You are an AI Tuning Bot for Process Control.
+        CRITICAL RULES CONSTRAINT: You ONLY know the following rules: {available_rules}. 
+        If the user asks what rules you have, you MUST ONLY list these exact rules. Do NOT mention Cohen-Coon, IMC, Tyreus-Luyben, or any other rule.
+        
+        CURRENT PARAMETERS: Km={bot_memory['km']}, Tm={bot_memory['tm']}, Tau={bot_memory['taum']}, Preference={bot_memory['preference']}
         USER: "{user_msg}"
         
         Extract JSON:
         - "action": "reset", "chat", or "update"
         - "km", "tm", "taum": float or null
-        - "intent": 0 (fast), 1 (neutral), 2 (smooth), 3 (robust), 4 (disturbance)
-        - "ai_reply": Conversational reply.
+        - "preference": "fast", "smooth", "iae", "ise", "itae", "disturbance", or null
+        - "ai_reply": Conversational reply. If parameters are given but preference is null, specifically ask the user what type of response they want (e.g., Fast, IAE, ISE, ITAE, Disturbance).
         """
         
         try:
             response = llm_model.generate_content(ai_prompt)
             ext = json.loads(response.text.replace('```json', '').replace('```', '').strip())
         except Exception as e:
-            print(f"Gemini Error: {e}")
             ext = local_fallback_engine(user_msg)
 
         if ext.get('action') == "reset":
-            bot_memory.update({"km": None, "tm": None, "taum": None, "intent": 1})
-            return jsonify({"reply": ext.get('ai_reply', "Memory reset."), "chart": None})
+            bot_memory.update({"km": None, "tm": None, "taum": None, "preference": None})
+            return jsonify({"reply": ext.get('ai_reply', "Ready for a new tuning session."), "chart": None})
 
         if ext.get('action') == "update":
-            for k in ["km", "tm", "taum", "intent"]:
+            for k in ["km", "tm", "taum", "preference"]:
                 if ext.get(k) is not None: bot_memory[k] = ext[k]
-            
-            missing = [m for m, v in zip(["Gain (Km)", "Lag (Tm)", "Dead Time (Tau)"], [bot_memory['km'], bot_memory['tm'], bot_memory['taum']]) if v is None]
-            if missing:
-                return jsonify({"reply": f"{ext['ai_reply']} I need the following parameters: {', '.join(missing)}.", "chart": None})
 
-        if ext.get('action') == "chat" and not all([bot_memory['km'], bot_memory['tm'], bot_memory['taum']]):
-             return jsonify({"reply": ext['ai_reply'], "chart": None})
+        km, tm, taum, pref = bot_memory['km'], bot_memory['tm'], bot_memory['taum'], bot_memory['preference']
+        
+        # Check if we have numbers but no preference
+        if all([km, tm, taum]) and not pref:
+            return jsonify({"reply": "I have your parameters (Km, Tm, Tau). To select the best rule, what type of response do you want? (Options: Fast, Minimum IAE, Minimum ISE, Minimum ITAE, or Disturbance)", "chart": None})
 
-        km, tm, taum = bot_memory['km'], bot_memory['tm'], bot_memory['taum']
-        user_tag = intent_map.get(bot_memory['intent'], "neutral")
+        # Check if we are missing parameters
+        if not all([km, tm, taum]):
+            missing = [m for m, v in zip(["Gain (Km)", "Lag (Tm)", "Dead Time (Tau)"], [km, tm, taum]) if v is None]
+            if len(missing) < 3: # Only ask if they've provided at least one
+                return jsonify({"reply": f"{ext.get('ai_reply','')} I still need: {', '.join(missing)}.", "chart": None})
+            return jsonify({"reply": ext.get('ai_reply', "How can I help you today?"), "chart": None})
+
+        # WE HAVE EVERYTHING - SELECT RULE
         ratio = taum / tm
-
-        # Filter rules by L/tau ratio and intent
-        valid_rules = [k for k, r in rules_db.items() if r['min_ratio'] <= ratio <= r['max_ratio'] and user_tag in r['tags']]
-        best_rule = valid_rules[0] if valid_rules else "ziegler_nichols"
+        valid_rules = [k for k, r in rules_db.items() if pref in r['tags']]
+        if not valid_rules: valid_rules = ["ziegler_nichols"] # Fallback
+        
+        best_rule = valid_rules[0]
         r = rules_db[best_rule]
         
-        # MATH EXECUTION WITH SPECIAL LOOKUP BYPASS FOR HAZEBROEK
+        # HAZERBROEK SPECIAL LOOKUP
         if r['kc_math'] == "SPECIAL_LOOKUP":
-            kc = (0.85 * tm) / (km * taum) # Safe approximation
+            kc = (0.85 * tm) / (km * taum) 
             ti = 2.4 * taum
         else:
             safe_env = {"km": km, "tm": tm, "taum": taum, "min": min, "max": max}
@@ -167,9 +178,10 @@ def chat():
         
         chart, os_val = simulate_step(kc, ti, km, tm, taum)
         
-        reply = f"{ext.get('ai_reply', '')}\n\n**Selected Rule:** {r['name']}\n**Kc:** {round(kc,4)}\n**Ti:** {round(ti,4)}s\n**Overshoot:** {os_val}%"
+        reply = f"{ext.get('ai_reply', '')}\n\n**Tuned using:** {r['name']}\n**Kc:** {round(kc,4)}\n**Ti:** {round(ti,4)}s\n**Estimated Overshoot:** {os_val}%"
         
-        bot_memory.update({"km": None, "tm": None, "taum": None})
+        # Reset memory after plotting
+        bot_memory.update({"km": None, "tm": None, "taum": None, "preference": None})
         return jsonify({"reply": reply, "chart": chart})
 
     except Exception as e:
