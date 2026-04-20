@@ -48,6 +48,11 @@ def local_fallback_engine(user_msg):
     if "reset" in msg or "new chat" in msg:
         return {"action": "reset", "ai_reply": "Memory cleared for a new session."}
 
+    # Added logic so fallback tells you if it's offline instead of giving a dumb reply
+    if any(word in msg for word in ["how", "what", "why", "explain"]):
+        ext["ai_reply"] = "I am currently running in offline fallback mode, so I can't answer complex questions right now. I can only calculate tuning math. Please provide Km, Tm, and Tau."
+        return ext
+
     km_m = re.search(r'(km|gain)\s*=?\s*(\d+\.?\d*)', msg)
     tm_m = re.search(r'(tm|lag)\s*=?\s*(\d+\.?\d*)', msg)
     tau_m = re.search(r'(tau|dead)\s*=?\s*(\d+\.?\d*)', msg)
@@ -110,48 +115,75 @@ def chat():
         bot_memory['history'].append(f"User: {user_msg}")
         if len(bot_memory['history']) > 8: bot_memory['history'] = bot_memory['history'][-8:]
         
-        # BULLETPROOF HALLUCINATION INTERCEPTOR
         if "rules" in user_msg_lower or "what do you have" in user_msg_lower:
             rules_list = ", ".join([r['name'] for r in rules_db.values()])
             return jsonify({"reply": f"I exclusively support the following tuning rules from the database: {rules_list}.", "chart": None})
             
-        ai_prompt = f"""
-        You are TUNING BOT for Process Control.
-        CURRENT PARAMETERS: Km={bot_memory['km']}, Tm={bot_memory['tm']}, Tau={bot_memory['taum']}, Preference={bot_memory['preference']}
-        USER: "{user_msg}"
+        available_rules = [r['name'] for r in rules_db.values()]
         
-        Extract JSON:
-        - "action": "reset", "chat", or "update"
-        - "km", "tm", "taum": float or null
-        - "preference": "fast", "smooth", "iae", "ise", "itae", "disturbance", or null
-        - "ai_reply": Plain conversational reply. DO NOT USE markdown like asterisks or hashtags. If parameters are given but preference is null, ask what type of response they want.
+        # SMARTER PROMPT: Forces the bot to answer general questions intelligently
+        ai_prompt = f"""
+        You are TUNING BOT, an expert Process Control AI. 
+        CRITICAL RULES: You ONLY know: {available_rules}. 
+        
+        CURRENT MEMORY: Km={bot_memory['km']}, Tm={bot_memory['tm']}, Tau={bot_memory['taum']}, Preference={bot_memory['preference']}
+        USER MESSAGE: "{user_msg}"
+        
+        INSTRUCTIONS:
+        1. If the user asks a question (e.g., "how do you do that", "what is overshoot", "explain"), ANSWER the question clearly and conversationally in the 'ai_reply' field. Do NOT just ask for parameters. You are a tutor.
+        2. If the user provides parameters (Km, Tm, Tau), extract them.
+        3. Do NOT use markdown like asterisks (*). Keep text plain.
+        
+        OUTPUT EXCLUSIVELY IN THIS JSON FORMAT:
+        {{
+            "action": "chat",
+            "km": float or null,
+            "tm": float or null,
+            "taum": float or null,
+            "preference": "fast", "smooth", "iae", "ise", "itae", "disturbance", or null,
+            "ai_reply": "Your intelligent answer to their question, OR an acknowledgment of parameters."
+        }}
         """
         
         try:
             response = llm_model.generate_content(ai_prompt)
-            ext = json.loads(response.text.replace('```json', '').replace('```', '').strip())
+            # BULLETPROOF JSON PARSER to prevent fallback engine taking over by mistake
+            json_str = response.text
+            match = re.search(r'\{.*\}', json_str, re.DOTALL)
+            if match:
+                ext = json.loads(match.group(0))
+            else:
+                ext = json.loads(json_str)
         except Exception as e:
+            print("Fallback Triggered:", e)
             ext = local_fallback_engine(user_msg)
 
         if ext.get('action') == "reset":
             bot_memory.update({"km": None, "tm": None, "taum": None, "preference": None})
             return jsonify({"reply": ext.get('ai_reply', "Ready for a new tuning session.").replace('*', ''), "chart": None})
 
-        if ext.get('action') == "update":
-            for k in ["km", "tm", "taum", "preference"]:
-                if ext.get(k) is not None: bot_memory[k] = ext[k]
+        # Update memory if valid values exist
+        for k in ["km", "tm", "taum", "preference"]:
+            if ext.get(k) is not None: bot_memory[k] = ext[k]
 
         km, tm, taum, pref = bot_memory['km'], bot_memory['tm'], bot_memory['taum'], bot_memory['preference']
         
+        # If the user gives parameters but forgets preference
         if all([km, tm, taum]) and not pref:
             return jsonify({"reply": "I have your parameters (Km, Tm, Tau). To select the best rule, what type of response do you want? (Options: Fast, Minimum IAE, Minimum ISE, Minimum ITAE, or Disturbance)", "chart": None})
 
+        # If parameters are missing
         if not all([km, tm, taum]):
             missing = [m for m, v in zip(["Gain (Km)", "Lag (Tm)", "Dead Time (Tau)"], [km, tm, taum]) if v is None]
-            if len(missing) < 3: 
-                return jsonify({"reply": f"{ext.get('ai_reply','').replace('*', '')} I still need: {', '.join(missing)}.", "chart": None})
-            return jsonify({"reply": ext.get('ai_reply', "How can I help you today?").replace('*', ''), "chart": None})
+            
+            # If they gave NO parameters (len=3), they are just chatting/asking a question. Just give the answer.
+            if len(missing) == 3:
+                return jsonify({"reply": ext.get('ai_reply', "How can I help you?").replace('*', ''), "chart": None})
+            
+            # If they gave partial parameters, ask for the rest.
+            return jsonify({"reply": f"{ext.get('ai_reply','').replace('*', '')} I still need: {', '.join(missing)}.", "chart": None})
 
+        # MATH EXECUTION (Only runs when all parameters + preference are available)
         ratio = taum / tm
         valid_rules = [k for k, r in rules_db.items() if pref in r['tags']]
         if not valid_rules: valid_rules = ["ziegler_nichols"]
@@ -169,7 +201,6 @@ def chat():
         
         chart, os_val = simulate_step(kc, ti, km, tm, taum)
         
-        # REMOVED ALL MARKDOWN SYMBOLS HERE
         clean_ai_reply = ext.get('ai_reply', '').replace('*', '').replace('#', '')
         reply = f"{clean_ai_reply}\n\nTuned using: {r['name']}\nKc: {round(kc,4)}\nTi: {round(ti,4)}s\nEstimated Overshoot: {os_val}%"
         
