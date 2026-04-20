@@ -32,10 +32,30 @@ bot_memory = {
     "mode": 0, "overshoot": 0, "robust": 0, "metric": 0
 }
 
-# HYBRID FALLBACK ENGINE (Regex)
+# ---------------------------------------------------------
+# 1. LOCAL INTENT ENGINE (The Mini-AI Cache)
+# ---------------------------------------------------------
+# This answers basic chat without wasting your Gemini API Quota!
+def local_chat_model(msg):
+    msg = msg.lower()
+    
+    if msg in ["hi", "hello", "hey", "hii"]:
+        return "Hello! I am TUNING BOT, your expert Process Control assistant. You can provide parameters (Km, Tm, Tau) to start tuning, or click 'Advanced Filter' for specific responses."
+    
+    if "who are you" in msg or "what can you do" in msg:
+        return "I am a specialized Process Control SLM. I use machine learning to recommend optimal PI controller settings based on Aidan O'Dwyer's handbook rules."
+    
+    if "how do you work" in msg or "explain" in msg:
+        return "I analyze your First-Order Plus Dead Time (FOPDT) parameters and run them through a Random Forest decision tree to find the best tuning rule for your specific needs."
+        
+    return None
+
+# ---------------------------------------------------------
+# 2. LOCAL REGEX FALLBACK (When Gemini is exhausted)
+# ---------------------------------------------------------
 def local_fallback_engine(user_msg):
     msg = user_msg.lower()
-    ext = {"km": None, "tm": None, "taum": None, "tau_c": None, "reply": "[Offline Mode] Parameters received."}
+    ext = {"km": None, "tm": None, "taum": None, "tau_c": None, "reply": "Parameters received. Calculating..."}
     
     km_m = re.search(r'(km|gain)\s*=?\s*(\d+\.?\d*)', msg)
     tm_m = re.search(r'(tm|lag)\s*=?\s*(\d+\.?\d*)', msg)
@@ -48,10 +68,13 @@ def local_fallback_engine(user_msg):
     if tau_c_m: ext["tau_c"] = float(tau_c_m.group(2))
     
     if not any([ext["km"], ext["tm"], ext["taum"]]):
-        ext["reply"] = "[Offline Mode] Please provide Gain (Km), Lag (Tm), and Dead Time (Tau)."
+        ext["reply"] = "I didn't detect any process parameters. Please provide Gain (Km), Lag (Tm), and Dead Time (Tau)."
         
     return ext
 
+# ---------------------------------------------------------
+# 3. MATH SIMULATION
+# ---------------------------------------------------------
 def simulate_step(kc, ti, km, tm, taum):
     t = np.linspace(0, (tm + taum) * 6, 400)
     dt = t[1] - t[0]
@@ -82,15 +105,18 @@ def simulate_step(kc, ti, km, tm, taum):
     }
     return json.dumps(graph_data), round(max(0, (np.max(pv) - 1.0) * 100), 1)
 
+# ---------------------------------------------------------
+# 4. MAIN API ROUTE
+# ---------------------------------------------------------
 @app.route('/api/chat', methods=['POST'])
 def chat():
     global bot_memory
     try:
         user_msg = request.json.get('message', '')
-        user_msg_lower = user_msg.lower()
+        user_msg_lower = user_msg.lower().strip()
         action_data = request.json.get('action_data', None)
 
-        # 1. Reset Flow
+        # A. Reset Flow
         if user_msg_lower == "reset":
             bot_memory = {"step": "init", "km": None, "tm": None, "taum": None, "tau_c": None, "mode": 0, "overshoot": 0, "robust": 0, "metric": 0}
             return jsonify({
@@ -99,23 +125,22 @@ def chat():
                 "chart": None
             })
 
-        # 2. Professional Rule Categorizer
+        # B. O'Dwyer Professional Rule Categorizer
         if "rules" in user_msg_lower or "what do you have" in user_msg_lower:
-            categories = {}
-            for k, v in rules_db.items():
-                mode = str(v.get("mode", "Uncategorized")).capitalize()
-                name = v.get("name", k)
-                if mode not in categories:
-                    categories[mode] = []
-                categories[mode].append(name)
-            
-            reply_text = "I have a comprehensive database of tuning rules, categorized by their engineering specifications:\n\n"
-            for mode, rules in categories.items():
-                reply_text += f"**{mode} Rules:**\n- " + "\n- ".join(rules) + "\n\n"
-            
+            reply_text = "Here is my tuning database, categorized according to Aidan O'Dwyer's handbook:\n\n"
+            reply_text += "**1. Process Reaction Curve (Servo & Regulatory)**\n- Ziegler-Nichols (Classic)\n- Cohen-Coon\n- Hazebroek & Van der Waerden\n- CHR Servo & Regulatory (0% and 20% OS)\n\n"
+            reply_text += "**2. Minimum Performance Index (IAE, ISE, ITAE, ITSE)**\n- Rovira et al.\n- Zhuang & Atherton\n- Wang-Juang-Chan Optimum\n\n"
+            reply_text += "**3. Robust Tuning**\n- Skogestad IMC (SIMC)\n- AMIGO (Astrom-Hagglund)\n- Chun et al. (20% Uncertainty)\n\n"
+            reply_text += "**4. Direct Synthesis**\n- Lambda Tuning (Desired Tau_c)\n\n"
+            reply_text += "You can test any of these by using the Advanced Filter!"
             return jsonify({"reply": reply_text, "options": [], "chart": None})
 
-        # 3. Advanced Decision Tree Filter
+        # C. Local Chat Engine (Bypasses Gemini for informal text)
+        local_reply = local_chat_model(user_msg)
+        if local_reply:
+            return jsonify({"reply": local_reply, "options": [], "chart": None})
+
+        # D. Advanced Decision Tree Filter (UI Buttons)
         if action_data:
             key, val = action_data.get('key'), action_data.get('val')
             
@@ -149,13 +174,14 @@ def chat():
                 bot_memory['metric'] = int(val)
                 return jsonify({"reply": "Filter complete. Please provide your process parameters: Gain (Km), Lag (Tm), and Dead Time (Tau).", "options": []})
 
-        # 4. NLP Extraction with Local Regex Fallback
+        # E. NLP Extraction with Local Regex Fallback
         try:
-            ai_prompt = f'You are TUNING BOT. Extract parameters from: "{user_msg}". \nOUTPUT ONLY valid JSON: {{"km": float/null, "tm": float/null, "taum": float/null, "tau_c": float/null, "reply": "Plain conversational response, no markdown symbols."}}'
+            ai_prompt = f'You are TUNING BOT. Extract parameters from: "{user_msg}". \nOUTPUT ONLY valid JSON: {{"km": float/null, "tm": float/null, "taum": float/null, "tau_c": float/null, "reply": "Plain conversational response."}}'
             res = llm_model.generate_content(ai_prompt)
             ext = json.loads(res.text.replace('```json', '').replace('```', '').strip())
         except Exception as e:
-            print("LLM Quota/Error hit. Switching to local regex fallback:", e)
+            # Gemini Quota Exhausted! Use the regex fallback.
+            print("Gemini API Error, using Local Engine:", e)
             ext = local_fallback_engine(user_msg)
         
         for k in ["km", "tm", "taum", "tau_c"]:
@@ -166,7 +192,7 @@ def chat():
         if not all([km, tm, taum]): 
             return jsonify({"reply": ext.get('reply', '').replace('*', ''), "options": []})
 
-        # 5. AI Rule Selection & Math Execution
+        # F. AI Rule Selection & Math Execution
         if bot_memory['step'] == "simple_calc":
             best_rule = "ziegler_nichols"
         else:
@@ -189,7 +215,7 @@ def chat():
         
         chart, os_val = simulate_step(kc, ti, km, tm, taum)
         
-        reply = f"Tuned using: {r.get('name')}\nKc: {round(kc,4)}\nTi: {round(ti,4)}s\nEstimated Overshoot: {os_val}%"
+        reply = f"**Tuned using:** {r.get('name')}\n**Kc:** {round(kc,4)}\n**Ti:** {round(ti,4)}s\n**Estimated Overshoot:** {os_val}%"
         
         bot_memory.update({"km": None, "tm": None, "taum": None, "tau_c": None})
         
