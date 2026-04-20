@@ -1,0 +1,62 @@
+{
+  "mode_map": {
+    "0": "servo",
+    "1": "regulator",
+    "2": "both"
+  },
+  "os_map": {
+    "0": "none",
+    "1": "low",
+    "2": "medium",
+    "3": "high"
+  },
+  "metric_map": {
+    "0": "none",
+    "1": "iae",
+    "2": "ise",
+    "3": "itae",
+    "4": "istes"
+  },
+  "method_map": {
+    "0": "process_reaction",
+    "1": "performance_index",
+    "2": "direct_synthesis",
+    "3": "robust"
+  },
+  "features": [
+    "km",
+    "tm",
+    "taum",
+    "ratio",
+    "mode",
+    "overshoot",
+    "robust",
+    "metric",
+    "method"
+  ],
+  "MODE_MAP": {
+    "servo": 0,
+    "regulator": 1,
+    "both": 2
+  },
+  "OS_MAP": {
+    "none": 0,
+    "low": 1,
+    "medium": 2,
+    "high": 3
+  },
+  "MET_MAP": {
+    "none": 0,
+    "iae": 1,
+    "ise": 2,
+    "itae": 3,
+    "istse": 4,
+    "istes": 4
+  },
+  "METH_MAP": {
+    "process_reaction": 0,
+    "performance_index": 1,
+    "direct_synthesis": 2,
+    "robust": 3
+  }
+}

@@ -2,26 +2,469 @@
     "ziegler_nichols": {
         "name": "Ziegler-Nichols",
         "kc_math": "(0.9 * tm) / (km * taum)",
-        "ti_math": "3.33 * taum"
+        "ti_math": "3.33 * taum",
+        "mode": "regulator", "overshoot": "high", "robust": false, "integral_metric": "none",
+        "category": "process_reaction", "ratio_min": 0.0, "ratio_max": 1.0,
+        "description": "Classic Ziegler-Nichols process reaction rule. Quarter decay ratio response.",
+        "unique_feature": "Industry standard baseline; quarter decay ratio target; taum/Tm <= 1"
     },
     "cohen_coon": {
         "name": "Cohen-Coon",
         "kc_math": "(tm / (km * taum)) * (0.9 + (taum / (12 * tm)))",
-        "ti_math": "taum * ((30 + 3 * (taum / tm)) / (9 + 20 * (taum / tm)))"
+        "ti_math": "taum * ((30 + 3 * (taum / tm)) / (9 + 20 * (taum / tm)))",
+        "mode": "regulator", "overshoot": "high", "robust": false, "integral_metric": "none",
+        "category": "process_reaction", "ratio_min": 1.0, "ratio_max": 2.0,
+        "description": "Cohen-Coon process reaction method. Extends ZN for taum/Tm between 1.0 and 2.0.",
+        "unique_feature": "Extends ZN into high dead-time region (1.0 < taum/Tm <= 2.0); corrects for large delay ratios"
     },
     "zhuang_atherton": {
         "name": "Zhuang & Atherton (Fast)",
         "kc_math": "((1.048 * tm) / (km * taum)) * ((taum / tm)**-0.227)",
-        "ti_math": "tm / (1.195 - 0.368 * (taum / tm))"
+        "ti_math": "tm / (1.195 - 0.368 * (taum / tm))",
+        "mode": "regulator", "overshoot": "high", "robust": false, "integral_metric": "ise",
+        "category": "performance_index", "ratio_min": 0.1, "ratio_max": 1.0,
+        "description": "Zhuang & Atherton minimum ISE regulator. Optimised for fast disturbance rejection.",
+        "unique_feature": "Minimises ISE for regulatory (load disturbance) response; power-law formula; Zhuang & Atherton 1993"
     },
     "rovira": {
         "name": "Rovira (Smooth)",
         "kc_math": "((0.985 * tm) / (km * taum)) * ((taum / tm)**-0.086)",
-        "ti_math": "tm / (0.608 * (taum / tm)**-0.707)"
+        "ti_math": "tm / (0.608 * (taum / tm)**-0.707)",
+        "mode": "servo", "overshoot": "low", "robust": false, "integral_metric": "iae",
+        "category": "performance_index", "ratio_min": 0.1, "ratio_max": 1.0,
+        "description": "Rovira minimum IAE servo tuning. Smooth setpoint tracking.",
+        "unique_feature": "Minimises IAE for servo setpoint tracking; balanced smooth response; Rovira 1969 benchmark"
     },
     "hazebroek": {
         "name": "Hazebroek & Van der Waerden (Disturbance)",
         "kc_math": "SPECIAL_LOOKUP",
-        "ti_math": "SPECIAL_LOOKUP"
+        "ti_math": "SPECIAL_LOOKUP",
+        "mode": "regulator", "overshoot": "medium", "robust": false, "integral_metric": "ise",
+        "category": "performance_index", "ratio_min": 0.1, "ratio_max": 5.0,
+        "description": "Hazebroek & Van der Waerden min ISE regulator with tabulated alpha/beta coefficients.",
+        "unique_feature": "Graphical/tabular derivation; wide taum/Tm range (0.2-5.0); alpha-beta lookup table method"
+    },
+    "chien_regulator_0os": {
+        "name": "Chien et al. - Regulator 0% Overshoot",
+        "kc_math": "(0.6 * tm) / (km * taum)",
+        "ti_math": "4.0 * taum",
+        "mode": "regulator", "overshoot": "none", "robust": false, "integral_metric": "none",
+        "category": "process_reaction", "ratio_min": 0.11, "ratio_max": 1.0,
+        "description": "Chien et al. regulator for zero overshoot. Conservative disturbance rejection with no oscillation.",
+        "unique_feature": "Guarantees 0% overshoot regulatory mode; explicit OS specification; Chien, Hrones & Reswick 1952"
+    },
+    "chien_regulator_20os": {
+        "name": "Chien et al. - Regulator 20% Overshoot",
+        "kc_math": "(0.7 * tm) / (km * taum)",
+        "ti_math": "2.33 * taum",
+        "mode": "regulator", "overshoot": "medium", "robust": false, "integral_metric": "none",
+        "category": "process_reaction", "ratio_min": 0.11, "ratio_max": 1.0,
+        "description": "Chien et al. regulator 20% overshoot. Faster disturbance recovery accepting some oscillation.",
+        "unique_feature": "Explicit 20% overshoot regulatory mode; faster than 0% OS; Ti = 2.33*taum"
+    },
+    "chien_servo_0os": {
+        "name": "Chien et al. - Servo 0% Overshoot",
+        "kc_math": "(0.35 * tm) / (km * taum)",
+        "ti_math": "1.17 * tm",
+        "mode": "servo", "overshoot": "none", "robust": false, "integral_metric": "none",
+        "category": "process_reaction", "ratio_min": 0.11, "ratio_max": 1.0,
+        "description": "Chien et al. servo 0% overshoot. Very conservative smooth setpoint tracking.",
+        "unique_feature": "Guarantees 0% overshoot for setpoint steps; most conservative Chien variant; Ti = 1.17*Tm"
+    },
+    "chien_servo_20os": {
+        "name": "Chien et al. - Servo 20% Overshoot",
+        "kc_math": "(0.6 * tm) / (km * taum)",
+        "ti_math": "tm",
+        "mode": "servo", "overshoot": "medium", "robust": false, "integral_metric": "none",
+        "category": "process_reaction", "ratio_min": 0.11, "ratio_max": 1.0,
+        "description": "Chien et al. servo 20% overshoot. Faster setpoint tracking with moderate oscillation.",
+        "unique_feature": "Explicit 20% overshoot servo mode; Ti = Tm directly; Chien, Hrones & Reswick 1952"
+    },
+    "murrill_servo": {
+        "name": "Murrill - Quarter Decay Ratio Servo",
+        "kc_math": "(0.9284 / km) * ((tm / taum)**0.946)",
+        "ti_math": "1.078 * tm * ((taum / tm)**0.583)",
+        "mode": "servo", "overshoot": "medium", "robust": false, "integral_metric": "none",
+        "category": "process_reaction", "ratio_min": 0.1, "ratio_max": 1.0,
+        "description": "Murrill servo targeting quarter decay ratio. Power-law regression formula.",
+        "unique_feature": "Power-law regression (non-linear formula); quarter decay ratio servo target; Murrill 1967 thesis"
+    },
+    "astrom_regulator_20os": {
+        "name": "Astrom & Hagglund - Regulator 20% OS",
+        "kc_math": "(0.7 * tm) / (km * taum)",
+        "ti_math": "2.3 * taum",
+        "mode": "regulator", "overshoot": "medium", "robust": false, "integral_metric": "none",
+        "category": "process_reaction", "ratio_min": 0.1, "ratio_max": 1.0,
+        "description": "Astrom & Hagglund textbook regulator for 20% overshoot (page 150).",
+        "unique_feature": "From Astrom & Hagglund PID Controllers textbook p.150; slightly different Ti from Chien 20% OS"
+    },
+    "st_clair": {
+        "name": "St. Clair - Conservative PI",
+        "kc_math": "(0.333 * tm) / (km * taum)",
+        "ti_math": "tm",
+        "mode": "regulator", "overshoot": "none", "robust": false, "integral_metric": "none",
+        "category": "process_reaction", "ratio_min": 0.0, "ratio_max": 3.0,
+        "description": "St. Clair conservative tuning for Tm/taum <= 3. Very stable and slow.",
+        "unique_feature": "Very conservative; Ti = Tm exactly; valid for Tm/taum <= 3; St. Clair 1953"
+    },
+    "rovira_iae_servo": {
+        "name": "Rovira - Minimum IAE Servo",
+        "kc_math": "((0.758 * tm) / km) * ((taum / tm)**-0.861)",
+        "ti_math": "tm / (1.020 - 0.323 * (taum / tm))",
+        "mode": "servo", "overshoot": "low", "robust": false, "integral_metric": "iae",
+        "category": "performance_index", "ratio_min": 0.1, "ratio_max": 1.0,
+        "description": "Rovira minimum IAE servo. Optimised for smooth setpoint tracking minimising absolute error.",
+        "unique_feature": "Minimises IAE for servo mode; different coefficients from regulator; Rovira et al. 1969"
+    },
+    "rovira_itae_servo": {
+        "name": "Rovira - Minimum ITAE Servo",
+        "kc_math": "((0.586 * tm) / km) * ((taum / tm)**-0.916)",
+        "ti_math": "tm / (1.030 - 0.165 * (taum / tm))",
+        "mode": "servo", "overshoot": "none", "robust": false, "integral_metric": "itae",
+        "category": "performance_index", "ratio_min": 0.1, "ratio_max": 1.0,
+        "description": "Rovira minimum ITAE servo. Penalises long-lasting errors - slowest but smoothest.",
+        "unique_feature": "ITAE penalises persistent errors more than IAE/ISE; slowest servo rule; best for noise-sensitive processes"
+    },
+    "murrill_iae_regulator": {
+        "name": "Murrill - Minimum IAE Regulator",
+        "kc_math": "((0.984 * tm) / km) * ((taum / tm)**-0.986)",
+        "ti_math": "(tm / 0.608) * ((taum / tm)**0.707)",
+        "mode": "regulator", "overshoot": "low", "robust": false, "integral_metric": "iae",
+        "category": "performance_index", "ratio_min": 0.1, "ratio_max": 1.0,
+        "description": "Murrill minimum IAE regulator. Power-law for optimal load rejection.",
+        "unique_feature": "Minimises IAE for load disturbance rejection; power-law regression; Murrill 1967 doctoral thesis"
+    },
+    "murrill_ise_regulator": {
+        "name": "Murrill - Minimum ISE Regulator",
+        "kc_math": "((1.305 * tm) / km) * ((taum / tm)**-0.959)",
+        "ti_math": "(tm / 0.492) * ((taum / tm)**0.739)",
+        "mode": "regulator", "overshoot": "high", "robust": false, "integral_metric": "ise",
+        "category": "performance_index", "ratio_min": 0.1, "ratio_max": 1.0,
+        "description": "Murrill minimum ISE regulator. Penalises large errors heavily - aggressive with more overshoot.",
+        "unique_feature": "ISE penalises large errors more; fastest initial disturbance response; highest overshoot; Murrill 1967"
+    },
+    "murrill_itae_regulator": {
+        "name": "Murrill - Minimum ITAE Regulator",
+        "kc_math": "((0.859 * tm) / km) * ((taum / tm)**-0.977)",
+        "ti_math": "(tm / 0.674) * ((taum / tm)**0.680)",
+        "mode": "regulator", "overshoot": "low", "robust": false, "integral_metric": "itae",
+        "category": "performance_index", "ratio_min": 0.1, "ratio_max": 1.0,
+        "description": "Murrill minimum ITAE regulator. Best when long-lasting deviations are costly.",
+        "unique_feature": "ITAE time-weighted penalty; discourages long settling; Murrill 1967; complements ISE/IAE variants"
+    },
+    "zhuang_ise_servo": {
+        "name": "Zhuang & Atherton - Minimum ISE Servo",
+        "kc_math": "((1.279 * tm) / km) * ((taum / tm)**-0.945)",
+        "ti_math": "(tm / 0.535) * ((taum / tm)**0.586)",
+        "mode": "servo", "overshoot": "high", "robust": false, "integral_metric": "ise",
+        "category": "performance_index", "ratio_min": 0.1, "ratio_max": 1.0,
+        "description": "Zhuang & Atherton minimum ISE servo. Fastest setpoint tracking at cost of higher overshoot.",
+        "unique_feature": "ISE servo optimisation; highest gain servo rule; trades overshoot for speed; Zhuang & Atherton 1993"
+    },
+    "zhuang_istse_regulator": {
+        "name": "Zhuang & Atherton - Minimum ISTSE Regulator",
+        "kc_math": "((1.015 * tm) / km) * ((taum / tm)**-0.957)",
+        "ti_math": "(tm / 0.667) * ((taum / tm)**0.552)",
+        "mode": "regulator", "overshoot": "low", "robust": false, "integral_metric": "istse",
+        "category": "performance_index", "ratio_min": 0.1, "ratio_max": 1.0,
+        "description": "Zhuang & Atherton minimum ISTSE (t^2*e^2 integral) regulator.",
+        "unique_feature": "ISTSE = ISE weighted by t^2; penalises very late-occurring errors; targets tail-end performance specifically"
+    },
+    "zhuang_istes_regulator": {
+        "name": "Zhuang & Atherton - Minimum ISTES Regulator",
+        "kc_math": "((1.021 * tm) / km) * ((taum / tm)**-0.953)",
+        "ti_math": "(tm / 0.629) * ((taum / tm)**0.546)",
+        "mode": "regulator", "overshoot": "low", "robust": false, "integral_metric": "istes",
+        "category": "performance_index", "ratio_min": 0.1, "ratio_max": 1.0,
+        "description": "Zhuang & Atherton minimum ISTES (t*e^2 integral) regulator.",
+        "unique_feature": "Unique ISTES composite time-error criterion; balances speed and smoothness; Zhuang & Atherton 1993"
+    },
+    "zhuang_istse_servo": {
+        "name": "Zhuang & Atherton - Minimum ISTSE Servo",
+        "kc_math": "((0.712 * tm) / km) * ((taum / tm)**-0.921)",
+        "ti_math": "tm / (0.968 - 0.247 * (taum / tm))",
+        "mode": "servo", "overshoot": "low", "robust": false, "integral_metric": "istse",
+        "category": "performance_index", "ratio_min": 0.1, "ratio_max": 1.0,
+        "description": "Zhuang & Atherton minimum ISTSE servo.",
+        "unique_feature": "ISTSE servo variant; Ti linear function of ratio; different from ISTSE regulator; Zhuang 1993"
+    },
+    "zhuang_istes_servo": {
+        "name": "Zhuang & Atherton - Minimum ISTES Servo",
+        "kc_math": "((0.569 * tm) / km) * ((taum / tm)**-0.951)",
+        "ti_math": "tm / (1.023 - 0.179 * (taum / tm))",
+        "mode": "servo", "overshoot": "none", "robust": false, "integral_metric": "istes",
+        "category": "performance_index", "ratio_min": 0.1, "ratio_max": 1.0,
+        "description": "Zhuang & Atherton minimum ISTES servo. Smoothest composite-criterion servo.",
+        "unique_feature": "ISTES servo - lowest gain Zhuang servo variant; slowest but most damped; no overshoot by design"
+    },
+    "shinskey_iae_02": {
+        "name": "Shinskey - Min IAE Regulator (taum/Tm=0.2)",
+        "kc_math": "1.00 * tm / (km * taum)",
+        "ti_math": "3.0 * taum",
+        "mode": "regulator", "overshoot": "medium", "robust": false, "integral_metric": "iae",
+        "category": "performance_index", "ratio_min": 0.15, "ratio_max": 0.25,
+        "description": "Shinskey tabulated minimum IAE regulator for taum/Tm = 0.2.",
+        "unique_feature": "Shinskey tabulated values for specific ratio; for taum/Tm=0.2; from Shinskey textbook p.123"
+    },
+    "haalman": {
+        "name": "Haalman - Direct Synthesis (Ms=1.9)",
+        "kc_math": "(2.0 * tm) / (3.0 * km * taum)",
+        "ti_math": "tm",
+        "mode": "regulator", "overshoot": "none", "robust": true, "integral_metric": "none",
+        "category": "direct_synthesis", "ratio_min": 0.1, "ratio_max": 2.0,
+        "description": "Haalman direct synthesis with sensitivity Ms=1.9. Simple 2/3 gain formula.",
+        "unique_feature": "Derived by specifying Ms=1.9 sensitivity; Ti=Tm exactly; simple clean formula; Haalman 1965"
+    },
+    "chen_yang": {
+        "name": "Chen & Yang - Direct Synthesis (Ms=1.26)",
+        "kc_math": "(0.7 * tm) / (km * taum)",
+        "ti_math": "tm",
+        "mode": "servo", "overshoot": "none", "robust": true, "integral_metric": "none",
+        "category": "direct_synthesis", "ratio_min": 0.1, "ratio_max": 1.0,
+        "description": "Chen & Yang direct synthesis. Achieves Ms=1.26, Am=2.24, PM=50 degrees.",
+        "unique_feature": "Targets Ms=1.26, Am=2.24, PM=50 deg; Method 25 parameter estimation; Chen & Yang 1995"
+    },
+    "smith_corripio_regulator": {
+        "name": "Smith & Corripio - Direct Synthesis Regulator",
+        "kc_math": "tm / (km * taum)",
+        "ti_math": "tm",
+        "mode": "regulator", "overshoot": "none", "robust": false, "integral_metric": "iae",
+        "category": "direct_synthesis", "ratio_min": 0.1, "ratio_max": 0.5,
+        "description": "Smith & Corripio direct synthesis min IAE regulator. Ti = Tm.",
+        "unique_feature": "Pure DS: Ti=Tm, Kc=Tm/(Km*taum); min IAE target; from Smith & Corripio textbook p.343-346"
+    },
+    "smith_corripio_servo": {
+        "name": "Smith & Corripio - Direct Synthesis Servo",
+        "kc_math": "(3.0 * tm) / (5.0 * km * taum)",
+        "ti_math": "tm",
+        "mode": "servo", "overshoot": "low", "robust": false, "integral_metric": "iae",
+        "category": "direct_synthesis", "ratio_min": 0.1, "ratio_max": 0.5,
+        "description": "Smith & Corripio DS servo. Detuned gain (3/5 factor) for smoother setpoint response.",
+        "unique_feature": "Servo DS: Kc reduced by 3/5 vs regulator version; targets min IAE for setpoint changes; Ti=Tm"
+    },
+    "miluse_0os": {
+        "name": "Miluse et al. - 0% Overshoot",
+        "kc_math": "(0.368 * tm) / (km * taum)",
+        "ti_math": "tm",
+        "mode": "servo", "overshoot": "none", "robust": false, "integral_metric": "none",
+        "category": "direct_synthesis", "ratio_min": 0.04, "ratio_max": 1.4,
+        "description": "Miluse et al. direct synthesis guaranteed 0% overshoot.",
+        "unique_feature": "Rigorously guarantees 0% overshoot; Ti=Tm; Method 26 estimation; Miluse et al. 1994"
+    },
+    "miluse_5os": {
+        "name": "Miluse et al. - 5% Overshoot",
+        "kc_math": "(0.514 * tm) / (km * taum)",
+        "ti_math": "tm",
+        "mode": "servo", "overshoot": "low", "robust": false, "integral_metric": "none",
+        "category": "direct_synthesis", "ratio_min": 0.04, "ratio_max": 1.4,
+        "description": "Miluse et al. direct synthesis for exactly 5% overshoot.",
+        "unique_feature": "Precisely 5% overshoot; Ti=Tm; widest overshoot-selection family (0-50%) of any PI set"
+    },
+    "miluse_10os": {
+        "name": "Miluse et al. - 10% Overshoot",
+        "kc_math": "(0.581 * tm) / (km * taum)",
+        "ti_math": "tm",
+        "mode": "servo", "overshoot": "low", "robust": false, "integral_metric": "none",
+        "category": "direct_synthesis", "ratio_min": 0.04, "ratio_max": 1.4,
+        "description": "Miluse et al. for exactly 10% overshoot.",
+        "unique_feature": "Precisely 10% overshoot; Ti=Tm constant across all Miluse OS variants; Miluse 1994"
+    },
+    "miluse_20os": {
+        "name": "Miluse et al. - 20% Overshoot",
+        "kc_math": "(0.696 * tm) / (km * taum)",
+        "ti_math": "tm",
+        "mode": "servo", "overshoot": "medium", "robust": false, "integral_metric": "none",
+        "category": "direct_synthesis", "ratio_min": 0.04, "ratio_max": 1.4,
+        "description": "Miluse et al. for 20% overshoot servo response.",
+        "unique_feature": "20% overshoot; Ti=Tm; Miluse family offers 0-50% OS selection - broadest range of any PI family"
+    },
+    "miluse_30os": {
+        "name": "Miluse et al. - 30% Overshoot",
+        "kc_math": "(0.801 * tm) / (km * taum)",
+        "ti_math": "tm",
+        "mode": "servo", "overshoot": "high", "robust": false, "integral_metric": "none",
+        "category": "direct_synthesis", "ratio_min": 0.04, "ratio_max": 1.4,
+        "description": "Miluse et al. for 30% overshoot. Aggressive fast servo response.",
+        "unique_feature": "30% overshoot; fastest Miluse variant; Ti=Tm; for processes where speed is critical"
+    },
+    "hang_gm15": {
+        "name": "Hang et al. - GM=1.5 (PM=30 deg)",
+        "kc_math": "(1.048 * tm) / (km * taum)",
+        "ti_math": "tm",
+        "mode": "regulator", "overshoot": "medium", "robust": false, "integral_metric": "none",
+        "category": "direct_synthesis", "ratio_min": 0.1, "ratio_max": 1.0,
+        "description": "Hang et al. for Gain Margin=1.5, PM=30 degrees. Aggressive with specified stability margins.",
+        "unique_feature": "Explicit GM=1.5, PM=30 deg; relay-based ID (Method 11 or 14); fastest Hang variant"
+    },
+    "hang_gm2": {
+        "name": "Hang et al. - GM=2 (PM=45 deg)",
+        "kc_math": "(0.7854 * tm) / (km * taum)",
+        "ti_math": "tm",
+        "mode": "regulator", "overshoot": "low", "robust": true, "integral_metric": "none",
+        "category": "direct_synthesis", "ratio_min": 0.1, "ratio_max": 1.0,
+        "description": "Hang et al. for GM=2, PM=45 degrees. Standard engineering robustness target.",
+        "unique_feature": "GM=2, PM=45 deg - standard robustness target; relay autotuning ID; Hang et al. 1991"
+    },
+    "hang_gm3": {
+        "name": "Hang et al. - GM=3 (PM=60 deg)",
+        "kc_math": "(0.524 * tm) / (km * taum)",
+        "ti_math": "tm",
+        "mode": "regulator", "overshoot": "none", "robust": true, "integral_metric": "none",
+        "category": "direct_synthesis", "ratio_min": 0.1, "ratio_max": 1.0,
+        "description": "Hang et al. for GM=3, PM=60 degrees. Robust with good stability margins.",
+        "unique_feature": "GM=3, PM=60 deg; conservative gain; for processes with model uncertainty; Hang 1991"
+    },
+    "hang_gm4": {
+        "name": "Hang et al. - GM=4 (PM=67.5 deg)",
+        "kc_math": "(0.393 * tm) / (km * taum)",
+        "ti_math": "tm",
+        "mode": "regulator", "overshoot": "none", "robust": true, "integral_metric": "none",
+        "category": "direct_synthesis", "ratio_min": 0.1, "ratio_max": 1.0,
+        "description": "Hang et al. for very high robustness: GM=4, PM=67.5 degrees.",
+        "unique_feature": "GM=4, PM=67.5 deg; near-maximum achievable PI robustness; for highly uncertain processes"
+    },
+    "astrom_honeywell": {
+        "name": "Astrom et al. - Honeywell UDC 6000",
+        "kc_math": "3.0 / (km * (1.0 + 3.0 * taum / tm))",
+        "ti_math": "tm",
+        "mode": "regulator", "overshoot": "low", "robust": false, "integral_metric": "none",
+        "category": "direct_synthesis", "ratio_min": 0.1, "ratio_max": 1.5,
+        "description": "Astrom et al. rule embedded in Honeywell UDC 6000 industrial autotuner.",
+        "unique_feature": "Embedded in real Honeywell UDC 6000 autotuner; Method 22 relay+closed-loop identification"
+    },
+    "davydov_ds": {
+        "name": "Davydov et al. - Direct Synthesis (Damping=0.9)",
+        "kc_math": "1.0 / (km * (1.905 * tm / taum + 0.826))",
+        "ti_math": "(0.153 * tm / taum + 0.362) * tm",
+        "mode": "servo", "overshoot": "low", "robust": false, "integral_metric": "none",
+        "category": "direct_synthesis", "ratio_min": 0.2, "ratio_max": 1.0,
+        "description": "Davydov et al. DS for closed-loop damping factor = 0.9.",
+        "unique_feature": "Damping=0.9 specification; Method 12 tangent-point estimation; Ti is linear function of Tm/taum"
+    },
+    "bi_et_al": {
+        "name": "Bi et al. - Direct Synthesis",
+        "kc_math": "(0.5064 * tm) / (km * taum)",
+        "ti_math": "tm",
+        "mode": "servo", "overshoot": "low", "robust": false, "integral_metric": "none",
+        "category": "direct_synthesis", "ratio_min": 0.1, "ratio_max": 1.0,
+        "description": "Bi et al. direct synthesis PI using Method 20 closed-loop identification.",
+        "unique_feature": "Uses closed-loop step response identification (Method 20); Ti=Tm; Bi, Cai, Wang 1999"
+    },
+    "smith_delay_dominant": {
+        "name": "Smith - 6dB Gain Margin (Delay Dominant)",
+        "kc_math": "0.35 / km",
+        "ti_math": "0.42 * taum",
+        "mode": "regulator", "overshoot": "none", "robust": true, "integral_metric": "none",
+        "category": "direct_synthesis", "ratio_min": 1.0, "ratio_max": 10.0,
+        "description": "Smith DS for delay-dominant processes. 6 dB gain margin. Kc independent of Tm.",
+        "unique_feature": "For delay-dominant processes (taum >> Tm); 6 dB gain margin; Kc = 0.35/Km only; Smith 1957"
+    },
+    "brambilla_robust": {
+        "name": "Brambilla et al. - Robust (<5% OS)",
+        "kc_math": "(tm + 0.5 * taum) / (km * (taum + taum))",
+        "ti_math": "tm + 0.5 * taum",
+        "mode": "regulator", "overshoot": "low", "robust": true, "integral_metric": "none",
+        "category": "robust", "ratio_min": 0.1, "ratio_max": 10.0,
+        "description": "Brambilla et al. robust design guaranteed <5% overshoot with no model uncertainty (lambda=1).",
+        "unique_feature": "Guarantees <5% overshoot with no model errors; lambda=1; explicitly robust against parameter variation"
+    },
+    "rivera_imc": {
+        "name": "Rivera et al. - IMC Robust PI",
+        "kc_math": "tm / (1.7 * taum * km)",
+        "ti_math": "tm",
+        "mode": "regulator", "overshoot": "none", "robust": true, "integral_metric": "none",
+        "category": "robust", "ratio_min": 0.1, "ratio_max": 2.0,
+        "description": "Rivera et al. Internal Model Control (IMC) robust PI. Lambda >= 1.7*taum.",
+        "unique_feature": "IMC-based derivation; lambda=1.7*taum adjustable closed-loop time constant; Rivera 1986 industry standard"
+    },
+    "chien_imc": {
+        "name": "Chien - IMC Robust PI (lambda=Tm)",
+        "kc_math": "tm / (km * (taum + tm))",
+        "ti_math": "tm",
+        "mode": "regulator", "overshoot": "none", "robust": true, "integral_metric": "none",
+        "category": "robust", "ratio_min": 0.1, "ratio_max": 2.0,
+        "description": "Chien robust IMC PI with lambda=Tm. Conservative, stable, no overshoot.",
+        "unique_feature": "IMC with lambda=Tm (natural process time constant); guaranteed stability; Chien 1988; safety-critical loops"
+    },
+    "fruehauf_robust_low": {
+        "name": "Fruehauf et al. - Robust Low Dead-Time",
+        "kc_math": "(5.0 * tm) / (9.0 * taum * km)",
+        "ti_math": "5.0 * taum",
+        "mode": "regulator", "overshoot": "low", "robust": true, "integral_metric": "none",
+        "category": "robust", "ratio_min": 0.0, "ratio_max": 0.33,
+        "description": "Fruehauf et al. robust for lag-dominant processes (taum/Tm < 0.33).",
+        "unique_feature": "Two-regime rule: for taum/Tm < 0.33; Ti=5*taum; explicitly handles dead-time dominance transition"
+    },
+    "fruehauf_robust_high": {
+        "name": "Fruehauf et al. - Robust High Dead-Time",
+        "kc_math": "tm / (2.0 * taum * km)",
+        "ti_math": "tm",
+        "mode": "regulator", "overshoot": "none", "robust": true, "integral_metric": "none",
+        "category": "robust", "ratio_min": 0.33, "ratio_max": 2.0,
+        "description": "Fruehauf et al. robust for dead-time-significant processes (taum/Tm >= 0.33).",
+        "unique_feature": "High DT regime; Ti=Tm; conservative; for delay-dominant processes; Fruehauf et al. 1993"
+    },
+    "chen_robust_ms100": {
+        "name": "Chen et al. - Robust Ms=1.00 (AM=3.14, PM=61.4)",
+        "kc_math": "(0.50 * tm) / (taum * km)",
+        "ti_math": "tm",
+        "mode": "regulator", "overshoot": "none", "robust": true, "integral_metric": "none",
+        "category": "robust", "ratio_min": 0.1, "ratio_max": 2.0,
+        "description": "Chen et al. Ms=1.00 - no resonance peak. Maximum stability: AM=3.14, PM=61.4 deg.",
+        "unique_feature": "Ms=1.00 means no frequency amplification; maximum robustness; 6 Ms settings (1.0-1.5); Chen 1995"
+    },
+    "chen_robust_ms120": {
+        "name": "Chen et al. - Robust Ms=1.20 (AM=2.34, PM=51.6)",
+        "kc_math": "(0.67 * tm) / (taum * km)",
+        "ti_math": "tm",
+        "mode": "regulator", "overshoot": "low", "robust": true, "integral_metric": "none",
+        "category": "robust", "ratio_min": 0.1, "ratio_max": 2.0,
+        "description": "Chen et al. Ms=1.20. Standard industrial robustness: AM=2.34, PM=51.6 deg.",
+        "unique_feature": "Ms=1.2 - standard industrial robustness target; AM=2.34, PM=51.6 deg; best speed-stability balance"
+    },
+    "chen_robust_ms150": {
+        "name": "Chen et al. - Robust Ms=1.50 (AM=1.96, PM=44.1)",
+        "kc_math": "(0.80 * tm) / (taum * km)",
+        "ti_math": "tm",
+        "mode": "regulator", "overshoot": "medium", "robust": true, "integral_metric": "none",
+        "category": "robust", "ratio_min": 0.1, "ratio_max": 2.0,
+        "description": "Chen et al. Ms=1.50. More aggressive: AM=1.96, PM=44.1 deg. Faster but less robust.",
+        "unique_feature": "Ms=1.5 acceptable limit; fastest Chen robust variant; AM=1.96, PM=44.1 deg; Chen 1995"
+    },
+    "lee_robust": {
+        "name": "Lee et al. - Desired CL Response (lambda=0.333*taum)",
+        "kc_math": "tm / (km * (1.333 * taum + taum))",
+        "ti_math": "tm + (taum**2) / (2.0 * (1.333 * taum + taum))",
+        "mode": "servo", "overshoot": "none", "robust": true, "integral_metric": "none",
+        "category": "robust", "ratio_min": 0.1, "ratio_max": 2.0,
+        "description": "Lee et al. targeting CL response e^(-taum*s)/(lambda*s+1), lambda=0.333*taum.",
+        "unique_feature": "Specifies exact desired closed-loop TF; lambda=0.333*taum; requires Tm > taum; Lee et al. 1996"
+    },
+    "isaksson_graebe": {
+        "name": "Isaksson & Graebe - Robust PI (lambda=0.4*Tm)",
+        "kc_math": "(tm + 0.25 * taum) / (km * 0.4 * tm)",
+        "ti_math": "tm + 0.25 * taum",
+        "mode": "regulator", "overshoot": "none", "robust": true, "integral_metric": "none",
+        "category": "robust", "ratio_min": 0.1, "ratio_max": 2.0,
+        "description": "Isaksson & Graebe robust PI with lambda=0.4*Tm. Systematic stability-guaranteed design.",
+        "unique_feature": "Lambda=0.4*Tm; requires Tm > taum; systematic robust design; Isaksson & Graebe 1999"
+    },
+    "chun_robust_20pct": {
+        "name": "Chun et al. - Robust 20% Parameter Uncertainty",
+        "kc_math": "(tm * (taum + 2.0 * 0.4 * tm) - (0.4 * tm)**2) / (km * (taum + 0.4 * tm)**2)",
+        "ti_math": "(tm * (taum + 2.0 * 0.4 * tm) - (0.4 * tm)**2) / (tm + 0.4 * tm)",
+        "mode": "regulator", "overshoot": "none", "robust": true, "integral_metric": "none",
+        "category": "robust", "ratio_min": 0.1, "ratio_max": 2.0,
+        "description": "Chun et al. robust PI for 20% uncertainty in all process parameters. Lambda=0.4*Tm.",
+        "unique_feature": "Explicit 20% parametric uncertainty specification; lambda=0.4*Tm; Method 21 regression; Chun 1999"
+    },
+    "voda_landau_pm60": {
+        "name": "Voda & Landau - Symmetrical Optimum (PM=60 deg)",
+        "kc_math": "tm / (2.0 * km * taum)",
+        "ti_math": "tm",
+        "mode": "servo", "overshoot": "none", "robust": true, "integral_metric": "none",
+        "category": "direct_synthesis", "ratio_min": 0.25, "ratio_max": 1.0,
+        "description": "Voda & Landau symmetrical optimum for 60 degree phase margin.",
+        "unique_feature": "Symmetrical optimum principle; frequency domain using G_p(j*omega_135) data; PM=60 deg; Voda & Landau 1995"
     }
 }
