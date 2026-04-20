@@ -26,55 +26,12 @@ except Exception as e:
     rf_model = None
     rules_db = {}
 
+# Simplified Memory - The LLM handles the context now
 bot_memory = {
-    "step": "init", 
     "km": None, "tm": None, "taum": None, "tau_c": None,
-    "mode": 0, "overshoot": 0, "robust": 0, "metric": 0
+    "is_simple": False, "mode": None, "overshoot": None, "robust": None, "metric": None
 }
 
-# ---------------------------------------------------------
-# 1. LOCAL INTENT ENGINE (The Mini-AI Cache)
-# ---------------------------------------------------------
-# This answers basic chat without wasting your Gemini API Quota!
-def local_chat_model(msg):
-    msg = msg.lower()
-    
-    if msg in ["hi", "hello", "hey", "hii"]:
-        return "Hello! I am TUNING BOT, your expert Process Control assistant. You can provide parameters (Km, Tm, Tau) to start tuning, or click 'Advanced Filter' for specific responses."
-    
-    if "who are you" in msg or "what can you do" in msg:
-        return "I am a specialized Process Control SLM. I use machine learning to recommend optimal PI controller settings based on Aidan O'Dwyer's handbook rules."
-    
-    if "how do you work" in msg or "explain" in msg:
-        return "I analyze your First-Order Plus Dead Time (FOPDT) parameters and run them through a Random Forest decision tree to find the best tuning rule for your specific needs."
-        
-    return None
-
-# ---------------------------------------------------------
-# 2. LOCAL REGEX FALLBACK (When Gemini is exhausted)
-# ---------------------------------------------------------
-def local_fallback_engine(user_msg):
-    msg = user_msg.lower()
-    ext = {"km": None, "tm": None, "taum": None, "tau_c": None, "reply": "Parameters received. Calculating..."}
-    
-    km_m = re.search(r'(km|gain)\s*=?\s*(\d+\.?\d*)', msg)
-    tm_m = re.search(r'(tm|lag)\s*=?\s*(\d+\.?\d*)', msg)
-    tau_m = re.search(r'(tau|dead)\s*=?\s*(\d+\.?\d*)', msg)
-    tau_c_m = re.search(r'(tau_c|tauc)\s*=?\s*(\d+\.?\d*)', msg)
-    
-    if km_m: ext["km"] = float(km_m.group(2))
-    if tm_m: ext["tm"] = float(tm_m.group(2))
-    if tau_m: ext["taum"] = float(tau_m.group(2))
-    if tau_c_m: ext["tau_c"] = float(tau_c_m.group(2))
-    
-    if not any([ext["km"], ext["tm"], ext["taum"]]):
-        ext["reply"] = "I didn't detect any process parameters. Please provide Gain (Km), Lag (Tm), and Dead Time (Tau)."
-        
-    return ext
-
-# ---------------------------------------------------------
-# 3. MATH SIMULATION
-# ---------------------------------------------------------
 def simulate_step(kc, ti, km, tm, taum):
     t = np.linspace(0, (tm + taum) * 6, 400)
     dt = t[1] - t[0]
@@ -105,107 +62,104 @@ def simulate_step(kc, ti, km, tm, taum):
     }
     return json.dumps(graph_data), round(max(0, (np.max(pv) - 1.0) * 100), 1)
 
-# ---------------------------------------------------------
-# 4. MAIN API ROUTE
-# ---------------------------------------------------------
 @app.route('/api/chat', methods=['POST'])
 def chat():
     global bot_memory
     try:
         user_msg = request.json.get('message', '')
         user_msg_lower = user_msg.lower().strip()
-        action_data = request.json.get('action_data', None)
 
-        # A. Reset Flow
+        # 1. Reset Flow
         if user_msg_lower == "reset":
-            bot_memory = {"step": "init", "km": None, "tm": None, "taum": None, "tau_c": None, "mode": 0, "overshoot": 0, "robust": 0, "metric": 0}
+            bot_memory = {"km": None, "tm": None, "taum": None, "tau_c": None, "is_simple": False, "mode": None, "overshoot": None, "robust": None, "metric": None}
             return jsonify({
-                "reply": "Welcome to TUNING BOT. How would you like to proceed?", 
-                "options": [{"label": "Simple Calculator", "val": "path:simple"}, {"label": "Advanced Filter", "val": "path:advanced"}], 
+                "reply": "Welcome to TUNING BOT. Please provide your process parameters (Km, Tm, Tau). You can also tell me what you are controlling (e.g., a heater, water tank) so I can optimize it for you.", 
+                "options": [], "chart": None
+            })
+
+        # 2. Professional Rule Listing
+        if "rules" in user_msg_lower or "what do you have" in user_msg_lower:
+            reply_text = "Here is my tuning database, categorized by Aidan O'Dwyer's handbook:\n\n"
+            reply_text += "**1. Process Reaction Curve (Servo & Regulatory)**\n- Ziegler-Nichols, Cohen-Coon, Hazebroek\n"
+            reply_text += "**2. Minimum Performance Index (IAE, ISE, ITAE, ITSE)**\n- Rovira, Zhuang & Atherton, Wang-Juang-Chan\n"
+            reply_text += "**3. Robust Tuning**\n- Skogestad IMC, AMIGO, Chun et al.\n"
+            reply_text += "**4. Direct Synthesis**\n- Lambda Tuning\n\n"
+            return jsonify({"reply": reply_text, "options": [], "chart": None})
+
+        # 3. Dynamic LLM Context Translator
+        ai_prompt = f"""
+        You are TUNING BOT, a smart process control assistant. 
+        User Message: "{user_msg}"
+        Current Memory: {json.dumps(bot_memory)}
+
+        TASK:
+        1. Extract Km, Tm, Tau (and Tau_c) if provided.
+        2. Determine if the user wants a "Simple Calculator" (Ziegler-Nichols). If they explicitly say "simple" or click it, set "is_simple": true.
+        3. If they give natural language preferences (e.g., "smooth", "fast", "aggressive"), translate them to Random Forest numerical features:
+           - mode: 0 (Regulator/Disturbance) or 1 (Servo/Setpoint)
+           - overshoot: 0 (None), 1 (Low), 2 (Medium), 3 (High)
+           - robust: 0 (No), 1 (Yes)
+           - metric: 1 (IAE/Smooth), 2 (ISE/Aggressive), 3 (ITAE)
+        4. IF you have Km, Tm, Tau, BUT NO PREFERENCES, act as an expert consultant. Look at their context (e.g., if they mentioned a "heater" or "water tank"). Generate a plain-English "reply" asking how they want it to perform. Provide 3 easy-to-understand "options" for them to click.
+
+        OUTPUT ONLY JSON:
+        {{
+            "km": float/null, "tm": float/null, "taum": float/null, "tau_c": float/null,
+            "is_simple": boolean,
+            "mode": int/null, "overshoot": int/null, "robust": int/null, "metric": int/null,
+            "reply": "Conversational reply, OR a context-specific question (e.g., 'Do you want the water tank to fill rapidly with some splash, or smoothly and safely?')",
+            "options": [{{"label": "Simple Calculator", "val": "simple"}}, {{"label": "Fast & Aggressive", "val": "fast response"}}, {{"label": "Smooth & Safe", "val": "smooth and robust"}}] 
+        }}
+        """
+        
+        res = llm_model.generate_content(ai_prompt)
+        ext = json.loads(res.text.replace('```json', '').replace('```', '').strip())
+        
+        # Update memory
+        for k in ["km", "tm", "taum", "tau_c", "is_simple", "mode", "overshoot", "robust", "metric"]:
+            if ext.get(k) is not None: 
+                bot_memory[k] = ext[k]
+
+        km, tm, taum = bot_memory['km'], bot_memory['tm'], bot_memory['taum']
+        
+        # A. Missing Basic Parameters
+        if not all([km, tm, taum]): 
+            return jsonify({"reply": ext.get('reply', 'Please provide Km, Tm, and Tau.'), "options": [], "chart": None})
+
+        # B. We have parameters, but we need to know HOW they want it tuned
+        if not bot_memory['is_simple'] and (bot_memory['mode'] is None or bot_memory['overshoot'] is None):
+            return jsonify({
+                "reply": ext.get('reply', 'I have your parameters. Do you want a standard simple calculation, or a specific optimization?'),
+                "options": ext.get('options', [
+                    {"label": "Simple Calculator", "val": "Simple Calculator"},
+                    {"label": "Smooth / No Overshoot", "val": "Smooth response without overshoot"},
+                    {"label": "Fast / Aggressive", "val": "Fast response"}
+                ]),
                 "chart": None
             })
 
-        # B. O'Dwyer Professional Rule Categorizer
-        if "rules" in user_msg_lower or "what do you have" in user_msg_lower:
-            reply_text = "Here is my tuning database, categorized according to Aidan O'Dwyer's handbook:\n\n"
-            reply_text += "**1. Process Reaction Curve (Servo & Regulatory)**\n- Ziegler-Nichols (Classic)\n- Cohen-Coon\n- Hazebroek & Van der Waerden\n- CHR Servo & Regulatory (0% and 20% OS)\n\n"
-            reply_text += "**2. Minimum Performance Index (IAE, ISE, ITAE, ITSE)**\n- Rovira et al.\n- Zhuang & Atherton\n- Wang-Juang-Chan Optimum\n\n"
-            reply_text += "**3. Robust Tuning**\n- Skogestad IMC (SIMC)\n- AMIGO (Astrom-Hagglund)\n- Chun et al. (20% Uncertainty)\n\n"
-            reply_text += "**4. Direct Synthesis**\n- Lambda Tuning (Desired Tau_c)\n\n"
-            reply_text += "You can test any of these by using the Advanced Filter!"
-            return jsonify({"reply": reply_text, "options": [], "chart": None})
-
-        # C. Local Chat Engine (Bypasses Gemini for informal text)
-        local_reply = local_chat_model(user_msg)
-        if local_reply:
-            return jsonify({"reply": local_reply, "options": [], "chart": None})
-
-        # D. Advanced Decision Tree Filter (UI Buttons)
-        if action_data:
-            key, val = action_data.get('key'), action_data.get('val')
-            
-            if key == "path":
-                if val == "simple":
-                    bot_memory['step'] = "simple_calc"
-                    return jsonify({"reply": "Simple Mode. Please provide Gain (Km), Lag (Tm), and Dead Time (Tau).", "options": []})
-                else:
-                    bot_memory['step'] = "advanced_calc"
-                    return jsonify({"reply": "What is your target operation mode?", "options": [{"label": "Regulator", "val": "mode:0"}, {"label": "Servo", "val": "mode:1"}]})
-            
-            if key == "mode":
-                bot_memory['mode'] = int(val)
-                return jsonify({"reply": "What is your overshoot target?", "options": [
-                    {"label": "None (0%)", "val": "os:0"}, {"label": "Low (5-10%)", "val": "os:1"}, 
-                    {"label": "Medium (20-25%)", "val": "os:2"}, {"label": "High (>25%)", "val": "os:3"}
-                ]})
-            
-            if key == "os":
-                bot_memory['overshoot'] = int(val)
-                return jsonify({"reply": "Is Robust Tuning required?", "options": [{"label": "Yes", "val": "rob:1"}, {"label": "No", "val": "rob:0"}]})
-            
-            if key == "rob":
-                bot_memory['robust'] = int(val)
-                return jsonify({"reply": "Select an Integral Error Metric to minimize:", "options": [
-                    {"label": "None", "val": "met:0"}, {"label": "IAE", "val": "met:1"}, {"label": "ISE", "val": "met:2"}, 
-                    {"label": "ITAE", "val": "met:3"}, {"label": "ISTSE", "val": "met:4"}, {"label": "ISTES", "val": "met:5"}
-                ]})
-            
-            if key == "met":
-                bot_memory['metric'] = int(val)
-                return jsonify({"reply": "Filter complete. Please provide your process parameters: Gain (Km), Lag (Tm), and Dead Time (Tau).", "options": []})
-
-        # E. NLP Extraction with Local Regex Fallback
-        try:
-            ai_prompt = f'You are TUNING BOT. Extract parameters from: "{user_msg}". \nOUTPUT ONLY valid JSON: {{"km": float/null, "tm": float/null, "taum": float/null, "tau_c": float/null, "reply": "Plain conversational response."}}'
-            res = llm_model.generate_content(ai_prompt)
-            ext = json.loads(res.text.replace('```json', '').replace('```', '').strip())
-        except Exception as e:
-            # Gemini Quota Exhausted! Use the regex fallback.
-            print("Gemini API Error, using Local Engine:", e)
-            ext = local_fallback_engine(user_msg)
-        
-        for k in ["km", "tm", "taum", "tau_c"]:
-            if ext.get(k) is not None: bot_memory[k] = ext[k]
-
-        km, tm, taum, tau_c = bot_memory['km'], bot_memory['tm'], bot_memory['taum'], bot_memory['tau_c']
-        
-        if not all([km, tm, taum]): 
-            return jsonify({"reply": ext.get('reply', '').replace('*', ''), "options": []})
-
-        # F. AI Rule Selection & Math Execution
-        if bot_memory['step'] == "simple_calc":
+        # C. Ready to Execute Math
+        if bot_memory['is_simple']:
             best_rule = "ziegler_nichols"
         else:
+            # Provide safe defaults if the LLM didn't extract every single feature perfectly
+            mode = bot_memory.get('mode') or 1
+            os_val = bot_memory.get('overshoot') or 0
+            rob = bot_memory.get('robust') or 0
+            met = bot_memory.get('metric') or 1
+            
             ratio = taum / tm
-            features = np.array([[km, tm, taum, ratio, bot_memory['mode'], bot_memory['overshoot'], bot_memory['robust'], bot_memory['metric']]])
+            features = np.array([[km, tm, taum, ratio, mode, os_val, rob, met]])
+            
             best_rule = rf_model.predict(features)[0] if rf_model else "ziegler_nichols"
 
         r = rules_db.get(best_rule, rules_db.get("ziegler_nichols", {}))
         
-        if "tau_c" in str(r.get('kc_math', '')) and not tau_c:
-            return jsonify({"reply": f"The AI selected {r.get('name')}, which requires a desired Closed-Loop Time Constant (Tau_c). Please provide Tau_c.", "options": []})
+        # Tau_C Check for Direct Synthesis
+        if "tau_c" in str(r.get('kc_math', '')) and not bot_memory['tau_c']:
+            return jsonify({"reply": f"The AI optimized this to **{r.get('name')}**. This rule requires a desired Closed-Loop Time Constant (Tau_c). What should Tau_c be?", "options": [], "chart": None})
 
-        safe_env = {"km": km, "tm": tm, "taum": taum, "tau_c": tau_c if tau_c else 0, "min": min, "max": max}
+        safe_env = {"km": km, "tm": tm, "taum": taum, "tau_c": bot_memory['tau_c'] if bot_memory['tau_c'] else 0, "min": min, "max": max}
         
         if r.get('kc_math') == "SPECIAL_LOOKUP":
             kc, ti = (0.85 * tm) / (km * taum), 2.4 * taum
@@ -213,17 +167,18 @@ def chat():
             kc = eval(r['kc_math'], {"__builtins__": None}, safe_env)
             ti = eval(r['ti_math'], {"__builtins__": None}, safe_env)
         
-        chart, os_val = simulate_step(kc, ti, km, tm, taum)
+        chart, os_est = simulate_step(kc, ti, km, tm, taum)
         
-        reply = f"**Tuned using:** {r.get('name')}\n**Kc:** {round(kc,4)}\n**Ti:** {round(ti,4)}s\n**Estimated Overshoot:** {os_val}%"
+        reply = f"**Optimization Complete!**\n\n**Rule Applied:** {r.get('name')}\n**Proportional Gain (Kc):** {round(kc,4)}\n**Integral Time (Ti):** {round(ti,4)}s\n**Estimated Overshoot:** {os_est}%"
         
-        bot_memory.update({"km": None, "tm": None, "taum": None, "tau_c": None})
+        # Wipe memory for the next calculation
+        bot_memory = {"km": None, "tm": None, "taum": None, "tau_c": None, "is_simple": False, "mode": None, "overshoot": None, "robust": None, "metric": None}
         
         return jsonify({"reply": reply, "chart": chart, "options": []})
 
     except Exception as e:
-        print("CRITICAL SERVER ERROR:", traceback.format_exc())
-        return jsonify({"reply": f"SYSTEM ERROR: {str(e)}. Please check parameters and try again.", "options": []})
+        print("CRITICAL ERROR:", traceback.format_exc())
+        return jsonify({"reply": f"An error occurred. Let's start over. Provide your parameters.", "options": []})
 
 if __name__ == '__main__': 
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
