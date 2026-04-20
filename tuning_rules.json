@@ -8,6 +8,11 @@
         "description": "Classic Ziegler-Nichols process reaction rule. Quarter decay ratio response.",
         "unique_feature": "Industry standard baseline; quarter decay ratio target; taum/Tm <= 1"
     },
+    "hazebroek": {
+        "name": "Hazebroek & Van der Waerden", "min_ratio": 0.1, "max_ratio": 2.0, 
+        "mode": "regulatory", "overshoot": 100, "robust": 1, "integral_metric": "none",
+        "kc_math": "SPECIAL_LOOKUP", "ti_math": "SPECIAL_LOOKUP"
+    },
     "cohen_coon": {
         "name": "Cohen-Coon",
         "kc_math": "(tm / (km * taum)) * (0.9 + (taum / (12 * tm)))",
