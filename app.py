@@ -1,4 +1,5 @@
 import os
+import re
 import json
 import pickle
 import numpy as np
@@ -10,11 +11,9 @@ from flask_cors import CORS
 app = Flask(__name__)
 CORS(app)
 
-# Configure Gemini for NLP Extraction
 genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
 llm_model = genai.GenerativeModel("gemini-2.5-flash", generation_config={"response_mime_type": "application/json"})
 
-# Load the Database and the AI Brain
 current_dir = os.path.dirname(os.path.abspath(__file__))
 try:
     with open(os.path.join(current_dir, 'tuning_rules.json'), 'r') as f:
@@ -27,12 +26,31 @@ except Exception as e:
     rf_model = None
     rules_db = {}
 
-# Session Memory
 bot_memory = {
     "step": "init", 
     "km": None, "tm": None, "taum": None, "tau_c": None,
     "mode": 0, "overshoot": 0, "robust": 0, "metric": 0
 }
+
+# HYBRID FALLBACK ENGINE (Regex)
+def local_fallback_engine(user_msg):
+    msg = user_msg.lower()
+    ext = {"km": None, "tm": None, "taum": None, "tau_c": None, "reply": "[Offline Mode] Parameters received."}
+    
+    km_m = re.search(r'(km|gain)\s*=?\s*(\d+\.?\d*)', msg)
+    tm_m = re.search(r'(tm|lag)\s*=?\s*(\d+\.?\d*)', msg)
+    tau_m = re.search(r'(tau|dead)\s*=?\s*(\d+\.?\d*)', msg)
+    tau_c_m = re.search(r'(tau_c|tauc)\s*=?\s*(\d+\.?\d*)', msg)
+    
+    if km_m: ext["km"] = float(km_m.group(2))
+    if tm_m: ext["tm"] = float(tm_m.group(2))
+    if tau_m: ext["taum"] = float(tau_m.group(2))
+    if tau_c_m: ext["tau_c"] = float(tau_c_m.group(2))
+    
+    if not any([ext["km"], ext["tm"], ext["taum"]]):
+        ext["reply"] = "[Offline Mode] Please provide Gain (Km), Lag (Tm), and Dead Time (Tau)."
+        
+    return ext
 
 def simulate_step(kc, ti, km, tm, taum):
     t = np.linspace(0, (tm + taum) * 6, 400)
@@ -69,10 +87,11 @@ def chat():
     global bot_memory
     try:
         user_msg = request.json.get('message', '')
+        user_msg_lower = user_msg.lower()
         action_data = request.json.get('action_data', None)
 
         # 1. Reset Flow
-        if user_msg.lower() == "reset":
+        if user_msg_lower == "reset":
             bot_memory = {"step": "init", "km": None, "tm": None, "taum": None, "tau_c": None, "mode": 0, "overshoot": 0, "robust": 0, "metric": 0}
             return jsonify({
                 "reply": "Welcome to TUNING BOT. How would you like to proceed?", 
@@ -80,7 +99,23 @@ def chat():
                 "chart": None
             })
 
-        # 2. Advanced Decision Tree Filter (Mapped exactly to Claude's numerical features)
+        # 2. Professional Rule Categorizer
+        if "rules" in user_msg_lower or "what do you have" in user_msg_lower:
+            categories = {}
+            for k, v in rules_db.items():
+                mode = str(v.get("mode", "Uncategorized")).capitalize()
+                name = v.get("name", k)
+                if mode not in categories:
+                    categories[mode] = []
+                categories[mode].append(name)
+            
+            reply_text = "I have a comprehensive database of tuning rules, categorized by their engineering specifications:\n\n"
+            for mode, rules in categories.items():
+                reply_text += f"**{mode} Rules:**\n- " + "\n- ".join(rules) + "\n\n"
+            
+            return jsonify({"reply": reply_text, "options": [], "chart": None})
+
+        # 3. Advanced Decision Tree Filter
         if action_data:
             key, val = action_data.get('key'), action_data.get('val')
             
@@ -114,21 +149,24 @@ def chat():
                 bot_memory['metric'] = int(val)
                 return jsonify({"reply": "Filter complete. Please provide your process parameters: Gain (Km), Lag (Tm), and Dead Time (Tau).", "options": []})
 
-        # 3. NLP Extraction
-        ai_prompt = f'You are TUNING BOT. Extract parameters from: "{user_msg}". \nOUTPUT ONLY valid JSON: {{"km": float/null, "tm": float/null, "taum": float/null, "tau_c": float/null, "reply": "Plain conversational response, no markdown symbols."}}'
-        res = llm_model.generate_content(ai_prompt)
-        ext = json.loads(res.text.replace('```json', '').replace('```', '').strip())
+        # 4. NLP Extraction with Local Regex Fallback
+        try:
+            ai_prompt = f'You are TUNING BOT. Extract parameters from: "{user_msg}". \nOUTPUT ONLY valid JSON: {{"km": float/null, "tm": float/null, "taum": float/null, "tau_c": float/null, "reply": "Plain conversational response, no markdown symbols."}}'
+            res = llm_model.generate_content(ai_prompt)
+            ext = json.loads(res.text.replace('```json', '').replace('```', '').strip())
+        except Exception as e:
+            print("LLM Quota/Error hit. Switching to local regex fallback:", e)
+            ext = local_fallback_engine(user_msg)
         
         for k in ["km", "tm", "taum", "tau_c"]:
             if ext.get(k) is not None: bot_memory[k] = ext[k]
 
         km, tm, taum, tau_c = bot_memory['km'], bot_memory['tm'], bot_memory['taum'], bot_memory['tau_c']
         
-        # Check if basic parameters are missing
         if not all([km, tm, taum]): 
             return jsonify({"reply": ext.get('reply', '').replace('*', ''), "options": []})
 
-        # 4. AI Rule Selection & Math Execution
+        # 5. AI Rule Selection & Math Execution
         if bot_memory['step'] == "simple_calc":
             best_rule = "ziegler_nichols"
         else:
@@ -138,7 +176,6 @@ def chat():
 
         r = rules_db.get(best_rule, rules_db.get("ziegler_nichols", {}))
         
-        # Check if the chosen rule requires tau_c (like Direct Synthesis) and ask for it if missing
         if "tau_c" in str(r.get('kc_math', '')) and not tau_c:
             return jsonify({"reply": f"The AI selected {r.get('name')}, which requires a desired Closed-Loop Time Constant (Tau_c). Please provide Tau_c.", "options": []})
 
@@ -154,14 +191,13 @@ def chat():
         
         reply = f"Tuned using: {r.get('name')}\nKc: {round(kc,4)}\nTi: {round(ti,4)}s\nEstimated Overshoot: {os_val}%"
         
-        # Wipe the math params but keep the UI filters for the next calculation
         bot_memory.update({"km": None, "tm": None, "taum": None, "tau_c": None})
         
         return jsonify({"reply": reply, "chart": chart, "options": []})
 
     except Exception as e:
-        return jsonify({"reply": f"SYSTEM ERROR: {str(e)}", "options": []})
+        print("CRITICAL SERVER ERROR:", traceback.format_exc())
+        return jsonify({"reply": f"SYSTEM ERROR: {str(e)}. Please check parameters and try again.", "options": []})
 
 if __name__ == '__main__': 
-    # Use 0.0.0.0 so Render can bind to the port
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
