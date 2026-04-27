@@ -41,10 +41,6 @@
         .dynamic-loader { height: 20px; width: 40%; border-radius: 4px; background: linear-gradient(90deg, var(--bg-input) 25%, var(--border) 50%, var(--bg-input) 75%); background-size: 200% 100%; animation: pulse-loading 1.5s infinite linear; }
         @keyframes pulse-loading { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        
-        /* Structure formatting for Lists */
-        ol { padding-left: 20px; margin-top: 5px; margin-bottom: 5px; }
-        li { margin-bottom: 4px; }
     </style>
 </head>
 <body class="dark-mode">
@@ -111,8 +107,6 @@
     function renderBotReply(text, opts = [], chart = null) {
         let btnHtml = opts.length > 0 ? `<div class="options-container">` + opts.map(o => `<button class="option-btn" onclick="sendOption('${o.val}')">${o.label}</button>`).join('') + `</div>` : "";
         
-        // Directly output the text. The Python backend now sends raw HTML (<ol>, <li>, <strong>)
-        // so we DO NOT want to use replace() for asterisks anymore, which was breaking the layout.
         document.getElementById('chat-box').innerHTML += `
             <div class="msg bot-msg">
                 <div class="bot-header"><div class="bot-icon"></div> TUNING BOT</div>
