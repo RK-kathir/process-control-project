@@ -25,6 +25,10 @@
         .bot-icon { width: 24px; height: 24px; border-radius: 50%; background: linear-gradient(135deg, #0ea5e9, #8b5cf6); flex-shrink: 0;}
         .bot-header { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 0.9em; color: var(--text-main);}
         
+        .options-container { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
+        .option-btn { padding: 10px 18px; background: transparent; border: 1px solid var(--accent); color: var(--accent); border-radius: 20px; cursor: pointer; font-weight: 600; font-size: 0.85em; transition: 0.2s; }
+        .option-btn:hover { background: var(--accent); color: white; }
+
         .suggestions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-bottom: 12px; }
         .chip { padding: 8px 16px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 20px; font-size: 0.85em; cursor: pointer; color: var(--text-muted); transition: 0.2s; }
         .chip:hover { border-color: var(--accent); color: var(--accent); }
@@ -81,6 +85,7 @@
     }
 
     function sendChip(text) { document.getElementById('chat-input').value = text; sendMessage(); }
+    function sendOption(label) { document.getElementById('chat-input').value = label; sendMessage(); }
 
     function drawChart(cData) {
         const cId = 'chart-' + Date.now();
@@ -100,12 +105,14 @@
     }
 
     function renderBotReply(text, opts = [], chart = null) {
-        let formattedText = text.replace(/\n/g, "<br>").replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
+        let btnHtml = opts.length > 0 ? `<div class="options-container">` + opts.map(o => `<button class="option-btn" onclick="sendOption('${o.val}')">${o.label}</button>`).join('') + `</div>` : "";
+        // Safely format markdown bolding since we use <br> for newlines now
+        let formattedText = text.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
 
         document.getElementById('chat-box').innerHTML += `
             <div class="msg bot-msg">
                 <div class="bot-header"><div class="bot-icon"></div> TUNING BOT</div>
-                <div style="padding-left: 34px;">${formattedText}</div>
+                <div style="padding-left: 34px;">${formattedText}${btnHtml}</div>
             </div>`;
         
         if (chart) drawChart(chart);
