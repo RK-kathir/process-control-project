@@ -86,18 +86,20 @@ def chat():
             bot_memory = {"km": None, "tm": None, "taum": None, "tau_c": None, "mode": None, "overshoot": None, "robust": None, "metric": None, "ready_to_tune": False}
             return jsonify({"reply": "Session reset. Please give me your process parameters (Km, Tm, Tau) and tell me what you are trying to control.", "options": [], "chart": None})
 
-        # 2. DYNAMIC RULE LISTING (Displays EVERY rule in your JSON)
+        # 2. DYNAMIC RULE LISTING (Reads ALL rules from your JSON)
         if "rules" in user_msg_lower or "what do you have" in user_msg_lower:
-            categories = {}
+            categories = {"Servo": [], "Regulator": [], "General/Hybrid": []}
             for k, v in rules_db.items():
                 mode_val = v.get("mode", -1)
                 mode_str = "Servo" if mode_val == 1 else "Regulator" if mode_val == 0 else "General/Hybrid"
-                categories.setdefault(mode_str, []).append(v.get("name", k))
+                # Pull the clean name, or format the JSON key if name is missing
+                rule_name = v.get("name", k.replace("_", " ").title())
+                categories[mode_str].append(rule_name)
             
-            reply_text = f"**I have {len(rules_db)} advanced tuning rules loaded.** Here they are categorized by mode:\n\n"
+            reply_text = f"**I have {len(rules_db)} tuning rules loaded from Aidan O'Dwyer's handbook.** Here is the complete list:\n\n"
             for mode, rules_list in categories.items():
-                # Join the rules cleanly with commas
-                reply_text += f"**{mode} Rules:**\n- " + ", ".join(rules_list) + "\n\n"
+                if rules_list:
+                    reply_text += f"**{mode} Rules:** {', '.join(rules_list)}\n\n"
             
             return jsonify({"reply": reply_text, "options": [], "chart": None})
 
@@ -136,7 +138,6 @@ def chat():
             res = llm_model.generate_content(ai_prompt)
             ext = json.loads(res.text.replace('```json', '').replace('```', '').strip())
             
-            # Update memory dynamically
             for k in ["km", "tm", "taum", "mode", "overshoot", "robust", "metric"]:
                 if ext.get(k) is not None: bot_memory[k] = ext[k]
             if ext.get("ready_to_tune"): bot_memory["ready_to_tune"] = True
