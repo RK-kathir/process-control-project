@@ -41,6 +41,10 @@
         .dynamic-loader { height: 20px; width: 40%; border-radius: 4px; background: linear-gradient(90deg, var(--bg-input) 25%, var(--border) 50%, var(--bg-input) 75%); background-size: 200% 100%; animation: pulse-loading 1.5s infinite linear; }
         @keyframes pulse-loading { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        
+        /* Structure formatting for Lists */
+        ol { padding-left: 20px; margin-top: 5px; margin-bottom: 5px; }
+        li { margin-bottom: 4px; }
     </style>
 </head>
 <body class="dark-mode">
@@ -57,7 +61,7 @@
     <div class="input-wrapper">
         <div class="suggestions">
             <div class="chip" onclick="sendChip('What tuning rules do you have?')">What tuning rules do you have?</div>
-            <div class="chip" onclick="sendChip('Km=2, Tm=10, Tau=2 for a mixing tank')">Start Example</div>
+            <div class="chip" onclick="sendChip('Km=2, Tm=10, Tau=2')">Start Example</div>
         </div>
         <div class="input-container">
             <input type="text" id="chat-input" placeholder="Message TUNING BOT..." onkeypress="if(event.key==='Enter') sendMessage()">
@@ -106,13 +110,13 @@
 
     function renderBotReply(text, opts = [], chart = null) {
         let btnHtml = opts.length > 0 ? `<div class="options-container">` + opts.map(o => `<button class="option-btn" onclick="sendOption('${o.val}')">${o.label}</button>`).join('') + `</div>` : "";
-        // Safely format markdown bolding since we use <br> for newlines now
-        let formattedText = text.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
-
+        
+        // Directly output the text. The Python backend now sends raw HTML (<ol>, <li>, <strong>)
+        // so we DO NOT want to use replace() for asterisks anymore, which was breaking the layout.
         document.getElementById('chat-box').innerHTML += `
             <div class="msg bot-msg">
                 <div class="bot-header"><div class="bot-icon"></div> TUNING BOT</div>
-                <div style="padding-left: 34px;">${formattedText}${btnHtml}</div>
+                <div style="padding-left: 34px;">${text}${btnHtml}</div>
             </div>`;
         
         if (chart) drawChart(chart);
