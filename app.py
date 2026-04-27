@@ -8,13 +8,17 @@ import traceback
 import google.generativeai as genai
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.svm import LinearSVC
 
 app = Flask(__name__)
 CORS(app)
 
+# 1. CLOUD NLP ENGINE (Gemini)
 genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
 llm_model = genai.GenerativeModel("gemini-2.5-flash", generation_config={"response_mime_type": "application/json"})
 
+# 2. LOAD DECISION ENGINE (Random Forest)
 current_dir = os.path.dirname(os.path.abspath(__file__))
 try:
     with open(os.path.join(current_dir, 'tuning_rules.json'), 'r') as f:
@@ -26,6 +30,23 @@ except Exception as e:
     print(f"STARTUP ERROR: {e}")
     rf_model = None
     rules_db = {}
+
+# 3. EDGE NLP ENGINE (Local Intent Classifier - Zero API Cost)
+nlp_training_data = [
+    ("hi", "greeting"), ("hello there", "greeting"), ("hey", "greeting"), ("good morning", "greeting"),
+    ("who are you", "identity"), ("what can you do", "identity"), ("how do you work", "identity"),
+    ("what tuning rules do you have", "rules"), ("show me the rules", "rules"), ("list all rules", "rules"),
+    ("km is 50", "parameters"), ("tm=10 tau=2", "parameters"), ("i have a water tank", "parameters")
+]
+texts, labels = zip(*nlp_training_data)
+intent_vectorizer = TfidfVectorizer()
+X_nlp = intent_vectorizer.fit_transform(texts)
+intent_model = LinearSVC()
+intent_model.fit(X_nlp, labels)
+
+def get_local_intent(text):
+    vec = intent_vectorizer.transform([text.lower()])
+    return intent_model.predict(vec)[0]
 
 # Intelligent State Memory
 bot_memory = {
@@ -92,86 +113,77 @@ def chat():
         # 1. Reset
         if user_msg_lower == "reset":
             bot_memory = {"km": None, "tm": None, "taum": None, "tau_c": None, "mode": None, "overshoot": None, "robust": None, "metric": None, "ready_to_tune": False}
-            return jsonify({"reply": "Session reset. I am ready to help you optimize your process. Please provide your process parameters (Km, Tm, Tau) and the type of system you are running.", "options": [], "chart": None})
+            return jsonify({"reply": "Session reset. I am your AI Process Control Engineer. Please provide your process parameters (Km, Tm, Tau) and the type of system you are running.", "options": [], "chart": None})
 
-        # 2. DYNAMIC RULE LISTING (Beautifully Formatted)
-        if "rules" in user_msg_lower or "what do you have" in user_msg_lower:
-            categories = {"Servo": [], "Regulator": [], "General/Hybrid": []}
-            for k, v in rules_db.items():
-                mode_val = v.get("mode", -1)
-                mode_str = "Servo" if mode_val == 1 else "Regulator" if mode_val == 0 else "General/Hybrid"
-                rule_name = v.get("name", k.replace("_", " ").title())
-                categories[mode_str].append(rule_name)
+        # 2. EDGE NLP ROUTING (Handles rules and greetings locally)
+        if len(user_msg_lower.split()) < 10 and not any(char.isdigit() for char in user_msg_lower):
+            local_intent = get_local_intent(user_msg_lower)
             
-            reply_text = f"**I have {len(rules_db)} tuning rules loaded from Aidan O'Dwyer's handbook.** Here is the complete list:\n\n"
-            for mode_category, rules_list in categories.items():
-                if rules_list:
-                    reply_text += f"**{mode_category} Rules:**\n"
-                    for r in rules_list:
-                        reply_text += f"• {r}\n"
-                    reply_text += "\n"
+            if local_intent == "greeting":
+                return jsonify({"reply": "Hello! Provide your system parameters (Km, Tm, Tau) to begin.", "options": [], "chart": None})
             
-            return jsonify({"reply": reply_text, "options": [], "chart": None})
+            if local_intent == "rules" or "rules" in user_msg_lower:
+                categories = {"Servo": [], "Regulator": [], "General/Hybrid": []}
+                for k, v in rules_db.items():
+                    mode_val = v.get("mode", -1)
+                    mode_str = "Servo" if mode_val == 1 else "Regulator" if mode_val == 0 else "General/Hybrid"
+                    rule_name = v.get("name", k.replace("_", " ").title())
+                    categories[mode_str].append(rule_name)
+                
+                reply_text = f"**I have {len(rules_db)} tuning rules loaded into my database.** Here is the structured list:<br><br>"
+                rule_count = 1
+                for mode_category, rules_list in categories.items():
+                    if rules_list:
+                        reply_text += f"**{mode_category} Rules:**<br>"
+                        for r in rules_list:
+                            reply_text += f"{rule_count}. {r}<br>"
+                            rule_count += 1
+                        reply_text += "<br>"
+                return jsonify({"reply": reply_text, "options": [], "chart": None})
 
         # 3. Extract Numbers Locally
         regex_data = local_regex_extract(user_msg)
         for k in ["km", "tm", "taum"]:
-            if regex_data[k] is not None:
-                bot_memory[k] = regex_data[k]
-
-        # 4. LLM Multi-Turn Interview Process
-        ai_prompt = f"""
-        You are a Senior Industrial Process Control Engineer. 
-        User says: "{user_msg}"
-        Current Memory: {json.dumps({k:v for k,v in bot_memory.items() if v is not None})}
-
-        YOUR STRICT INSTRUCTIONS:
-        1. Extract any parameters (km, tm, taum).
-        2. SCENARIO INTERVIEW: If you have parameters, YOU MUST INTERVIEW THE USER to determine the control strategy. Look at their scenario (e.g., water tank, boiler) and ask professional, targeted questions.
-           You MUST determine:
-           - mode: 1 (Servo/Setpoint tracking) or 0 (Regulator/Disturbance rejection)
-           - metric: 1 (IAE-Smooth), 2 (ISE-Aggressive), 3 (ITAE-Balanced)
-           - overshoot: 0 (None), 1 (Low), 2 (Medium), 3 (High)
-           - robust: 1 (Yes/Safe) or 0 (No/Fast)
-        3. CRITICAL: Ask ONLY ONE logical question at a time. For example, "Since this is a water tank, do you want to prioritize fast filling (which might overshoot) or smooth, safe filling?".
-        4. Provide 2-4 clickable 'options' tailored to your question.
-        5. ABSOLUTE RULE: DO NOT set "ready_to_tune" to true until you have confident answers for mode, metric, overshoot, and robust from the user's responses.
-
-        OUTPUT VALID JSON ONLY:
-        {{
-            "km": float/null, "tm": float/null, "taum": float/null,
-            "mode": int/null, "overshoot": int/null, "robust": int/null, "metric": int/null,
-            "ready_to_tune": boolean,
-            "reply": "Your professional question/analysis here.",
-            "options": [{{"label": "Option 1", "val": "opt1"}}, {{"label": "Option 2", "val": "opt2"}}]
-        }}
-        """
-        
-        try:
-            res = llm_model.generate_content(ai_prompt)
-            ext = json.loads(res.text.replace('```json', '').replace('```', '').strip())
-            
-            for k in ["km", "tm", "taum", "mode", "overshoot", "robust", "metric"]:
-                if ext.get(k) is not None: bot_memory[k] = ext[k]
-            if ext.get("ready_to_tune"): bot_memory["ready_to_tune"] = True
-            
-            reply_text = ext.get("reply", "Understood.")
-            options = ext.get("options", [])
-        except Exception as e:
-            reply_text = "I received your parameters. To find the perfect rule, do you want a fast response (which may overshoot) or a smooth, safe response?"
-            options = [{"label": "Fast & Aggressive", "val": "fast"}, {"label": "Smooth & Safe", "val": "smooth"}]
+            if regex_data[k] is not None: bot_memory[k] = regex_data[k]
 
         km, tm, taum = bot_memory['km'], bot_memory['tm'], bot_memory['taum']
 
+        # 4. EDGE INTERCEPTOR: Breaks the infinite loop if user provides preference keywords
+        if all([km, tm, taum]) and not bot_memory['ready_to_tune']:
+            if any(w in user_msg_lower for w in ["smooth", "safe", "iae"]):
+                bot_memory.update({"mode": 1, "overshoot": 0, "robust": 1, "metric": 1, "ready_to_tune": True})
+            elif any(w in user_msg_lower for w in ["fast", "aggressive", "ise", "quick"]):
+                bot_memory.update({"mode": 1, "overshoot": 2, "robust": 0, "metric": 2, "ready_to_tune": True})
+            elif any(w in user_msg_lower for w in ["standard", "balance", "itae", "normal"]):
+                bot_memory.update({"mode": 0, "overshoot": 1, "robust": 0, "metric": 3, "ready_to_tune": True})
+            
+            # If the user answered the question, skip the LLM and go straight to tuning
+            if not bot_memory['ready_to_tune']:
+                # CLOUD NLP ENGINE (Gemini Multi-Turn Interview)
+                ai_prompt = f"""
+                You are a Senior Industrial Process Control Engineer. 
+                User says: "{user_msg}"
+                Memory: {json.dumps({k:v for k,v in bot_memory.items() if v is not None})}
+                
+                Ask ONLY ONE logical question to determine if they want a fast response (which may overshoot) or a smooth/safe response. Provide 2-3 clickable options.
+                OUTPUT JSON ONLY: {{"reply": "Your question here.", "options": [{{"label": "Fast", "val": "fast"}}, {{"label": "Smooth", "val": "smooth"}}]}}
+                """
+                try:
+                    res = llm_model.generate_content(ai_prompt)
+                    ext = json.loads(res.text.replace('```json', '').replace('```', '').strip())
+                    reply_text = ext.get("reply", "Understood.")
+                    options = ext.get("options", [])
+                except Exception as e:
+                    reply_text = "I have your parameters. Do you want to tune this system for a Fast response, or a Smooth/Safe response?"
+                    options = [{"label": "Fast & Aggressive", "val": "fast"}, {"label": "Smooth & Safe", "val": "smooth"}]
+
+                return jsonify({"reply": reply_text, "options": options, "chart": None})
+
         # 5. Missing Parameters
         if not all([km, tm, taum]):
-            return jsonify({"reply": reply_text + "\n\n*(Note: I still need your Km, Tm, or Tau parameters)*", "options": options, "chart": None})
+            return jsonify({"reply": "I received some parameters, but I am still missing complete data. Please ensure you provide Km, Tm, and Tau.", "options": [], "chart": None})
 
-        # 6. Not Ready? Keep Interviewing
-        if all([km, tm, taum]) and not bot_memory['ready_to_tune']:
-            return jsonify({"reply": reply_text, "options": options, "chart": None})
-
-        # 7. EXECUTE MATH & GRAPH (Flawless Execution)
+        # 6. EXECUTE DECISION ENGINE & GRAPH
         if all([km, tm, taum]) and bot_memory['ready_to_tune']:
             mode = bot_memory.get('mode', 1)
             os_val = bot_memory.get('overshoot', 0)
@@ -200,22 +212,21 @@ def chat():
                 print(f"Math Error on rule {best_rule}: {math_error}")
                 kc = (1.2 * tm) / (km * taum) 
                 ti = 2.0 * taum
-                r = {"name": f"Ziegler-Nichols (Safety Fallback from {best_rule})"}
+                r = {"name": f"Ziegler-Nichols (Fallback from {best_rule})"}
 
             chart, os_est = simulate_step(kc, ti, km, tm, taum)
             
-            # THE DYNAMIC "WHY" EXPLANATION
+            # PROFESSIONAL ANALYSIS EXPLANATION
             mode_str = "Setpoint Tracking (Servo)" if mode == 1 else "Disturbance Rejection (Regulatory)"
             os_str = "Minimal/No" if os_val == 0 else "Low" if os_val == 1 else "Medium" if os_val == 2 else "High"
             rob_str = "High Robustness/Stability" if rob == 1 else "Aggressive Performance"
             metric_str = "IAE (Smooth Error)" if met == 1 else "ISE (Aggressive Error)" if met == 2 else "ITAE (Balanced Error)" if met == 3 else "Standard"
             
-            final_reply = f"**System Optimization Complete.**\n\n"
-            final_reply += f"**Scenario Analysis:** You requested a **{mode_str}** response prioritizing **{metric_str}** minimization, with a need for **{rob_str}** and **{os_str} Overshoot**.\n\n"
-            final_reply += f"**Why this rule was chosen:** Based on these exact mathematical constraints and your parameters (Km={km}, Tm={tm}, Tau={taum}), my AI Decision Engine evaluated all {len(rules_db)} rules and determined that **{r.get('name')}** is the absolute optimal choice for your scenario.\n\n"
-            final_reply += f"**Proportional Gain (Kc):** {round(kc,4)}\n**Integral Time (Ti):** {round(ti,4)}s\n**Estimated Overshoot:** {os_est}%\n\nHere is your closed-loop step response:"
+            final_reply = f"**System Optimization Complete.**<br><br>"
+            final_reply += f"**Scenario Analysis:** You requested a **{mode_str}** response prioritizing **{metric_str}** minimization, with a need for **{rob_str}** and **{os_str} Overshoot**.<br><br>"
+            final_reply += f"**Rule Selection:** Based on these exact constraints and your parameters (Km={km}, Tm={tm}, Tau={taum}), my AI Decision Engine evaluated the entire database and determined that **{r.get('name')}** is the absolute optimal choice for your scenario.<br><br>"
+            final_reply += f"**Proportional Gain (Kc):** {round(kc,4)}<br>**Integral Time (Ti):** {round(ti,4)}s<br>**Estimated Overshoot:** {os_est}%<br><br>Here is your closed-loop step response:"
             
-            # Reset memory for next run
             bot_memory = {"km": None, "tm": None, "taum": None, "tau_c": None, "mode": None, "overshoot": None, "robust": None, "metric": None, "ready_to_tune": False}
             
             return jsonify({"reply": final_reply, "chart": chart, "options": []})
