@@ -6,8 +6,8 @@
     <title>TUNING BOT</title>
     <script src="https://cdn.plot.ly/plotly-2.24.1.min.js"></script>
     <style>
-        :root { --bg-main: #121212; --bg-side: #0a0a0a; --bg-input: #1e1e1e; --text-main: #f0f0f0; --text-muted: #888888; --accent: #0ea5e9; --accent-hover: #0284c7; --msg-user: #2d2d2d; --msg-bot: transparent; --border: #2a2a2a; }
-        body.light-mode { --bg-main: #f9fafb; --bg-side: #ffffff; --bg-input: #ffffff; --text-main: #111827; --text-muted: #6b7280; --accent: #0284c7; --msg-user: #e5e7eb; --msg-bot: transparent; --border: #e5e7eb; }
+        :root { --bg-main: #121212; --bg-side: #0a0a0a; --bg-input: #1e1e1e; --text-main: #f0f0f0; --text-muted: #888888; --accent: #0ea5e9; --msg-user: #2d2d2d; --border: #2a2a2a; }
+        body.light-mode { --bg-main: #f9fafb; --bg-side: #ffffff; --bg-input: #ffffff; --text-main: #111827; --text-muted: #6b7280; --accent: #0284c7; --msg-user: #e5e7eb; --border: #e5e7eb; }
         body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg-main); color: var(--text-main); margin: 0; display: flex; height: 100vh; overflow: hidden; transition: 0.3s;}
         
         #sidebar { width: 260px; background: var(--bg-side); display: flex; flex-direction: column; border-right: 1px solid var(--border); z-index: 10; }
@@ -25,10 +25,6 @@
         .bot-icon { width: 24px; height: 24px; border-radius: 50%; background: linear-gradient(135deg, #0ea5e9, #8b5cf6); flex-shrink: 0;}
         .bot-header { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 0.9em; color: var(--text-main);}
         
-        .options-container { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
-        .option-btn { padding: 10px 18px; background: transparent; border: 1px solid var(--accent); color: var(--accent); border-radius: 20px; cursor: pointer; font-weight: 600; font-size: 0.85em; transition: 0.2s; }
-        .option-btn:hover { background: var(--accent); color: white; }
-
         .suggestions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-bottom: 12px; }
         .chip { padding: 8px 16px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 20px; font-size: 0.85em; cursor: pointer; color: var(--text-muted); transition: 0.2s; }
         .chip:hover { border-color: var(--accent); color: var(--accent); }
@@ -38,13 +34,7 @@
         input { flex: 1; background: transparent; border: none; color: var(--text-main); font-size: 1em; outline: none; }
         button.send { padding: 12px 24px; background: var(--text-main); color: var(--bg-main); border: none; border-radius: 20px; cursor: pointer; font-weight: 600; transition: 0.2s;}
 
-        /* Modern Dynamic Thinking Animation */
-        .dynamic-loader {
-            height: 20px; width: 40%; border-radius: 4px;
-            background: linear-gradient(90deg, var(--bg-input) 25%, var(--border) 50%, var(--bg-input) 75%);
-            background-size: 200% 100%;
-            animation: pulse-loading 1.5s infinite linear;
-        }
+        .dynamic-loader { height: 20px; width: 40%; border-radius: 4px; background: linear-gradient(90deg, var(--bg-input) 25%, var(--border) 50%, var(--bg-input) 75%); background-size: 200% 100%; animation: pulse-loading 1.5s infinite linear; }
         @keyframes pulse-loading { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
     </style>
@@ -63,7 +53,7 @@
     <div class="input-wrapper">
         <div class="suggestions">
             <div class="chip" onclick="sendChip('What tuning rules do you have?')">What tuning rules do you have?</div>
-            <div class="chip" onclick="sendChip('Km=2, Tm=10, Tau=2')">Test Parameters</div>
+            <div class="chip" onclick="sendChip('Km=2, Tm=10, Tau=2 for a mixing tank')">Start Example</div>
         </div>
         <div class="input-container">
             <input type="text" id="chat-input" placeholder="Message TUNING BOT..." onkeypress="if(event.key==='Enter') sendMessage()">
@@ -87,41 +77,35 @@
 
     function startNewChat() {
         document.getElementById('chat-box').innerHTML = "";
-        fetch(API_URL, { 
-            method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({message: "reset"}) 
-        }).then(res => res.json()).then(data => renderBotReply(data.reply, data.options));
+        fetch(API_URL, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({message: "reset"}) }).then(res => res.json()).then(data => renderBotReply(data.reply, data.options));
     }
 
-    function sendChip(text) {
-        document.getElementById('chat-input').value = text;
-        sendMessage();
-    }
-
-    function sendOption(label) {
-        document.getElementById('chat-input').value = label;
-        sendMessage();
-    }
+    function sendChip(text) { document.getElementById('chat-input').value = text; sendMessage(); }
 
     function drawChart(cData) {
         const cId = 'chart-' + Date.now();
         document.getElementById('chat-box').innerHTML += `<div id="${cId}" style="width:100%; height:350px; margin-top:15px; border-radius:12px; border:1px solid var(--border); overflow:hidden;"></div>`;
-        let parsed = typeof cData === 'string' ? JSON.parse(cData) : cData;
-        const isL = document.body.className === 'light-mode';
-        parsed.layout.font = { color: isL ? '#333' : '#e0e0e0' };
-        parsed.layout.xaxis.gridcolor = isL ? '#e5e7eb' : '#333';
-        parsed.layout.yaxis.gridcolor = isL ? '#e5e7eb' : '#333';
-        Plotly.newPlot(cId, parsed.data, parsed.layout);
+        
+        try {
+            let parsed = typeof cData === 'string' ? JSON.parse(cData) : cData;
+            const isL = document.body.className === 'light-mode';
+            parsed.layout.font = { color: isL ? '#333' : '#e0e0e0' };
+            parsed.layout.xaxis.gridcolor = isL ? '#e5e7eb' : '#333';
+            parsed.layout.yaxis.gridcolor = isL ? '#e5e7eb' : '#333';
+            Plotly.newPlot(cId, parsed.data, parsed.layout);
+        } catch (e) {
+            console.error("Plotly error: ", e);
+        }
         scrollToBottom();
     }
 
     function renderBotReply(text, opts = [], chart = null) {
-        let btnHtml = opts.length > 0 ? `<div class="options-container">` + opts.map(o => `<button class="option-btn" onclick="sendOption('${o.val}')">${o.label}</button>`).join('') + `</div>` : "";
         let formattedText = text.replace(/\n/g, "<br>").replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
 
         document.getElementById('chat-box').innerHTML += `
             <div class="msg bot-msg">
                 <div class="bot-header"><div class="bot-icon"></div> TUNING BOT</div>
-                <div style="padding-left: 34px;">${formattedText}${btnHtml}</div>
+                <div style="padding-left: 34px;">${formattedText}</div>
             </div>`;
         
         if (chart) drawChart(chart);
@@ -145,9 +129,7 @@
         scrollToBottom();
 
         try {
-            const res = await fetch(API_URL, { 
-                method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({message: text}) 
-            });
+            const res = await fetch(API_URL, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({message: text}) });
             const data = await res.json();
             document.getElementById(tempId).remove();
             renderBotReply(data.reply, data.options, data.chart);
@@ -157,10 +139,7 @@
         }
     }
 
-    function scrollToBottom() {
-        const b = document.getElementById('chat-box');
-        b.scrollTop = b.scrollHeight;
-    }
+    function scrollToBottom() { const b = document.getElementById('chat-box'); b.scrollTop = b.scrollHeight; }
 </script>
 </body>
 </html>
