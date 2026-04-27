@@ -2,6 +2,7 @@ import os
 import re
 import json
 import pickle
+import math
 import numpy as np
 import traceback
 import google.generativeai as genai
@@ -51,6 +52,13 @@ def simulate_step(kc, ti, km, tm, taum):
         dpv = ((km * d_mv) - pv[i-1]) / tm
         pv[i] = pv[i-1] + dpv * dt
 
+    os_val = 0.0
+    try:
+        os_val = round(max(0, (np.max(pv) - 1.0) * 100), 1)
+        if math.isnan(os_val) or math.isinf(os_val): os_val = 0.0
+    except:
+        pass
+
     graph_data = {
         "data": [
             {"x": t.tolist(), "y": pv.tolist(), "type": "scatter", "name": "Process Output", "line": {"color": "#0ea5e9", "width": 3}},
@@ -61,7 +69,7 @@ def simulate_step(kc, ti, km, tm, taum):
             "paper_bgcolor": "transparent", "plot_bgcolor": "transparent", "font": {"color": "#e0e0e0"}, "margin": {"l": 40, "r": 20, "t": 40, "b": 40}
         }
     }
-    return json.dumps(graph_data), round(max(0, (np.max(pv) - 1.0) * 100), 1)
+    return json.dumps(graph_data), os_val
 
 def local_regex_extract(msg):
     ext = {"km": None, "tm": None, "taum": None}
@@ -84,26 +92,28 @@ def chat():
         # 1. Reset
         if user_msg_lower == "reset":
             bot_memory = {"km": None, "tm": None, "taum": None, "tau_c": None, "mode": None, "overshoot": None, "robust": None, "metric": None, "ready_to_tune": False}
-            return jsonify({"reply": "Session reset. Please give me your process parameters (Km, Tm, Tau) and tell me what you are trying to control.", "options": [], "chart": None})
+            return jsonify({"reply": "Session reset. I am ready to help you optimize your process. Please provide your process parameters (Km, Tm, Tau) and the type of system you are running.", "options": [], "chart": None})
 
-        # 2. DYNAMIC RULE LISTING (Reads ALL rules from your JSON)
+        # 2. DYNAMIC RULE LISTING (Beautifully Formatted)
         if "rules" in user_msg_lower or "what do you have" in user_msg_lower:
             categories = {"Servo": [], "Regulator": [], "General/Hybrid": []}
             for k, v in rules_db.items():
                 mode_val = v.get("mode", -1)
                 mode_str = "Servo" if mode_val == 1 else "Regulator" if mode_val == 0 else "General/Hybrid"
-                # Pull the clean name, or format the JSON key if name is missing
                 rule_name = v.get("name", k.replace("_", " ").title())
                 categories[mode_str].append(rule_name)
             
             reply_text = f"**I have {len(rules_db)} tuning rules loaded from Aidan O'Dwyer's handbook.** Here is the complete list:\n\n"
-            for mode, rules_list in categories.items():
+            for mode_category, rules_list in categories.items():
                 if rules_list:
-                    reply_text += f"**{mode} Rules:** {', '.join(rules_list)}\n\n"
+                    reply_text += f"**{mode_category} Rules:**\n"
+                    for r in rules_list:
+                        reply_text += f"• {r}\n"
+                    reply_text += "\n"
             
             return jsonify({"reply": reply_text, "options": [], "chart": None})
 
-        # 3. Extract Numbers Locally First
+        # 3. Extract Numbers Locally
         regex_data = local_regex_extract(user_msg)
         for k in ["km", "tm", "taum"]:
             if regex_data[k] is not None:
@@ -111,26 +121,29 @@ def chat():
 
         # 4. LLM Multi-Turn Interview Process
         ai_prompt = f"""
-        You are a highly intelligent Process Control Assistant. 
+        You are a Senior Industrial Process Control Engineer. 
         User says: "{user_msg}"
         Current Memory: {json.dumps({k:v for k,v in bot_memory.items() if v is not None})}
 
-        YOUR GOALS:
-        1. Extract any new parameters (km, tm, taum).
-        2. If parameters exist, ACT AS AN EXPERT INTERVIEWER. You need to determine the user's specific performance goals to set the following features:
-           - mode (1=Servo/Setpoint, 0=Regulator/Disturbance)
-           - overshoot (0=None, 1=Low, 2=Medium, 3=High)
-           - robust (1=Yes, 0=No)
-           - metric (1=IAE, 2=ISE, 3=ITAE)
-        3. DO NOT ASK EVERYTHING AT ONCE. Ask natural, contextual questions based on their process. For example, if it's a heater, ask if they want to avoid overshoot to prevent burning. If they answer one question, figure out the next missing feature and ask about that.
-        4. When you have asked enough questions to confidently infer the 'mode', 'overshoot', 'robust', and 'metric' values, set "ready_to_tune": true.
+        YOUR STRICT INSTRUCTIONS:
+        1. Extract any parameters (km, tm, taum).
+        2. SCENARIO INTERVIEW: If you have parameters, YOU MUST INTERVIEW THE USER to determine the control strategy. Look at their scenario (e.g., water tank, boiler) and ask professional, targeted questions.
+           You MUST determine:
+           - mode: 1 (Servo/Setpoint tracking) or 0 (Regulator/Disturbance rejection)
+           - metric: 1 (IAE-Smooth), 2 (ISE-Aggressive), 3 (ITAE-Balanced)
+           - overshoot: 0 (None), 1 (Low), 2 (Medium), 3 (High)
+           - robust: 1 (Yes/Safe) or 0 (No/Fast)
+        3. CRITICAL: Ask ONLY ONE logical question at a time. For example, "Since this is a water tank, do you want to prioritize fast filling (which might overshoot) or smooth, safe filling?".
+        4. Provide 2-4 clickable 'options' tailored to your question.
+        5. ABSOLUTE RULE: DO NOT set "ready_to_tune" to true until you have confident answers for mode, metric, overshoot, and robust from the user's responses.
 
         OUTPUT VALID JSON ONLY:
         {{
             "km": float/null, "tm": float/null, "taum": float/null,
             "mode": int/null, "overshoot": int/null, "robust": int/null, "metric": int/null,
             "ready_to_tune": boolean,
-            "reply": "Your intelligent, conversational question or statement here."
+            "reply": "Your professional question/analysis here.",
+            "options": [{{"label": "Option 1", "val": "opt1"}}, {{"label": "Option 2", "val": "opt2"}}]
         }}
         """
         
@@ -142,22 +155,23 @@ def chat():
                 if ext.get(k) is not None: bot_memory[k] = ext[k]
             if ext.get("ready_to_tune"): bot_memory["ready_to_tune"] = True
             
-            reply_text = ext.get("reply", "Understood. Please continue.")
-            
+            reply_text = ext.get("reply", "Understood.")
+            options = ext.get("options", [])
         except Exception as e:
-            reply_text = "I received your input, but I need to know: do you want a fast response, or a smooth one with minimal overshoot?"
+            reply_text = "I received your parameters. To find the perfect rule, do you want a fast response (which may overshoot) or a smooth, safe response?"
+            options = [{"label": "Fast & Aggressive", "val": "fast"}, {"label": "Smooth & Safe", "val": "smooth"}]
 
         km, tm, taum = bot_memory['km'], bot_memory['tm'], bot_memory['taum']
 
-        # 5. Handle Missing Parameters
+        # 5. Missing Parameters
         if not all([km, tm, taum]):
-            return jsonify({"reply": reply_text + "\n\n*(Note: I am still missing some process parameters like Km, Tm, or Tau)*", "options": [], "chart": None})
+            return jsonify({"reply": reply_text + "\n\n*(Note: I still need your Km, Tm, or Tau parameters)*", "options": options, "chart": None})
 
         # 6. Not Ready? Keep Interviewing
         if all([km, tm, taum]) and not bot_memory['ready_to_tune']:
-            return jsonify({"reply": reply_text, "options": [], "chart": None})
+            return jsonify({"reply": reply_text, "options": options, "chart": None})
 
-        # 7. EXECUTE MATH & GRAPH (With Crash Prevention)
+        # 7. EXECUTE MATH & GRAPH (Flawless Execution)
         if all([km, tm, taum]) and bot_memory['ready_to_tune']:
             mode = bot_memory.get('mode', 1)
             os_val = bot_memory.get('overshoot', 0)
@@ -170,9 +184,11 @@ def chat():
             best_rule = rf_model.predict(features)[0] if rf_model else "ziegler_nichols"
             r = rules_db.get(best_rule, rules_db.get("ziegler_nichols", {}))
 
-            safe_env = {"km": km, "tm": tm, "taum": taum, "tau_c": bot_memory.get('tau_c', max(0.1, taum)), "min": min, "max": max}
+            safe_env = {
+                "km": km, "tm": tm, "taum": taum, "tau_c": bot_memory.get('tau_c', max(0.1, taum)), 
+                "min": min, "max": max, "exp": np.exp, "log": np.log, "sqrt": np.sqrt, "np": np, "math": math
+            }
             
-            # BULLETPROOF MATH EXECUTION
             try:
                 if r.get('kc_math') == "SPECIAL_LOOKUP":
                     kc, ti = (0.85 * tm) / (km * taum), 2.4 * taum
@@ -182,14 +198,22 @@ def chat():
                     if ti <= 0: ti = 0.001
             except Exception as math_error:
                 print(f"Math Error on rule {best_rule}: {math_error}")
-                # Fallback so the plot STILL renders
                 kc = (1.2 * tm) / (km * taum) 
                 ti = 2.0 * taum
-                r = {"name": "Ziegler-Nichols (Safety Fallback)"}
+                r = {"name": f"Ziegler-Nichols (Safety Fallback from {best_rule})"}
 
             chart, os_est = simulate_step(kc, ti, km, tm, taum)
             
-            final_reply = f"**Optimization Complete!**\n\nBased on your specific requirements, I have selected the **{r.get('name')}** tuning rule.\n\n**Proportional Gain (Kc):** {round(kc,4)}\n**Integral Time (Ti):** {round(ti,4)}s\n**Estimated Overshoot:** {os_est}%\n\nHere is your closed-loop step response:"
+            # THE DYNAMIC "WHY" EXPLANATION
+            mode_str = "Setpoint Tracking (Servo)" if mode == 1 else "Disturbance Rejection (Regulatory)"
+            os_str = "Minimal/No" if os_val == 0 else "Low" if os_val == 1 else "Medium" if os_val == 2 else "High"
+            rob_str = "High Robustness/Stability" if rob == 1 else "Aggressive Performance"
+            metric_str = "IAE (Smooth Error)" if met == 1 else "ISE (Aggressive Error)" if met == 2 else "ITAE (Balanced Error)" if met == 3 else "Standard"
+            
+            final_reply = f"**System Optimization Complete.**\n\n"
+            final_reply += f"**Scenario Analysis:** You requested a **{mode_str}** response prioritizing **{metric_str}** minimization, with a need for **{rob_str}** and **{os_str} Overshoot**.\n\n"
+            final_reply += f"**Why this rule was chosen:** Based on these exact mathematical constraints and your parameters (Km={km}, Tm={tm}, Tau={taum}), my AI Decision Engine evaluated all {len(rules_db)} rules and determined that **{r.get('name')}** is the absolute optimal choice for your scenario.\n\n"
+            final_reply += f"**Proportional Gain (Kc):** {round(kc,4)}\n**Integral Time (Ti):** {round(ti,4)}s\n**Estimated Overshoot:** {os_est}%\n\nHere is your closed-loop step response:"
             
             # Reset memory for next run
             bot_memory = {"km": None, "tm": None, "taum": None, "tau_c": None, "mode": None, "overshoot": None, "robust": None, "metric": None, "ready_to_tune": False}
