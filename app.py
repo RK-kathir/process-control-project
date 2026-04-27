@@ -20,17 +20,17 @@ try:
         rules_db = json.load(f)
     with open(os.path.join(current_dir, 'ai_brain.pkl'), 'rb') as f:
         rf_model = pickle.load(f)
-    print("SUCCESS: Database and AI Brain loaded.")
+    print(f"SUCCESS: {len(rules_db)} rules and AI Brain loaded.")
 except Exception as e:
     print(f"STARTUP ERROR: {e}")
     rf_model = None
     rules_db = {}
 
-# State Memory
+# Intelligent State Memory
 bot_memory = {
     "km": None, "tm": None, "taum": None, "tau_c": None,
     "mode": None, "overshoot": None, "robust": None, "metric": None,
-    "preferences_set": False
+    "ready_to_tune": False
 }
 
 def simulate_step(kc, ti, km, tm, taum):
@@ -81,70 +81,83 @@ def chat():
         user_msg = request.json.get('message', '')
         user_msg_lower = user_msg.lower().strip()
 
-        # 1. Reset Command
+        # 1. Reset
         if user_msg_lower == "reset":
-            bot_memory = {"km": None, "tm": None, "taum": None, "tau_c": None, "mode": None, "overshoot": None, "robust": None, "metric": None, "preferences_set": False}
-            return jsonify({"reply": "Session reset. Please give me your process parameters (Km, Tm, Tau).", "options": [], "chart": None})
+            bot_memory = {"km": None, "tm": None, "taum": None, "tau_c": None, "mode": None, "overshoot": None, "robust": None, "metric": None, "ready_to_tune": False}
+            return jsonify({"reply": "Session reset. Please give me your process parameters (Km, Tm, Tau) and tell me what you are trying to control.", "options": [], "chart": None})
 
-        # 2. LOCAL NLP ROUTER: Offline Intents (Saves Gemini Tokens)
+        # 2. DYNAMIC RULE LISTING (Displays EVERY rule in your JSON)
         if "rules" in user_msg_lower or "what do you have" in user_msg_lower:
-            reply_text = "**Here is my tuning database (Aidan O'Dwyer):**\n\n"
-            reply_text += "**1. Servo & Regulatory:** Ziegler-Nichols, Cohen-Coon, Hazebroek\n"
-            reply_text += "**2. Minimum Error (IAE/ISE):** Rovira, Zhuang & Atherton, Wang-Juang-Chan\n"
-            reply_text += "**3. Robust Tuning:** Skogestad IMC, AMIGO, Chun et al.\n"
-            reply_text += "**4. Direct Synthesis:** Lambda Tuning"
+            categories = {}
+            for k, v in rules_db.items():
+                mode_val = v.get("mode", -1)
+                mode_str = "Servo" if mode_val == 1 else "Regulator" if mode_val == 0 else "General/Hybrid"
+                categories.setdefault(mode_str, []).append(v.get("name", k))
+            
+            reply_text = f"**I have {len(rules_db)} advanced tuning rules loaded.** Here they are categorized by mode:\n\n"
+            for mode, rules_list in categories.items():
+                # Join the rules cleanly with commas
+                reply_text += f"**{mode} Rules:**\n- " + ", ".join(rules_list) + "\n\n"
+            
             return jsonify({"reply": reply_text, "options": [], "chart": None})
 
-        # 3. LOCAL NLP ROUTER: Hardcoded Preferences (Stops the Looping Bug)
-        if "fast" in user_msg_lower or "aggressive" in user_msg_lower or "ise" in user_msg_lower:
-            bot_memory.update({"mode": 1, "overshoot": 2, "robust": 0, "metric": 2, "preferences_set": True})
-        elif "smooth" in user_msg_lower or "safe" in user_msg_lower or "iae" in user_msg_lower:
-            bot_memory.update({"mode": 1, "overshoot": 0, "robust": 1, "metric": 1, "preferences_set": True})
-        elif "standard" in user_msg_lower or "balance" in user_msg_lower or "itae" in user_msg_lower:
-            bot_memory.update({"mode": 0, "overshoot": 1, "robust": 0, "metric": 3, "preferences_set": True})
-
-        # 4. Extract Numbers Locally
+        # 3. Extract Numbers Locally First
         regex_data = local_regex_extract(user_msg)
         for k in ["km", "tm", "taum"]:
             if regex_data[k] is not None:
                 bot_memory[k] = regex_data[k]
 
+        # 4. LLM Multi-Turn Interview Process
+        ai_prompt = f"""
+        You are a highly intelligent Process Control Assistant. 
+        User says: "{user_msg}"
+        Current Memory: {json.dumps({k:v for k,v in bot_memory.items() if v is not None})}
+
+        YOUR GOALS:
+        1. Extract any new parameters (km, tm, taum).
+        2. If parameters exist, ACT AS AN EXPERT INTERVIEWER. You need to determine the user's specific performance goals to set the following features:
+           - mode (1=Servo/Setpoint, 0=Regulator/Disturbance)
+           - overshoot (0=None, 1=Low, 2=Medium, 3=High)
+           - robust (1=Yes, 0=No)
+           - metric (1=IAE, 2=ISE, 3=ITAE)
+        3. DO NOT ASK EVERYTHING AT ONCE. Ask natural, contextual questions based on their process. For example, if it's a heater, ask if they want to avoid overshoot to prevent burning. If they answer one question, figure out the next missing feature and ask about that.
+        4. When you have asked enough questions to confidently infer the 'mode', 'overshoot', 'robust', and 'metric' values, set "ready_to_tune": true.
+
+        OUTPUT VALID JSON ONLY:
+        {{
+            "km": float/null, "tm": float/null, "taum": float/null,
+            "mode": int/null, "overshoot": int/null, "robust": int/null, "metric": int/null,
+            "ready_to_tune": boolean,
+            "reply": "Your intelligent, conversational question or statement here."
+        }}
+        """
+        
+        try:
+            res = llm_model.generate_content(ai_prompt)
+            ext = json.loads(res.text.replace('```json', '').replace('```', '').strip())
+            
+            # Update memory dynamically
+            for k in ["km", "tm", "taum", "mode", "overshoot", "robust", "metric"]:
+                if ext.get(k) is not None: bot_memory[k] = ext[k]
+            if ext.get("ready_to_tune"): bot_memory["ready_to_tune"] = True
+            
+            reply_text = ext.get("reply", "Understood. Please continue.")
+            
+        except Exception as e:
+            reply_text = "I received your input, but I need to know: do you want a fast response, or a smooth one with minimal overshoot?"
+
         km, tm, taum = bot_memory['km'], bot_memory['tm'], bot_memory['taum']
 
-        # 5. Gemini API (Only used if numbers are missing or complex context is given)
-        if not all([km, tm, taum]) and not bot_memory['preferences_set']:
-            ai_prompt = f"""
-            You are a helpful engineering bot. User said: "{user_msg}"
-            Memory: {bot_memory}
-            If they gave parameters, output them. If they didn't, politely ask for missing Km, Tm, or Tau.
-            OUTPUT JSON ONLY: {{"km": float/null, "tm": float/null, "taum": float/null, "reply": "String"}}
-            """
-            try:
-                res = llm_model.generate_content(ai_prompt)
-                ext = json.loads(res.text.replace('```json', '').replace('```', '').strip())
-                for k in ["km", "tm", "taum"]:
-                    if ext.get(k) is not None: bot_memory[k] = ext[k]
-                if not all([bot_memory['km'], bot_memory['tm'], bot_memory['taum']]):
-                    return jsonify({"reply": ext.get('reply', 'I still need your Km, Tm, and Tau parameters.'), "options": [], "chart": None})
-            except Exception as e:
-                pass # Fall through to local parameter check
+        # 5. Handle Missing Parameters
+        if not all([km, tm, taum]):
+            return jsonify({"reply": reply_text + "\n\n*(Note: I am still missing some process parameters like Km, Tm, or Tau)*", "options": [], "chart": None})
 
-        km, tm, taum = bot_memory['km'], bot_memory['tm'], bot_memory['taum']
+        # 6. Not Ready? Keep Interviewing
+        if all([km, tm, taum]) and not bot_memory['ready_to_tune']:
+            return jsonify({"reply": reply_text, "options": [], "chart": None})
 
-        # 6. Check if we have parameters, but need preference
-        if all([km, tm, taum]) and not bot_memory['preferences_set']:
-            return jsonify({
-                "reply": f"Parameters locked in (Km={km}, Tm={tm}, Tau={taum}). How would you like me to tune this system?",
-                "options": [
-                    {"label": "Fast & Aggressive", "val": "fast"},
-                    {"label": "Smooth & Safe", "val": "smooth"},
-                    {"label": "Standard Balance", "val": "standard"}
-                ],
-                "chart": None
-            })
-
-        # 7. Ready to Calculate (Loop broken)
-        if all([km, tm, taum]) and bot_memory['preferences_set']:
+        # 7. EXECUTE MATH & GRAPH (With Crash Prevention)
+        if all([km, tm, taum]) and bot_memory['ready_to_tune']:
             mode = bot_memory.get('mode', 1)
             os_val = bot_memory.get('overshoot', 0)
             rob = bot_memory.get('robust', 0)
@@ -156,27 +169,35 @@ def chat():
             best_rule = rf_model.predict(features)[0] if rf_model else "ziegler_nichols"
             r = rules_db.get(best_rule, rules_db.get("ziegler_nichols", {}))
 
-            safe_env = {"km": km, "tm": tm, "taum": taum, "tau_c": 0, "min": min, "max": max}
-            if r.get('kc_math') == "SPECIAL_LOOKUP":
-                kc, ti = (0.85 * tm) / (km * taum), 2.4 * taum
-            else:
-                kc = eval(r['kc_math'], {"__builtins__": None}, safe_env)
-                ti = eval(r['ti_math'], {"__builtins__": None}, safe_env)
+            safe_env = {"km": km, "tm": tm, "taum": taum, "tau_c": bot_memory.get('tau_c', max(0.1, taum)), "min": min, "max": max}
             
+            # BULLETPROOF MATH EXECUTION
+            try:
+                if r.get('kc_math') == "SPECIAL_LOOKUP":
+                    kc, ti = (0.85 * tm) / (km * taum), 2.4 * taum
+                else:
+                    kc = eval(r['kc_math'], {"__builtins__": None}, safe_env)
+                    ti = eval(r['ti_math'], {"__builtins__": None}, safe_env)
+                    if ti <= 0: ti = 0.001
+            except Exception as math_error:
+                print(f"Math Error on rule {best_rule}: {math_error}")
+                # Fallback so the plot STILL renders
+                kc = (1.2 * tm) / (km * taum) 
+                ti = 2.0 * taum
+                r = {"name": "Ziegler-Nichols (Safety Fallback)"}
+
             chart, os_est = simulate_step(kc, ti, km, tm, taum)
             
-            final_reply = f"**Rule Applied:** {r.get('name')}\n**Proportional Gain (Kc):** {round(kc,4)}\n**Integral Time (Ti):** {round(ti,4)}s\n**Estimated Overshoot:** {os_est}%"
+            final_reply = f"**Optimization Complete!**\n\nBased on your specific requirements, I have selected the **{r.get('name')}** tuning rule.\n\n**Proportional Gain (Kc):** {round(kc,4)}\n**Integral Time (Ti):** {round(ti,4)}s\n**Estimated Overshoot:** {os_est}%\n\nHere is your closed-loop step response:"
             
-            # Reset memory
-            bot_memory = {"km": None, "tm": None, "taum": None, "tau_c": None, "mode": None, "overshoot": None, "robust": None, "metric": None, "preferences_set": False}
+            # Reset memory for next run
+            bot_memory = {"km": None, "tm": None, "taum": None, "tau_c": None, "mode": None, "overshoot": None, "robust": None, "metric": None, "ready_to_tune": False}
             
             return jsonify({"reply": final_reply, "chart": chart, "options": []})
 
-        return jsonify({"reply": "I am missing some parameters. Please provide Km, Tm, and Tau.", "options": [], "chart": None})
-
     except Exception as e:
         print("CRITICAL ERROR:", traceback.format_exc())
-        return jsonify({"reply": "An error occurred while processing.", "options": []})
+        return jsonify({"reply": "An unexpected system error occurred. Please try entering your parameters again.", "options": []})
 
 if __name__ == '__main__': 
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
