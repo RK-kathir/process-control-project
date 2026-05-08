@@ -1,683 +1,591 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>TUNING BOT — PID Intelligence</title>
-<script src="https://cdn.plot.ly/plotly-2.24.1.min.js"></script>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-<style>
-:root {
-  --bg: #0b0f1a;
-  --bg2: #0f1623;
-  --bg3: #161d2e;
-  --bg4: #1c253a;
-  --border: rgba(0,212,255,0.12);
-  --border2: rgba(255,255,255,0.06);
-  --text: #e2e8f0;
-  --text-dim: #7a8ba0;
-  --text-dimmer: #3d5068;
-  --accent: #00d4ff;
-  --accent2: #7c3aed;
-  --accent3: #f59e0b;
-  --green: #10b981;
-  --red: #ef4444;
-  --glow: rgba(0,212,255,0.15);
-  --glow-strong: rgba(0,212,255,0.3);
-  --radius: 14px;
-  --radius-sm: 8px;
-  --font: 'Space Grotesk', sans-serif;
-  --mono: 'JetBrains Mono', monospace;
-  --sidebar-w: 280px;
-  --transition: 0.22s cubic-bezier(0.4,0,0.2,1);
-}
-body.light {
-  --bg: #f0f4f8;
-  --bg2: #ffffff;
-  --bg3: #f8fafc;
-  --bg4: #eef2f7;
-  --border: rgba(0,150,200,0.15);
-  --border2: rgba(0,0,0,0.06);
-  --text: #0f172a;
-  --text-dim: #64748b;
-  --text-dimmer: #94a3b8;
-  --glow: rgba(0,150,200,0.1);
-  --glow-strong: rgba(0,150,200,0.2);
-}
+import os
+import re
+import json
+import pickle
+import math
+import numpy as np
+import traceback
+import google.generativeai as genai
+from flask import Flask, request, jsonify
+from flask_cors import CORS
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.svm import LinearSVC
 
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-html, body { height: 100%; overflow: hidden; }
-body { font-family: var(--font); background: var(--bg); color: var(--text); display: flex; transition: background var(--transition), color var(--transition); }
-::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-track { background: transparent; } ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }
-button { cursor: pointer; font-family: var(--font); }
+app = Flask(__name__)
+CORS(app)
 
-#sidebar {
-  width: var(--sidebar-w);
-  background: var(--bg2);
-  border-right: 1px solid var(--border2);
-  display: flex;
-  flex-direction: column;
-  padding: 0;
-  flex-shrink: 0;
-  position: relative;
-  z-index: 20;
-}
-.sidebar-logo {
-  padding: 28px 24px 20px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  border-bottom: 1px solid var(--border2);
-}
-.logo-icon {
-  width: 36px; height: 36px;
-  border-radius: 10px;
-  background: linear-gradient(135deg, var(--accent), var(--accent2));
-  display: flex; align-items: center; justify-content: center;
-  font-size: 16px;
-  box-shadow: 0 0 20px var(--glow);
-  flex-shrink: 0;
-}
-.logo-text { font-size: 0.85em; font-weight: 700; letter-spacing: 0.12em; color: var(--text); line-height: 1.2; }
-.logo-sub { font-size: 0.65em; color: var(--text-dim); font-weight: 400; letter-spacing: 0.05em; }
+genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
+llm_model = genai.GenerativeModel(
+    "gemini-2.5-flash",
+    generation_config={"response_mime_type": "application/json"}
+)
 
-.sidebar-section { padding: 16px 12px 8px; }
-.sidebar-label { font-size: 0.65em; font-weight: 600; letter-spacing: 0.12em; color: var(--text-dimmer); text-transform: uppercase; padding: 0 8px 8px; }
+current_dir = os.path.dirname(os.path.abspath(__file__))
+try:
+    with open(os.path.join(current_dir, 'tuning_rules.json'), 'r') as f:
+        rules_db = json.load(f)
+    with open(os.path.join(current_dir, 'ai_brain.pkl'), 'rb') as f:
+        rf_model = pickle.load(f)
+except Exception as e:
+    rf_model = None
+    rules_db = {}
 
-.new-btn {
-  width: 100%; padding: 10px 14px;
-  background: linear-gradient(135deg, rgba(0,212,255,0.1), rgba(124,58,237,0.1));
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  color: var(--accent);
-  font-size: 0.85em; font-weight: 600;
-  display: flex; align-items: center; gap: 10px;
-  transition: var(--transition);
-  letter-spacing: 0.02em;
-}
-.new-btn:hover { background: linear-gradient(135deg, rgba(0,212,255,0.2), rgba(124,58,237,0.2)); box-shadow: 0 0 20px var(--glow); }
-.new-btn .plus { font-size: 1.2em; line-height: 1; }
+nlp_training_data = [
+    ("hi", "greeting"), ("hello", "greeting"), ("hey", "greeting"),
+    ("good morning", "greeting"), ("good evening", "greeting"), ("howdy", "greeting"),
+    ("who are you", "identity"), ("what can you do", "identity"),
+    ("what is tuning bot", "identity"), ("tell me about yourself", "identity"),
+    ("what are you", "identity"), ("how do you work", "identity"),
+    ("what tuning rules do you have", "rules"), ("show me the rules", "rules"),
+    ("list rules", "rules"), ("what rules are available", "rules"),
+    ("show all rules", "rules"), ("how many rules", "rules"),
+    ("what is pid", "pid_explain"), ("explain pid", "pid_explain"),
+    ("what does pid mean", "pid_explain"), ("how does pid work", "pid_explain"),
+    ("what is proportional integral derivative", "pid_explain"),
+    ("what is km", "param_explain"), ("what is gain", "param_explain"),
+    ("what is tm", "param_explain"), ("what is lag time", "param_explain"),
+    ("what is tau", "param_explain"), ("what is dead time", "param_explain"),
+    ("what is fopdt", "param_explain"), ("explain fopdt", "param_explain"),
+    ("what is ziegler nichols", "rule_explain"), ("explain cohen coon", "rule_explain"),
+    ("what is imc", "rule_explain"), ("what is lambda tuning", "rule_explain"),
+    ("what is amigo", "rule_explain"), ("what is skogestad", "rule_explain"),
+    ("what is iae", "metric_explain"), ("what is ise", "metric_explain"),
+    ("what is itae", "metric_explain"), ("explain performance metrics", "metric_explain"),
+    ("help", "help"), ("how do i use this", "help"), ("guide me", "help"),
+    ("what should i do", "help"), ("where do i start", "help"),
+]
+texts, labels = zip(*nlp_training_data)
+intent_vectorizer = TfidfVectorizer(ngram_range=(1, 2))
+X_nlp = intent_vectorizer.fit_transform(texts)
+intent_model = LinearSVC()
+intent_model.fit(X_nlp, labels)
 
-.sidebar-divider { height: 1px; background: var(--border2); margin: 8px 12px; }
-
-.quick-links { padding: 4px 12px; display: flex; flex-direction: column; gap: 2px; }
-.quick-link {
-  padding: 9px 12px;
-  border-radius: var(--radius-sm);
-  font-size: 0.82em; color: var(--text-dim);
-  display: flex; align-items: center; gap: 10px;
-  transition: var(--transition);
-  border: 1px solid transparent;
-  background: transparent;
-  text-align: left; width: 100%;
-}
-.quick-link:hover { background: var(--bg3); color: var(--text); border-color: var(--border2); }
-.quick-link .ql-icon { font-size: 1em; width: 18px; text-align: center; }
-
-.sidebar-spacer { flex: 1; }
-
-.sidebar-bottom { padding: 12px; border-top: 1px solid var(--border2); }
-.theme-btn {
-  width: 100%; padding: 10px 14px;
-  background: var(--bg3); border: 1px solid var(--border2);
-  border-radius: var(--radius-sm); color: var(--text-dim);
-  font-size: 0.82em; display: flex; align-items: center; gap: 10px;
-  transition: var(--transition);
-}
-.theme-btn:hover { color: var(--text); background: var(--bg4); }
-
-#main { flex: 1; display: flex; flex-direction: column; min-width: 0; position: relative; }
-
-#topbar {
-  height: 56px;
-  border-bottom: 1px solid var(--border2);
-  display: flex; align-items: center;
-  padding: 0 28px;
-  background: var(--bg2);
-  gap: 16px;
-  flex-shrink: 0;
-}
-.tb-status { display: flex; align-items: center; gap: 8px; font-size: 0.8em; color: var(--text-dim); }
-.status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px var(--green); animation: pulse-dot 2s infinite; }
-@keyframes pulse-dot { 0%,100% { opacity:1; } 50% { opacity:0.5; } }
-.tb-model { margin-left: auto; font-size: 0.72em; font-family: var(--mono); color: var(--text-dimmer); background: var(--bg3); padding: 4px 10px; border-radius: 6px; border: 1px solid var(--border2); }
-
-#progress-bar-wrap { height: 3px; background: var(--bg3); flex-shrink: 0; display: none; }
-#progress-bar { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2)); transition: width 0.4s ease; border-radius: 0 3px 3px 0; }
-
-#chat-box {
-  flex: 1;
-  overflow-y: auto;
-  padding: 40px 0 200px;
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-}
-.chat-inner { max-width: 780px; margin: 0 auto; padding: 0 24px; width: 100%; }
-
-#welcome {
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  min-height: 60vh; text-align: center; padding: 40px 24px;
-  gap: 20px;
-}
-.welcome-badge {
-  display: inline-flex; align-items: center; gap: 8px;
-  background: rgba(0,212,255,0.08); border: 1px solid var(--border);
-  padding: 6px 14px; border-radius: 99px; font-size: 0.75em;
-  color: var(--accent); font-family: var(--mono); font-weight: 500;
-  letter-spacing: 0.05em;
-}
-.welcome-title {
-  font-size: 2.6em; font-weight: 700; letter-spacing: -0.02em;
-  background: linear-gradient(135deg, var(--text) 30%, var(--text-dim));
-  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-  background-clip: text; line-height: 1.15;
-}
-.welcome-sub { color: var(--text-dim); font-size: 1em; max-width: 440px; line-height: 1.6; }
-.welcome-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; width: 100%; max-width: 600px; margin-top: 8px; }
-.wcard {
-  background: var(--bg2); border: 1px solid var(--border2);
-  border-radius: var(--radius); padding: 16px 14px;
-  text-align: left; transition: var(--transition); cursor: pointer;
-}
-.wcard:hover { border-color: var(--border); background: var(--bg3); transform: translateY(-2px); }
-.wcard-icon { font-size: 1.4em; margin-bottom: 8px; }
-.wcard-title { font-size: 0.82em; font-weight: 600; color: var(--text); }
-.wcard-sub { font-size: 0.73em; color: var(--text-dim); margin-top: 3px; line-height: 1.4; }
-
-.msg-row { padding: 12px 0; animation: fadeUp 0.25s ease-out; }
-@keyframes fadeUp { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
-
-.user-row { display: flex; justify-content: flex-end; }
-.user-bubble {
-  background: var(--bg4);
-  border: 1px solid var(--border2);
-  border-radius: 18px 18px 4px 18px;
-  padding: 12px 18px;
-  max-width: 72%;
-  font-size: 0.93em;
-  line-height: 1.6;
-  color: var(--text);
+KNOWLEDGE_BASE = {
+    "identity": (
+        "<strong>I'm TUNING BOT</strong> — an AI-powered PID controller optimization engine.<br><br>"
+        "I use a <strong>Random Forest AI model</strong> trained on Aidan O'Dwyer's definitive handbook of 40+ industrial tuning rules. "
+        "Give me your process parameters, answer a few smart questions, and I'll prescribe the mathematically optimal PID settings — "
+        "plus simulate the closed-loop response with a live graph.<br><br>"
+        "No control theory expertise required. I handle the math."
+    ),
+    "pid_explain": (
+        "<strong>PID stands for Proportional–Integral–Derivative.</strong> It's the most widely used control algorithm in industry.<br><br>"
+        "Think of it like a smart thermostat for any industrial process:<br>"
+        "• <strong>Proportional (Kc):</strong> Reacts to the current error — the bigger the gap, the harder it pushes<br>"
+        "• <strong>Integral (Ti):</strong> Corrects accumulated past errors — eliminates persistent offsets<br>"
+        "• <strong>Derivative (Td):</strong> Predicts future error — dampens oscillations<br><br>"
+        "Getting these three numbers right (<em>tuning</em>) is what I do."
+    ),
+    "param_explain": (
+        "FOPDT stands for <strong>First Order Plus Dead Time</strong> — the standard model for most industrial processes.<br><br>"
+        "It needs three numbers from you:<br>"
+        "• <strong>Km (Process Gain):</strong> How much the output changes per unit of input. E.g., if you open a valve 10% and temperature rises 5°C → Km = 0.5<br>"
+        "• <strong>Tm (Time Constant / Lag):</strong> How quickly the process responds — time to reach ~63% of its final value (in seconds or minutes)<br>"
+        "• <strong>Tau (Dead Time / Delay):</strong> The pure delay before any response starts — like the time for fluid to travel through a pipe<br><br>"
+        "These are found via a simple <em>step test</em> on your process."
+    ),
+    "rule_explain": (
+        "I have <strong>40+ tuning rules</strong> from Aidan O'Dwyer's handbook, each designed for different scenarios:<br><br>"
+        "• <strong>Ziegler-Nichols:</strong> The classic — aggressive, fast, high overshoot<br>"
+        "• <strong>Cohen-Coon:</strong> Good for processes with large dead time<br>"
+        "• <strong>Skogestad IMC:</strong> Robust and predictable for safety-critical systems<br>"
+        "• <strong>AMIGO:</strong> Auto-tuning standard, balances performance and robustness<br>"
+        "• <strong>Lambda Tuning:</strong> You control the speed — great for cascade loops<br>"
+        "• <strong>Rovira (IAE/ISE/ITAE):</strong> Mathematically minimizes error integrals<br><br>"
+        "My AI picks the best one for <em>your specific process</em>."
+    ),
+    "metric_explain": (
+        "Performance metrics measure <em>how much error accumulates</em> during a transient. Lower = better.<br><br>"
+        "• <strong>IAE (Integral of Absolute Error):</strong> Weights all errors equally → smooth, moderate response. Best for most processes.<br>"
+        "• <strong>ISE (Integral of Squared Error):</strong> Penalizes large errors heavily → aggressive, fast response, but may overshoot.<br>"
+        "• <strong>ITAE (Integral of Time × Absolute Error):</strong> Penalizes errors that persist over time → best long-term settling, minimal oscillation.<br><br>"
+        "Not sure which to pick? I'll ask you about your <em>process behavior</em> and choose for you."
+    ),
+    "help": (
+        "Getting started is easy — no engineering degree needed!<br><br>"
+        "<strong>Step 1:</strong> Tell me your three process numbers: <em>Km</em> (gain), <em>Tm</em> (lag), and <em>Tau</em> (dead time).<br>"
+        "Example: <code>Km=2, Tm=10, Tau=2</code><br><br>"
+        "<strong>Step 2:</strong> I'll ask you a few plain-English questions about your system's behavior.<br><br>"
+        "<strong>Step 3:</strong> I compute your optimal PID settings and show a live simulation graph.<br><br>"
+        "💡 Tip: Use the suggestion chips below to try an example instantly!"
+    ),
 }
 
-.bot-row { display: flex; align-items: flex-start; gap: 12px; }
-.bot-avatar {
-  width: 30px; height: 30px; border-radius: 50%;
-  background: linear-gradient(135deg, var(--accent), var(--accent2));
-  flex-shrink: 0; margin-top: 2px;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 0.7em; font-weight: 700; color: white;
-  box-shadow: 0 0 12px var(--glow);
-}
-.bot-content { flex: 1; min-width: 0; }
-.bot-name { font-size: 0.72em; font-weight: 700; color: var(--accent); letter-spacing: 0.1em; margin-bottom: 6px; font-family: var(--mono); }
-.bot-text {
-  font-size: 0.92em; line-height: 1.7; color: var(--text);
-}
-.bot-text strong { color: var(--accent); font-weight: 600; }
-.bot-text code { font-family: var(--mono); font-size: 0.88em; background: var(--bg4); padding: 2px 7px; border-radius: 5px; color: var(--accent3); border: 1px solid var(--border2); }
-.bot-text em { color: var(--text-dim); font-style: normal; font-size: 0.92em; }
-
-.opts-wrap { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
-.opt-btn {
-  padding: 10px 18px;
-  background: var(--bg2);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  color: var(--accent);
-  font-size: 0.83em; font-weight: 600;
-  transition: var(--transition);
-  letter-spacing: 0.01em;
-}
-.opt-btn:hover { background: rgba(0,212,255,0.12); box-shadow: 0 0 16px var(--glow); transform: translateY(-1px); }
-.opt-btn:active { transform: translateY(0); }
-
-.skeleton-wrap { display: flex; flex-direction: column; gap: 8px; padding-top: 4px; }
-.skel { height: 14px; border-radius: 6px; background: linear-gradient(90deg, var(--bg3) 25%, var(--bg4) 50%, var(--bg3) 75%); background-size: 300% 100%; animation: shimmer 1.6s infinite; }
-.skel.short { width: 45%; }
-.skel.med { width: 70%; }
-.skel.long { width: 90%; }
-@keyframes shimmer { 0% { background-position: 300% 0; } 100% { background-position: -300% 0; } }
-
-.chart-wrap {
-  margin-top: 16px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  overflow: hidden;
-  background: rgba(0,0,0,0.25);
-  box-shadow: 0 0 40px rgba(0,212,255,0.05);
-}
-.chart-header {
-  padding: 12px 18px;
-  border-bottom: 1px solid var(--border2);
-  font-size: 0.75em; font-family: var(--mono);
-  color: var(--text-dim); display: flex; align-items: center; gap: 10px;
-}
-.chart-dot { width: 8px; height: 8px; border-radius: 50%; }
-
-#input-area {
-  position: absolute; bottom: 0; left: 0; right: 0;
-  background: linear-gradient(to top, var(--bg) 60%, transparent);
-  padding: 24px 28px 28px;
-}
-.input-area-inner { max-width: 780px; margin: 0 auto; }
-
-.chips-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
-.chip {
-  padding: 7px 14px;
-  background: var(--bg2);
-  border: 1px solid var(--border2);
-  border-radius: 99px;
-  font-size: 0.78em; color: var(--text-dim);
-  transition: var(--transition); white-space: nowrap;
-}
-.chip:hover { border-color: var(--border); color: var(--text); background: var(--bg3); }
-
-.input-box {
-  display: flex; align-items: flex-end; gap: 10px;
-  background: var(--bg2);
-  border: 1px solid var(--border2);
-  border-radius: 16px;
-  padding: 10px 10px 10px 20px;
-  transition: var(--transition);
-  box-shadow: 0 4px 20px rgba(0,0,0,0.2);
-}
-.input-box:focus-within { border-color: var(--border); box-shadow: 0 0 0 3px var(--glow), 0 4px 20px rgba(0,0,0,0.3); }
-#msg-input {
-  flex: 1; background: transparent; border: none;
-  font-family: var(--font); font-size: 0.93em;
-  color: var(--text); outline: none; resize: none;
-  min-height: 22px; max-height: 120px; line-height: 1.5;
-  padding: 2px 0;
-}
-#msg-input::placeholder { color: var(--text-dimmer); }
-.send-btn {
-  width: 38px; height: 38px; border-radius: 11px;
-  background: var(--accent); border: none;
-  display: flex; align-items: center; justify-content: center;
-  flex-shrink: 0; color: #000; font-size: 1em;
-  transition: var(--transition);
-  box-shadow: 0 0 16px var(--glow);
-}
-.send-btn:hover { background: #33dcff; box-shadow: 0 0 24px var(--glow-strong); transform: scale(1.05); }
-.send-btn:active { transform: scale(0.95); }
-.send-btn:disabled { background: var(--bg4); color: var(--text-dimmer); box-shadow: none; cursor: not-allowed; }
-
-.result-card {
-  background: linear-gradient(135deg, rgba(0,212,255,0.06), rgba(124,58,237,0.06));
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 18px 20px;
-  margin-top: 14px;
-}
-.result-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
-.result-item {
-  background: var(--bg3); border: 1px solid var(--border2);
-  border-radius: 10px; padding: 12px 16px;
-}
-.result-label { font-size: 0.7em; color: var(--text-dim); font-family: var(--mono); letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 6px; }
-.result-val { font-size: 1.35em; font-weight: 700; color: var(--accent); font-family: var(--mono); }
-.result-unit { font-size: 0.7em; color: var(--text-dim); }
-
-.info-tag {
-  display: inline-flex; align-items: center; gap: 5px;
-  font-size: 0.7em; font-family: var(--mono); color: var(--text-dim);
-  background: var(--bg4); padding: 4px 10px; border-radius: 6px;
-  border: 1px solid var(--border2); margin-top: 10px;
+bot_memory = {
+    "km": None, "tm": None, "taum": None, "tau_c": None,
+    "mode": None, "metric": None, "robust": None, "overshoot": None,
+    "interview_stage": 0
 }
 
-@media (max-width: 680px) {
-  #sidebar { display: none; }
-  .welcome-cards { grid-template-columns: 1fr 1fr; }
-  .welcome-title { font-size: 1.8em; }
-  #chat-box { padding-bottom: 180px; }
-  .result-grid { grid-template-columns: 1fr; }
-}
-</style>
-</head>
-<body>
+def simulate_step(kc, ti, km, tm, taum):
+    t = np.linspace(0, (tm + taum) * 8, 500)
+    dt = t[1] - t[0]
+    pv, mv_hist = np.zeros_like(t), np.zeros_like(t)
+    err_sum = 0
+    d_steps = max(1, int(taum / dt))
+    ti_val = ti if ti > 0 else 0.001
 
-<div id="sidebar">
-  <div class="sidebar-logo">
-    <div class="logo-icon">⚙️</div>
-    <div>
-      <div class="logo-text">TUNING BOT</div>
-      <div class="logo-sub">PID Intelligence Engine</div>
-    </div>
-  </div>
+    for i in range(1, len(t)):
+        err = 1.0 - pv[i - 1]
+        err_sum += err * dt
+        mv = max(0, min(100, kc * (err + (1 / ti_val) * err_sum)))
+        mv_hist[i] = mv
+        d_idx = i - d_steps
+        d_mv = mv_hist[d_idx] if d_idx >= 0 else 0
+        dpv = ((km * d_mv) - pv[i - 1]) / tm
+        pv[i] = pv[i - 1] + dpv * dt
 
-  <div class="sidebar-section">
-    <button class="new-btn" onclick="startNew()">
-      <span class="plus">+</span> New Session
-    </button>
-  </div>
+    os_val = 0.0
+    try:
+        os_val = round(max(0, (np.max(pv) - 1.0) * 100), 1)
+        if math.isnan(os_val) or math.isinf(os_val):
+            os_val = 0.0
+    except:
+        pass
 
-  <div class="sidebar-divider"></div>
+    settling_time = t[-1]
+    for i in range(len(pv) - 1, 0, -1):
+        if abs(pv[i] - 1.0) > 0.02:
+            settling_time = round(t[i], 1)
+            break
 
-  <div class="quick-links">
-    <div class="sidebar-label">Quick Reference</div>
-    <button class="quick-link" onclick="sendMsg('What tuning rules do you have?')">
-      <span class="ql-icon">📋</span> Rule Database
-    </button>
-    <button class="quick-link" onclick="sendMsg('What is PID?')">
-      <span class="ql-icon">❓</span> What is PID?
-    </button>
-    <button class="quick-link" onclick="sendMsg('What is FOPDT?')">
-      <span class="ql-icon">📐</span> What is FOPDT?
-    </button>
-    <button class="quick-link" onclick="sendMsg('What is dead time?')">
-      <span class="ql-icon">⏱️</span> Dead Time
-    </button>
-    <button class="quick-link" onclick="sendMsg('What is overshoot?')">
-      <span class="ql-icon">📈</span> Overshoot
-    </button>
-    <button class="quick-link" onclick="sendMsg('What is robustness?')">
-      <span class="ql-icon">🛡️</span> Robustness
-    </button>
-    <button class="quick-link" onclick="sendMsg('Explain Ziegler-Nichols')">
-      <span class="ql-icon">🔬</span> Ziegler-Nichols
-    </button>
-    <button class="quick-link" onclick="sendMsg('Explain AMIGO tuning')">
-      <span class="ql-icon">🎯</span> AMIGO Method
-    </button>
-  </div>
+    graph_data = {
+        "data": [
+            {
+                "x": t.tolist(), "y": pv.tolist(),
+                "type": "scatter", "name": "Process Output",
+                "line": {"color": "#00d4ff", "width": 2.5},
+                "fill": "tozeroy", "fillcolor": "rgba(0,212,255,0.04)"
+            },
+            {
+                "x": [t[0], t[-1]], "y": [1.0, 1.0],
+                "type": "scatter", "name": "Setpoint",
+                "line": {"color": "#ff4d6d", "dash": "dash", "width": 1.5}
+            },
+            {
+                "x": [t[0], t[-1]], "y": [1.02, 1.02],
+                "type": "scatter", "name": "+2% Band",
+                "line": {"color": "rgba(255,255,255,0.15)", "dash": "dot", "width": 1},
+                "showlegend": False
+            },
+            {
+                "x": [t[0], t[-1]], "y": [0.98, 0.98],
+                "type": "scatter", "name": "-2% Band",
+                "line": {"color": "rgba(255,255,255,0.15)", "dash": "dot", "width": 1},
+                "showlegend": False
+            }
+        ],
+        "layout": {
+            "title": {"text": "Closed-Loop Step Response", "font": {"size": 14}},
+            "xaxis": {"title": "Time (s)", "gridcolor": "#1e2a3a", "zerolinecolor": "#333"},
+            "yaxis": {"title": "Normalized Process Variable", "gridcolor": "#1e2a3a", "zerolinecolor": "#333"},
+            "paper_bgcolor": "transparent",
+            "plot_bgcolor": "rgba(10,14,20,0.6)",
+            "font": {"color": "#a0aec0"},
+            "legend": {"bgcolor": "rgba(0,0,0,0)", "bordercolor": "rgba(255,255,255,0.1)", "borderwidth": 1},
+            "margin": {"l": 50, "r": 20, "t": 45, "b": 45},
+            "hovermode": "x unified"
+        }
+    }
+    return json.dumps(graph_data), os_val, settling_time
 
-  <div class="sidebar-spacer"></div>
-  <div class="sidebar-bottom">
-    <button class="theme-btn" onclick="toggleTheme()">
-      <span id="theme-icon">☀️</span>
-      <span id="theme-label">Switch to Light Mode</span>
-    </button>
-  </div>
-</div>
+def local_regex_extract(msg):
+    ext = {"km": None, "tm": None, "taum": None}
+    msg_lower = msg.lower()
+    km_m = re.search(r'(km|gain|process\s*gain|k(?!c|p))\s*(is|:|=)?\s*([+-]?\d+\.?\d*)', msg_lower)
+    tm_m = re.search(r'(tm|lag|time\s*constant|t(?!au|d))\s*(is|:|=)?\s*([+-]?\d+\.?\d*)', msg_lower)
+    tau_m = re.search(r'(tau|dead\s*time|delay|θ)\s*(is|:|=)?\s*([+-]?\d+\.?\d*)', msg_lower)
+    if km_m:  ext["km"]   = float(km_m.group(4))
+    if tm_m:  ext["tm"]   = float(tm_m.group(4))
+    if tau_m: ext["taum"] = float(tau_m.group(4))
+    return ext
 
-<div id="main">
-  <div id="topbar">
-    <div class="tb-status">
-      <div class="status-dot"></div>
-      <span>AI Brain Active</span>
-    </div>
-    <div class="tb-model">Random Forest + Gemini Hybrid NLP</div>
-  </div>
-  <div id="progress-bar-wrap"><div id="progress-bar" style="width:0%"></div></div>
-
-  <div id="chat-box">
-    <div class="chat-inner" id="chat-inner">
-    </div>
-  </div>
-
-  <div id="input-area">
-    <div class="input-area-inner">
-      <div class="chips-row" id="chips-row">
-        <button class="chip" onclick="sendMsg('Km=2, Tm=10, Tau=2')">⚡ Quick Test (Km=2, Tm=10, Tau=2)</button>
-        <button class="chip" onclick="sendMsg('What is PID?')">❓ What is PID?</button>
-        <button class="chip" onclick="sendMsg('What tuning rules do you have?')">📋 View Rules</button>
-      </div>
-      <div class="input-box">
-        <textarea id="msg-input" rows="1" placeholder="Describe your process or enter parameters…" 
-          oninput="autoResize(this)"
-          onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();handleSend();}"></textarea>
-        <button class="send-btn" id="send-btn" onclick="handleSend()">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-        </button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<script>
-const API_URL = 'https://process-control-project.onrender.com/api/chat';
-let isWelcome = true;
-
-function toggleTheme() {
-  document.body.classList.toggle('light');
-  const isLight = document.body.classList.contains('light');
-  document.getElementById('theme-icon').textContent = isLight ? '🌙' : '☀️';
-  document.getElementById('theme-label').textContent = isLight ? 'Switch to Dark Mode' : 'Switch to Light Mode';
-  localStorage.setItem('tb_theme', isLight ? 'light' : 'dark');
-}
-if (localStorage.getItem('tb_theme') === 'light') toggleTheme();
-
-function autoResize(el) {
-  el.style.height = 'auto';
-  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
-}
-
-function showWelcome() {
-  isWelcome = true;
-  document.getElementById('chat-inner').innerHTML = `
-    <div id="welcome">
-      <div class="welcome-badge">⚙️ &nbsp; O'DWYER PID TUNING ENGINE &nbsp; v2.0</div>
-      <div class="welcome-title">What process<br>can I tune today?</div>
-      <div class="welcome-sub">Give me your FOPDT parameters or describe your process — I'll find the optimal PID settings using 50+ tuning rules.</div>
-      <div class="welcome-cards">
-        <div class="wcard" onclick="sendMsg('Km=2, Tm=10, Tau=2')">
-          <div class="wcard-icon">🧪</div>
-          <div class="wcard-title">Quick Test</div>
-          <div class="wcard-sub">Km=2, Tm=10, Tau=2</div>
-        </div>
-        <div class="wcard" onclick="sendMsg('I have a water tank that needs to be smooth and safe')">
-          <div class="wcard-icon">💧</div>
-          <div class="wcard-title">Water Tank</div>
-          <div class="wcard-sub">Describe in plain English</div>
-        </div>
-        <div class="wcard" onclick="sendMsg('What tuning rules do you have?')">
-          <div class="wcard-icon">📋</div>
-          <div class="wcard-title">View Rules</div>
-          <div class="wcard-sub">Browse the rule database</div>
-        </div>
-      </div>
-    </div>
-  `;
-}
-
-function startNew() {
-  fetch(API_URL, {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({message: 'reset'})
-  }).catch(() => {});
-  showWelcome();
-  setProgress(0);
-  setChips(["⚡ Quick Test (Km=2, Tm=10, Tau=2)", "❓ What is PID?", "📋 View Rules"]);
-}
-
-function sendMsg(text) {
-  document.getElementById('msg-input').value = text;
-  handleSend();
-}
-
-function setProgress(p) {
-  const wrap = document.getElementById('progress-bar-wrap');
-  const bar = document.getElementById('progress-bar');
-  if (p > 0 && p < 1) {
-    wrap.style.display = 'block';
-    bar.style.width = (p * 100) + '%';
-  } else {
-    wrap.style.display = 'none';
-    bar.style.width = '0%';
-  }
+INTERVIEW = {
+    1: {
+        "text": (
+            "Great, parameters locked in! Now let me understand your system.<br><br>"
+            "<strong>Question 1 of 3 — What is this control loop doing?</strong><br>"
+            "In most systems, the controller's main job is one of two things:"
+        ),
+        "options": [
+            {
+                "label": "🎯 Following a target — I change the setpoint and need it to track accurately",
+                "val": "servo",
+                "hint": "e.g. robot arm position, temperature profile, flow rate setpoint changes"
+            },
+            {
+                "label": "🛡️ Holding steady — setpoint is fixed; I want to reject disturbances",
+                "val": "regulator",
+                "hint": "e.g. pressure vessel, boiler level, conveyor speed under varying load"
+            }
+        ],
+        "map": {"servo": {"mode": 1}, "regulator": {"mode": 0}}
+    },
+    2: {
+        "text": (
+            "<strong>Question 2 of 3 — How should the response feel?</strong><br>"
+            "Imagine you change the target (or a disturbance hits). Which description fits your process best?"
+        ),
+        "options": [
+            {
+                "label": "⚡ Snap to it fast — I want the fastest possible response, even if it slightly overshoots",
+                "val": "fast",
+                "hint": "Prioritizes speed. Accepts ≤ 20% overshoot. Best for batch reactors, fast flow loops"
+            },
+            {
+                "label": "🌊 Glide in smoothly — no overshoot, no oscillations, steady approach",
+                "val": "smooth",
+                "hint": "Eliminates overshoot entirely. Best for level control, furnaces, biological processes"
+            },
+            {
+                "label": "⚖️ Balanced — reasonably fast but settles cleanly",
+                "val": "balanced",
+                "hint": "The engineering sweet spot. Works well for most general-purpose loops"
+            }
+        ],
+        "map": {
+            "fast":     {"metric": 2, "overshoot": 2, "robust": 0},
+            "smooth":   {"metric": 1, "overshoot": 0, "robust": 1},
+            "balanced": {"metric": 3, "overshoot": 1, "robust": 0}
+        }
+    },
+    3: {
+        "text": (
+            "<strong>Question 3 of 3 — How much do you trust your process model?</strong><br>"
+            "When you measured Km, Tm, and Tau — how confident are you those numbers are accurate?"
+        ),
+        "options": [
+            {
+                "label": "🔬 Very confident — I ran a careful step test and the model is accurate",
+                "val": "confident",
+                "hint": "Allows more aggressive tuning — full performance extraction"
+            },
+            {
+                "label": "📊 Roughly correct — estimated from historical data or a quick test",
+                "val": "estimated",
+                "hint": "Balanced tuning with moderate detuning factor"
+            },
+            {
+                "label": "🤔 Uncertain — rough guess, process varies a lot in real operation",
+                "val": "uncertain",
+                "hint": "Robust tuning — leaves safety margin for model uncertainty"
+            }
+        ],
+        "map": {
+            "confident": {"robust": 0},
+            "estimated": {"robust": 0},
+            "uncertain": {"robust": 1}
+        }
+    }
 }
 
-function setChips(chips) {
-  const row = document.getElementById('chips-row');
-  if (!chips || chips.length === 0) {
-    row.innerHTML = '';
-    return;
-  }
-  row.innerHTML = chips.map(c => `<button class="chip" onclick="sendMsg('${c.replace(/'/g, "\\'")}')">${c}</button>`).join('');
+INTERVIEW_ANSWER_PATTERNS = {
+    1: {
+        "servo":     ["servo", "setpoint", "track", "follow", "target", "change", "position", "profile"],
+        "regulator": ["regulator", "disturbance", "hold", "steady", "reject", "fixed", "constant", "stable"]
+    },
+    2: {
+        "fast":     ["fast", "quick", "aggressive", "speed", "snap", "ise", "overshoot"],
+        "smooth":   ["smooth", "safe", "slow", "no overshoot", "gentle", "iae", "soft", "glide"],
+        "balanced": ["balance", "balanced", "standard", "normal", "itae", "moderate", "typical"]
+    },
+    3: {
+        "confident": ["confident", "accurate", "careful", "step test", "measured", "certain", "precise"],
+        "estimated": ["estimated", "roughly", "approximate", "historical", "quick", "average"],
+        "uncertain": ["uncertain", "unsure", "rough", "guess", "varies", "not sure", "unknown"]
+    }
 }
 
-function parseMarkdown(text) {
-  return text
-    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-    .replace(/`([^`]+)`/g, '<code>$1</code>')
-    .replace(/_(.*?)_/g, '<em>$1</em>')
-    .replace(/\n/g, '<br>');
-}
+def parse_interview_answer(stage, msg_lower):
+    patterns = INTERVIEW_ANSWER_PATTERNS.get(stage, {})
+    for ans, keywords in patterns.items():
+        if any(kw in msg_lower for kw in keywords):
+            return ans
+    return None
 
-function appendUser(text) {
-  clearWelcome();
-  const ci = document.getElementById('chat-inner');
-  const row = document.createElement('div');
-  row.className = 'msg-row user-row';
-  row.innerHTML = `<div class="user-bubble">${escHtml(text)}</div>`;
-  ci.appendChild(row);
-  scrollDown();
-}
+@app.route('/api/chat', methods=['POST'])
+def chat():
+    global bot_memory
+    try:
+        user_msg = request.json.get('message', '')
+        user_msg_lower = user_msg.lower().strip()
 
-function appendSkeleton() {
-  const ci = document.getElementById('chat-inner');
-  const id = 'skel_' + Date.now();
-  const row = document.createElement('div');
-  row.className = 'msg-row bot-row';
-  row.id = id;
-  row.innerHTML = `
-    <div class="bot-avatar">TB</div>
-    <div class="bot-content">
-      <div class="bot-name">TUNING BOT</div>
-      <div class="skeleton-wrap">
-        <div class="skel long"></div>
-        <div class="skel med"></div>
-        <div class="skel short"></div>
-      </div>
-    </div>`;
-  ci.appendChild(row);
-  scrollDown();
-  return id;
-}
+        if user_msg_lower == "reset":
+            bot_memory = {
+                "km": None, "tm": None, "taum": None, "tau_c": None,
+                "mode": None, "metric": None, "robust": None, "overshoot": None,
+                "interview_stage": 0
+            }
+            return jsonify({
+                "reply": (
+                    "Session reset. I'm ready for a new process.<br><br>"
+                    "Please provide your FOPDT parameters: <strong>Km</strong> (process gain), "
+                    "<strong>Tm</strong> (time constant), and <strong>Tau</strong> (dead time).<br>"
+                    "Example: <code>Km=2, Tm=10, Tau=2</code>"
+                ),
+                "options": [], "chart": None
+            })
 
-function replaceSkeleton(id, data) {
-  const el = document.getElementById(id);
-  if (!el) return;
+        has_digits = any(ch.isdigit() for ch in user_msg_lower)
+        word_count = len(user_msg_lower.split())
 
-  const { reply, options, chart, chips, progress } = data;
-  
-  if (typeof progress === 'number') setProgress(progress);
-  else setProgress(0);
+        if word_count < 12 and not has_digits:
+            try:
+                vec = intent_vectorizer.transform([user_msg_lower])
+                local_intent = intent_model.predict(vec)[0]
+                confidence = max(intent_model.decision_function(vec)[0])
+            except:
+                local_intent, confidence = "none", 0
 
-  if (chips) setChips(chips);
+            if local_intent == "greeting" and confidence > 0.3:
+                return jsonify({
+                    "reply": (
+                        "Hello! I'm <strong>TUNING BOT</strong> — your AI-powered PID tuning assistant.<br><br>"
+                        "To get started, share your process parameters:<br>"
+                        "<code>Km=&lt;value&gt;, Tm=&lt;value&gt;, Tau=&lt;value&gt;</code><br><br>"
+                        "Not sure what those are? Just type <em>\"explain parameters\"</em> and I'll guide you."
+                    ),
+                    "options": [], "chart": None
+                })
 
-  let optsHtml = '';
-  if (options && options.length > 0) {
-    optsHtml = `<div class="opts-wrap">` +
-      options.map(o => `<button class="opt-btn" onclick="sendMsg('${o.val}')">${o.label}</button>`).join('') +
-      `</div>`;
-  }
+            if local_intent in KNOWLEDGE_BASE and confidence > 0.2:
+                return jsonify({"reply": KNOWLEDGE_BASE[local_intent], "options": [], "chart": None})
 
-  let resultHtml = '';
-  const kcMatch = reply.match(/Kc[^`]*`([^`]+)`/);
-  const tiMatch = reply.match(/Ti[^`]*`([^`]+)`/);
-  const ruleMatch = reply.match(/AI Brain Selected:\*\*\s*(.+)/);
-  if (kcMatch && tiMatch) {
-    resultHtml = `
-      <div class="result-card">
-        <div style="font-size:0.75em;color:var(--text-dim);font-family:var(--mono);margin-bottom:4px;">TUNING RESULT</div>
-        ${ruleMatch ? `<div style="font-size:0.9em;font-weight:600;color:var(--accent);margin-bottom:12px;">${ruleMatch[1].trim()}</div>` : ''}
-        <div class="result-grid">
-          <div class="result-item">
-            <div class="result-label">Kc — Proportional Gain</div>
-            <div class="result-val">${kcMatch[1]}</div>
-          </div>
-          <div class="result-item">
-            <div class="result-label">Ti — Integral Time</div>
-            <div class="result-val">${tiMatch[1]} <span class="result-unit">s</span></div>
-          </div>
-        </div>
-      </div>`;
-  }
+            if local_intent == "rules" and confidence > 0.2:
+                return _build_rules_response()
 
-  
-  let chartHtml = '';
-  if (chart) {
-    const cid = 'chart_' + Date.now();
-    chartHtml = `
-      <div class="chart-wrap">
-        <div class="chart-header">
-          <div class="chart-dot" style="background:var(--accent)"></div>
-          <span>Closed-Loop Step Response Simulation</span>
-          <div style="margin-left:auto;display:flex;gap:12px;">
-            <span style="display:flex;align-items:center;gap:5px;"><div class="chart-dot" style="background:var(--accent);width:20px;height:2px;border-radius:99px;"></div> PV</span>
-            <span style="display:flex;align-items:center;gap:5px;"><div class="chart-dot" style="background:var(--red);width:20px;height:2px;border-radius:99px;border-top:2px dashed var(--red);"></div> SP</span>
-          </div>
-        </div>
-        <div id="${cid}" style="width:100%;height:300px;"></div>
-      </div>`;
-    setTimeout(() => renderChart(cid, chart), 50);
-  }
+        if any(kw in user_msg_lower for kw in ["what rules", "show rules", "list rules", "how many rules", "rules do you"]):
+            return _build_rules_response()
 
-  el.innerHTML = `
-    <div class="bot-avatar">TB</div>
-    <div class="bot-content">
-      <div class="bot-name">TUNING BOT</div>
-      <div class="bot-text">${parseMarkdown(reply)}</div>
-      ${optsHtml}
-      ${resultHtml}
-      ${chartHtml}
-    </div>`;
-  scrollDown();
-}
+        regex_data = local_regex_extract(user_msg)
+        for k in ["km", "tm", "taum"]:
+            if regex_data[k] is not None:
+                bot_memory[k] = regex_data[k]
 
-function renderChart(cid, chartData) {
-  const el = document.getElementById(cid);
-  if (!el) return;
-  let parsed = typeof chartData === 'string' ? JSON.parse(chartData) : chartData;
-  const isLight = document.body.classList.contains('light');
-  parsed.layout.paper_bgcolor = 'transparent';
-  parsed.layout.plot_bgcolor = isLight ? 'rgba(0,0,0,0.03)' : 'rgba(0,0,0,0.2)';
-  parsed.layout.font = { color: isLight ? '#334155' : '#c9d1d9', family: 'JetBrains Mono, monospace', size: 11 };
-  parsed.layout.xaxis.gridcolor = isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.07)';
-  parsed.layout.yaxis.gridcolor = isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.07)';
-  parsed.layout.xaxis.linecolor = 'transparent';
-  parsed.layout.yaxis.linecolor = 'transparent';
-  Plotly.newPlot(cid, parsed.data, parsed.layout, {responsive: true, displayModeBar: false});
-}
+        if not all([bot_memory['km'], bot_memory['tm'], bot_memory['taum']]) and has_digits:
+            try:
+                prompt = f"""
+                You are an expert process control assistant. Extract FOPDT parameters from the user's message.
+                User said: "{user_msg}"
+                Current memory: km={bot_memory['km']}, tm={bot_memory['tm']}, taum={bot_memory['taum']}
 
-function clearWelcome() {
-  if (isWelcome) {
-    document.getElementById('chat-inner').innerHTML = '';
-    isWelcome = false;
-  }
-}
-function escHtml(t) { return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-function scrollDown() { const b = document.getElementById('chat-box'); b.scrollTop = b.scrollHeight; }
+                OUTPUT JSON ONLY:
+                {{"km": float_or_null, "tm": float_or_null, "taum": float_or_null}}
+                """
+                res = llm_model.generate_content(prompt)
+                ext = json.loads(res.text.replace('```json','').replace('```','').strip())
+                for k in ["km", "tm", "taum"]:
+                    if ext.get(k) is not None:
+                        bot_memory[k] = ext[k]
+            except:
+                pass
 
-async function handleSend() {
-  const input = document.getElementById('msg-input');
-  const text = input.value.trim();
-  if (!text) return;
+        km, tm, taum = bot_memory['km'], bot_memory['tm'], bot_memory['taum']
+        missing = []
+        if not km:   missing.append("<strong>Km</strong> (process gain)")
+        if not tm:   missing.append("<strong>Tm</strong> (time constant / lag)")
+        if not taum: missing.append("<strong>Tau</strong> (dead time / delay)")
 
-  input.value = '';
-  input.style.height = 'auto';
-  const btn = document.getElementById('send-btn');
-  btn.disabled = true;
+        if missing:
+            if len(missing) == 3:
+                return jsonify({
+                    "reply": (
+                        "To tune your PID controller, I need three numbers from your process model.<br><br>"
+                        "Please provide:<br>"
+                        f"{'<br>'.join(f'• {m}' for m in missing)}<br><br>"
+                        "Format: <code>Km=2, Tm=10, Tau=2</code><br>"
+                        "Type <em>\"explain parameters\"</em> if you need help finding these values."
+                    ),
+                    "options": [], "chart": None
+                })
+            else:
+                return jsonify({
+                    "reply": (
+                        f"Almost there! I still need: {', '.join(missing)}<br><br>"
+                        "Provide the remaining values to continue."
+                    ),
+                    "options": [], "chart": None
+                })
 
-  appendUser(text);
-  const skelId = appendSkeleton();
+        stage = bot_memory['interview_stage']
 
-  try {
-    const res = await fetch(API_URL, {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({message: text})
-    });
-    const data = await res.json();
-    replaceSkeleton(skelId, data);
-  } catch(e) {
-    replaceSkeleton(skelId, {
-      reply: '⚠️ Connection error. Is the server running?\n\nCheck: `' + API_URL + '`',
-      options: [], chart: null
-    });
-  } finally {
-    btn.disabled = false;
-    input.focus();
-  }
-}
+        if stage > 0:
+            interview_q = INTERVIEW[stage]
+            answer = None
 
-window.onload = () => {
-  showWelcome();
-};
-</script>
-</body>
-</html>
+            for opt in interview_q["options"]:
+                if user_msg_lower == opt["val"]:
+                    answer = opt["val"]
+                    break
+
+            if not answer:
+                answer = parse_interview_answer(stage, user_msg_lower)
+
+            if answer:
+                updates = interview_q["map"][answer]
+                bot_memory.update(updates)
+                bot_memory['interview_stage'] += 1
+                stage = bot_memory['interview_stage']
+
+                if stage <= 3:
+                    next_q = INTERVIEW[stage]
+                    return jsonify({
+                        "reply": next_q["text"],
+                        "options": [{"label": o["label"], "val": o["val"]} for o in next_q["options"]],
+                        "chart": None
+                    })
+                else:
+                    return _run_tuning_engine()
+            else:
+                return jsonify({
+                    "reply": f"I didn't quite catch that. {interview_q['text']}",
+                    "options": [{"label": o["label"], "val": o["val"]} for o in interview_q["options"]],
+                    "chart": None
+                })
+
+        if stage == 0:
+            bot_memory['interview_stage'] = 1
+            q = INTERVIEW[1]
+            ratio = taum / tm
+            ratio_insight = ""
+            if ratio < 0.2:
+                ratio_insight = f" Your dead-time ratio (τ/T = {round(ratio,2)}) is <strong>low</strong> — this process is very controllable."
+            elif ratio < 0.5:
+                ratio_insight = f" Your dead-time ratio (τ/T = {round(ratio,2)}) is <strong>moderate</strong> — standard tuning applies."
+            else:
+                ratio_insight = f" Your dead-time ratio (τ/T = {round(ratio,2)}) is <strong>high</strong> — I'll apply dead-time compensating rules."
+
+            return jsonify({
+                "reply": (
+                    f"Parameters confirmed: <strong>Km={km}, Tm={tm}s, Tau={taum}s</strong>.{ratio_insight}<br><br>"
+                    f"{q['text']}"
+                ),
+                "options": [{"label": o["label"], "val": o["val"]} for o in q["options"]],
+                "chart": None
+            })
+
+        return jsonify({
+            "reply": "Something went wrong in the state machine. Please reset and try again.",
+            "options": [], "chart": None
+        })
+
+    except Exception as e:
+        print(traceback.format_exc())
+        return jsonify({"reply": "System error. Please reset and try again.", "options": []})
+
+def _build_rules_response():
+    categories = {
+        "🎯 Servo / Setpoint Tracking": [],
+        "🛡️ Regulatory / Disturbance Rejection": [],
+        "⚖️ General Purpose / Hybrid": []
+    }
+    for k, v in rules_db.items():
+        mode_val = v.get("mode", -1)
+        if mode_val == 1:
+            categories["🎯 Servo / Setpoint Tracking"].append(v.get("name", k.replace("_", " ").title()))
+        elif mode_val == 0:
+            categories["🛡️ Regulatory / Disturbance Rejection"].append(v.get("name", k.replace("_", " ").title()))
+        else:
+            categories["⚖️ General Purpose / Hybrid"].append(v.get("name", k.replace("_", " ").title()))
+
+    reply = f"<strong>My tuning database contains {len(rules_db)} rules</strong> from Aidan O'Dwyer's handbook:<br><br>"
+    num = 1
+    for cat, rule_list in categories.items():
+        if rule_list:
+            reply += f"<strong>{cat}</strong><br>"
+            for r in rule_list:
+                reply += f"{num}. {r}<br>"
+                num += 1
+            reply += "<br>"
+
+    reply += "<em>My Random Forest AI selects the optimal rule for your specific process and objectives.</em>"
+    return jsonify({"reply": reply, "options": [], "chart": None})
+
+def _run_tuning_engine():
+    global bot_memory
+    km   = bot_memory['km']
+    tm   = bot_memory['tm']
+    taum = bot_memory['taum']
+    mode = bot_memory.get('mode', 1)
+    os_v = bot_memory.get('overshoot', 0)
+    rob  = bot_memory.get('robust', 0)
+    met  = bot_memory.get('metric', 1)
+
+    ratio    = taum / tm
+    features = np.array([[km, tm, taum, ratio, mode, os_v, rob, met]])
+
+    best_rule = rf_model.predict(features)[0] if rf_model else "ziegler_nichols"
+    r = rules_db.get(best_rule, rules_db.get("ziegler_nichols", {}))
+
+    tau_c_val = max(0.1, taum)
+    safe_env = {
+        "km": km, "tm": tm, "taum": taum,
+        "tau_c": tau_c_val,
+        "min": min, "max": max,
+        "exp": np.exp, "log": np.log, "sqrt": np.sqrt,
+        "np": np, "math": math
+    }
+
+    try:
+        if r.get('kc_math') == "SPECIAL_LOOKUP":
+            kc = (0.85 * tm) / (km * taum)
+            ti = 2.4 * taum
+        else:
+            kc = eval(r['kc_math'], {"__builtins__": None}, safe_env)
+            ti = eval(r['ti_math'], {"__builtins__": None}, safe_env)
+            if not ti or ti <= 0:
+                ti = 0.001
+    except Exception as e:
+        print(f"Math eval error: {e}")
+        kc = (1.2 * tm) / (km * taum)
+        ti = 2.0 * taum
+        r  = {"name": f"Ziegler-Nichols (Fallback)"}
+
+    chart, os_est, settling = simulate_step(kc, ti, km, tm, taum)
+
+    mode_str   = "Servo (Setpoint Tracking)" if mode == 1 else "Regulatory (Disturbance Rejection)"
+    metric_str = {"1": "IAE — smooth, no overshoot", "2": "ISE — fast, aggressive", "3": "ITAE — balanced, minimal long-term error"}.get(str(met), "IAE")
+    robust_str = "Robust (model-uncertainty tolerant)" if rob == 1 else "Performance-optimized"
+
+    rule_name = r.get('name', best_rule)
+
+    rule_insights = {
+        "ziegler_nichols": "a classic rule ideal for quick initial tuning, though it tends to be aggressive.",
+        "cohen_coon": "specifically designed for processes with significant dead time — very appropriate for your τ/T ratio.",
+        "skogestad": "a robust IMC-based rule that provides predictable, safe closed-loop behavior.",
+        "amigo": "the AMIGO rule, derived from modern robust control theory and validated on hundreds of industrial loops.",
+        "lambda": "Lambda (Direct Synthesis) tuning, where you control the closed-loop speed via τ_c.",
+        "rovira_iae": "Rovira's IAE-optimal rule, mathematically minimizing the integral of absolute error.",
+        "rovira_ise": "Rovira's ISE-optimal rule, prioritizing elimination of large initial errors.",
+        "rovira_itae": "Rovira's ITAE-optimal rule, minimizing long-term integrated error for clean settling.",
+    }
+    insight = next((v for k, v in rule_insights.items() if k in best_rule.lower()), "a highly specialized rule from O'Dwyer's handbook.")
+
+    final_reply = (
+        f"<strong>✅ Optimization Complete</strong><br><br>"
+        f"<strong>Process Analysis:</strong><br>"
+        f"• Mode: {mode_str}<br>"
+        f"• Performance objective: {metric_str}<br>"
+        f"• Tuning philosophy: {robust_str}<br>"
+        f"• Dead-time ratio (τ/T): {round(ratio, 3)}<br><br>"
+        f"<strong>AI Selection:</strong> My Random Forest evaluated all {len(rules_db)} candidate rules and selected "
+        f"<strong>{rule_name}</strong> — {insight}<br><br>"
+        f"<strong>🎛️ PID Parameters:</strong><br>"
+        f"• Proportional Gain <strong>Kc = {round(kc, 4)}</strong><br>"
+        f"• Integral Time <strong>Ti = {round(ti, 4)} s</strong><br><br>"
+        f"<strong>📊 Predicted Closed-Loop Performance:</strong><br>"
+        f"• Overshoot: <strong>{os_est}%</strong><br>"
+        f"• Estimated Settling Time: <strong>{settling} s</strong><br><br>"
+        f"Step response simulation below ↓"
+    )
+
+    bot_memory = {
+        "km": None, "tm": None, "taum": None, "tau_c": None,
+        "mode": None, "metric": None, "robust": None, "overshoot": None,
+        "interview_stage": 0
+    }
+
+    return jsonify({"reply": final_reply, "chart": chart, "options": []})
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
