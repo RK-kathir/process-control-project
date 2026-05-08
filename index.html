@@ -1,745 +1,683 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TUNING BOT — AI PID Optimizer</title>
-    <script src="https://cdn.plot.ly/plotly-2.24.1.min.js"></script>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
-    <style>
-        /* ═══════════════════════════════════════
-           TOKENS & THEME
-        ═══════════════════════════════════════ */
-        :root {
-            --bg:        #080c12;
-            --bg2:       #0c1018;
-            --bg3:       #111827;
-            --panel:     #0f1520;
-            --border:    rgba(255,255,255,0.07);
-            --border2:   rgba(0,212,255,0.2);
-            --txt:       #e2e8f0;
-            --txt2:      #64748b;
-            --txt3:      #94a3b8;
-            --cyan:      #00d4ff;
-            --cyan2:     #0ea5e9;
-            --purple:    #818cf8;
-            --green:     #34d399;
-            --red:       #f87171;
-            --warn:      #fbbf24;
-            --user-bg:   #1a2335;
-            --glow:      0 0 30px rgba(0,212,255,0.12);
-        }
-        body.light {
-            --bg:        #f0f4f8;
-            --bg2:       #e8edf3;
-            --bg3:       #dde3ec;
-            --panel:     #ffffff;
-            --border:    rgba(0,0,0,0.08);
-            --border2:   rgba(14,165,233,0.3);
-            --txt:       #1e293b;
-            --txt2:      #94a3b8;
-            --txt3:      #475569;
-            --cyan:      #0284c7;
-            --cyan2:     #0369a1;
-            --user-bg:   #e0e8f0;
-            --glow:      0 2px 20px rgba(0,0,0,0.08);
-        }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TUNING BOT — PID Intelligence</title>
+<script src="https://cdn.plot.ly/plotly-2.24.1.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0b0f1a;
+  --bg2: #0f1623;
+  --bg3: #161d2e;
+  --bg4: #1c253a;
+  --border: rgba(0,212,255,0.12);
+  --border2: rgba(255,255,255,0.06);
+  --text: #e2e8f0;
+  --text-dim: #7a8ba0;
+  --text-dimmer: #3d5068;
+  --accent: #00d4ff;
+  --accent2: #7c3aed;
+  --accent3: #f59e0b;
+  --green: #10b981;
+  --red: #ef4444;
+  --glow: rgba(0,212,255,0.15);
+  --glow-strong: rgba(0,212,255,0.3);
+  --radius: 14px;
+  --radius-sm: 8px;
+  --font: 'Space Grotesk', sans-serif;
+  --mono: 'JetBrains Mono', monospace;
+  --sidebar-w: 280px;
+  --transition: 0.22s cubic-bezier(0.4,0,0.2,1);
+}
+body.light {
+  --bg: #f0f4f8;
+  --bg2: #ffffff;
+  --bg3: #f8fafc;
+  --bg4: #eef2f7;
+  --border: rgba(0,150,200,0.15);
+  --border2: rgba(0,0,0,0.06);
+  --text: #0f172a;
+  --text-dim: #64748b;
+  --text-dimmer: #94a3b8;
+  --glow: rgba(0,150,200,0.1);
+  --glow-strong: rgba(0,150,200,0.2);
+}
 
-        /* ═══════════════════════════════════════
-           RESET & BASE
-        ═══════════════════════════════════════ */
-        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-        html, body { height: 100%; overflow: hidden; }
-        body {
-            font-family: 'DM Sans', sans-serif;
-            background: var(--bg);
-            color: var(--txt);
-            display: flex;
-            transition: background .3s, color .3s;
-        }
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; }
+body { font-family: var(--font); background: var(--bg); color: var(--text); display: flex; transition: background var(--transition), color var(--transition); }
+::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-track { background: transparent; } ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }
+button { cursor: pointer; font-family: var(--font); }
 
-        /* ═══════════════════════════════════════
-           SIDEBAR
-        ═══════════════════════════════════════ */
-        #sidebar {
-            width: 240px;
-            flex-shrink: 0;
-            background: var(--panel);
-            border-right: 1px solid var(--border);
-            display: flex;
-            flex-direction: column;
-            padding: 0;
-            position: relative;
-            overflow: hidden;
-        }
-        #sidebar::before {
-            content: '';
-            position: absolute;
-            top: 0; left: 0; right: 0;
-            height: 2px;
-            background: linear-gradient(90deg, var(--cyan), var(--purple), var(--cyan));
-            background-size: 200% 100%;
-            animation: shimmer 3s linear infinite;
-        }
-        @keyframes shimmer { to { background-position: 200% 0; } }
+#sidebar {
+  width: var(--sidebar-w);
+  background: var(--bg2);
+  border-right: 1px solid var(--border2);
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 20;
+}
+.sidebar-logo {
+  padding: 28px 24px 20px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid var(--border2);
+}
+.logo-icon {
+  width: 36px; height: 36px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px;
+  box-shadow: 0 0 20px var(--glow);
+  flex-shrink: 0;
+}
+.logo-text { font-size: 0.85em; font-weight: 700; letter-spacing: 0.12em; color: var(--text); line-height: 1.2; }
+.logo-sub { font-size: 0.65em; color: var(--text-dim); font-weight: 400; letter-spacing: 0.05em; }
 
-        .logo {
-            padding: 24px 20px 20px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        .logo-icon {
-            width: 32px; height: 32px;
-            background: linear-gradient(135deg, var(--cyan), var(--purple));
-            border-radius: 8px;
-            display: flex; align-items: center; justify-content: center;
-            font-family: 'Space Mono', monospace;
-            font-size: 13px;
-            font-weight: 700;
-            color: #000;
-            flex-shrink: 0;
-        }
-        .logo-text {
-            font-family: 'Space Mono', monospace;
-            font-size: 11px;
-            font-weight: 700;
-            letter-spacing: 2px;
-            color: var(--txt);
-            text-transform: uppercase;
-        }
-        .logo-sub {
-            font-size: 9px;
-            color: var(--txt2);
-            letter-spacing: 1px;
-            margin-top: 1px;
-        }
+.sidebar-section { padding: 16px 12px 8px; }
+.sidebar-label { font-size: 0.65em; font-weight: 600; letter-spacing: 0.12em; color: var(--text-dimmer); text-transform: uppercase; padding: 0 8px 8px; }
 
-        .side-divider {
-            height: 1px;
-            background: var(--border);
-            margin: 4px 0;
-        }
+.new-btn {
+  width: 100%; padding: 10px 14px;
+  background: linear-gradient(135deg, rgba(0,212,255,0.1), rgba(124,58,237,0.1));
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--accent);
+  font-size: 0.85em; font-weight: 600;
+  display: flex; align-items: center; gap: 10px;
+  transition: var(--transition);
+  letter-spacing: 0.02em;
+}
+.new-btn:hover { background: linear-gradient(135deg, rgba(0,212,255,0.2), rgba(124,58,237,0.2)); box-shadow: 0 0 20px var(--glow); }
+.new-btn .plus { font-size: 1.2em; line-height: 1; }
 
-        .side-btn {
-            margin: 6px 12px;
-            padding: 10px 14px;
-            background: transparent;
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            color: var(--txt3);
-            font-family: 'DM Sans', sans-serif;
-            font-size: 13px;
-            font-weight: 500;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            transition: all .2s;
-            text-align: left;
-        }
-        .side-btn:hover {
-            border-color: var(--border2);
-            color: var(--cyan);
-            background: rgba(0,212,255,0.04);
-        }
-        .side-btn svg { opacity: 0.6; flex-shrink: 0; }
-        .side-btn:hover svg { opacity: 1; }
+.sidebar-divider { height: 1px; background: var(--border2); margin: 8px 12px; }
 
-        /* Status indicator */
-        .status-box {
-            margin: 8px 12px;
-            padding: 10px 14px;
-            background: rgba(52,211,153,0.06);
-            border: 1px solid rgba(52,211,153,0.2);
-            border-radius: 8px;
-        }
-        .status-dot {
-            width: 6px; height: 6px;
-            background: var(--green);
-            border-radius: 50%;
-            display: inline-block;
-            margin-right: 6px;
-            box-shadow: 0 0 8px var(--green);
-            animation: pulse-dot 2s infinite;
-        }
-        @keyframes pulse-dot {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.4; }
-        }
-        .status-label { font-size: 11px; color: var(--green); font-weight: 600; letter-spacing: 0.5px; }
-        .status-detail { font-size: 10px; color: var(--txt2); margin-top: 2px; }
+.quick-links { padding: 4px 12px; display: flex; flex-direction: column; gap: 2px; }
+.quick-link {
+  padding: 9px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 0.82em; color: var(--text-dim);
+  display: flex; align-items: center; gap: 10px;
+  transition: var(--transition);
+  border: 1px solid transparent;
+  background: transparent;
+  text-align: left; width: 100%;
+}
+.quick-link:hover { background: var(--bg3); color: var(--text); border-color: var(--border2); }
+.quick-link .ql-icon { font-size: 1em; width: 18px; text-align: center; }
 
-        /* Quick-start section */
-        .side-section-title {
-            padding: 12px 20px 6px;
-            font-size: 9px;
-            font-weight: 700;
-            letter-spacing: 2px;
-            color: var(--txt2);
-            text-transform: uppercase;
-        }
-        .quick-chip {
-            margin: 3px 12px;
-            padding: 8px 12px;
-            background: transparent;
-            border: 1px solid var(--border);
-            border-radius: 6px;
-            color: var(--txt3);
-            font-family: 'DM Sans', sans-serif;
-            font-size: 11px;
-            cursor: pointer;
-            transition: all .2s;
-            text-align: left;
-            width: calc(100% - 24px);
-        }
-        .quick-chip:hover {
-            border-color: var(--border2);
-            color: var(--txt);
-            background: rgba(0,212,255,0.03);
-        }
+.sidebar-spacer { flex: 1; }
 
-        .side-spacer { flex: 1; }
+.sidebar-bottom { padding: 12px; border-top: 1px solid var(--border2); }
+.theme-btn {
+  width: 100%; padding: 10px 14px;
+  background: var(--bg3); border: 1px solid var(--border2);
+  border-radius: var(--radius-sm); color: var(--text-dim);
+  font-size: 0.82em; display: flex; align-items: center; gap: 10px;
+  transition: var(--transition);
+}
+.theme-btn:hover { color: var(--text); background: var(--bg4); }
 
-        .theme-btn {
-            margin: 8px 12px 16px;
-            padding: 10px 14px;
-            background: var(--bg3);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            color: var(--txt3);
-            font-family: 'DM Sans', sans-serif;
-            font-size: 12px;
-            font-weight: 500;
-            cursor: pointer;
-            text-align: center;
-            transition: all .2s;
-        }
-        .theme-btn:hover { border-color: var(--border2); color: var(--txt); }
+#main { flex: 1; display: flex; flex-direction: column; min-width: 0; position: relative; }
 
-        /* ═══════════════════════════════════════
-           MAIN AREA
-        ═══════════════════════════════════════ */
-        #main {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            position: relative;
-            min-width: 0;
-            background: var(--bg);
-        }
+#topbar {
+  height: 56px;
+  border-bottom: 1px solid var(--border2);
+  display: flex; align-items: center;
+  padding: 0 28px;
+  background: var(--bg2);
+  gap: 16px;
+  flex-shrink: 0;
+}
+.tb-status { display: flex; align-items: center; gap: 8px; font-size: 0.8em; color: var(--text-dim); }
+.status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px var(--green); animation: pulse-dot 2s infinite; }
+@keyframes pulse-dot { 0%,100% { opacity:1; } 50% { opacity:0.5; } }
+.tb-model { margin-left: auto; font-size: 0.72em; font-family: var(--mono); color: var(--text-dimmer); background: var(--bg3); padding: 4px 10px; border-radius: 6px; border: 1px solid var(--border2); }
 
-        /* Subtle grid texture */
-        #main::before {
-            content: '';
-            position: absolute;
-            inset: 0;
-            background-image:
-                linear-gradient(rgba(0,212,255,0.015) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(0,212,255,0.015) 1px, transparent 1px);
-            background-size: 40px 40px;
-            pointer-events: none;
-        }
+#progress-bar-wrap { height: 3px; background: var(--bg3); flex-shrink: 0; display: none; }
+#progress-bar { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2)); transition: width 0.4s ease; border-radius: 0 3px 3px 0; }
 
-        /* ═══════════════════════════════════════
-           CHAT MESSAGES
-        ═══════════════════════════════════════ */
-        #chat-box {
-            flex: 1;
-            overflow-y: auto;
-            padding: 32px max(32px, calc(50% - 380px));
-            padding-bottom: 200px;
-            display: flex;
-            flex-direction: column;
-            gap: 20px;
-            scroll-behavior: smooth;
-            position: relative;
-            z-index: 1;
-        }
-        #chat-box::-webkit-scrollbar { width: 4px; }
-        #chat-box::-webkit-scrollbar-track { background: transparent; }
-        #chat-box::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+#chat-box {
+  flex: 1;
+  overflow-y: auto;
+  padding: 40px 0 200px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.chat-inner { max-width: 780px; margin: 0 auto; padding: 0 24px; width: 100%; }
 
-        /* Welcome screen */
-        .welcome {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            padding: 60px 20px 20px;
-            text-align: center;
-            gap: 12px;
-        }
-        .welcome-icon {
-            width: 56px; height: 56px;
-            background: linear-gradient(135deg, var(--cyan), var(--purple));
-            border-radius: 16px;
-            display: flex; align-items: center; justify-content: center;
-            font-family: 'Space Mono', monospace;
-            font-size: 18px; font-weight: 700; color: #000;
-            box-shadow: 0 0 40px rgba(0,212,255,0.2);
-            margin-bottom: 8px;
-        }
-        .welcome h1 {
-            font-family: 'Space Mono', monospace;
-            font-size: 20px;
-            font-weight: 700;
-            color: var(--txt);
-            letter-spacing: 1px;
-        }
-        .welcome p {
-            font-size: 14px;
-            color: var(--txt3);
-            max-width: 380px;
-            line-height: 1.6;
-        }
+#welcome {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  min-height: 60vh; text-align: center; padding: 40px 24px;
+  gap: 20px;
+}
+.welcome-badge {
+  display: inline-flex; align-items: center; gap: 8px;
+  background: rgba(0,212,255,0.08); border: 1px solid var(--border);
+  padding: 6px 14px; border-radius: 99px; font-size: 0.75em;
+  color: var(--accent); font-family: var(--mono); font-weight: 500;
+  letter-spacing: 0.05em;
+}
+.welcome-title {
+  font-size: 2.6em; font-weight: 700; letter-spacing: -0.02em;
+  background: linear-gradient(135deg, var(--text) 30%, var(--text-dim));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  background-clip: text; line-height: 1.15;
+}
+.welcome-sub { color: var(--text-dim); font-size: 1em; max-width: 440px; line-height: 1.6; }
+.welcome-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; width: 100%; max-width: 600px; margin-top: 8px; }
+.wcard {
+  background: var(--bg2); border: 1px solid var(--border2);
+  border-radius: var(--radius); padding: 16px 14px;
+  text-align: left; transition: var(--transition); cursor: pointer;
+}
+.wcard:hover { border-color: var(--border); background: var(--bg3); transform: translateY(-2px); }
+.wcard-icon { font-size: 1.4em; margin-bottom: 8px; }
+.wcard-title { font-size: 0.82em; font-weight: 600; color: var(--text); }
+.wcard-sub { font-size: 0.73em; color: var(--text-dim); margin-top: 3px; line-height: 1.4; }
 
-        /* Message bubbles */
-        .msg { animation: slide-up .25s ease-out; }
-        @keyframes slide-up {
-            from { opacity: 0; transform: translateY(12px); }
-            to   { opacity: 1; transform: translateY(0); }
-        }
+.msg-row { padding: 12px 0; animation: fadeUp 0.25s ease-out; }
+@keyframes fadeUp { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
 
-        .user-msg {
-            align-self: flex-end;
-            max-width: 75%;
-            background: var(--user-bg);
-            border: 1px solid var(--border);
-            border-radius: 16px 16px 4px 16px;
-            padding: 12px 18px;
-            font-size: 14px;
-            line-height: 1.6;
-            color: var(--txt);
-        }
+.user-row { display: flex; justify-content: flex-end; }
+.user-bubble {
+  background: var(--bg4);
+  border: 1px solid var(--border2);
+  border-radius: 18px 18px 4px 18px;
+  padding: 12px 18px;
+  max-width: 72%;
+  font-size: 0.93em;
+  line-height: 1.6;
+  color: var(--text);
+}
 
-        .bot-row {
-            display: flex;
-            gap: 10px;
-            align-items: flex-start;
-            max-width: 100%;
-        }
-        .bot-avatar {
-            width: 28px; height: 28px;
-            background: linear-gradient(135deg, var(--cyan), var(--purple));
-            border-radius: 8px;
-            flex-shrink: 0;
-            display: flex; align-items: center; justify-content: center;
-            font-family: 'Space Mono', monospace;
-            font-size: 10px; font-weight: 700; color: #000;
-            margin-top: 2px;
-        }
-        .bot-content { flex: 1; min-width: 0; }
-        .bot-name {
-            font-size: 11px;
-            font-weight: 700;
-            letter-spacing: 1px;
-            color: var(--cyan);
-            text-transform: uppercase;
-            margin-bottom: 6px;
-            font-family: 'Space Mono', monospace;
-        }
-        .bot-text {
-            font-size: 14px;
-            line-height: 1.75;
-            color: var(--txt);
-        }
-        .bot-text code {
-            font-family: 'Space Mono', monospace;
-            font-size: 12px;
-            background: rgba(0,212,255,0.08);
-            border: 1px solid rgba(0,212,255,0.2);
-            padding: 1px 6px;
-            border-radius: 4px;
-            color: var(--cyan);
-        }
-        .bot-text strong { color: var(--txt); font-weight: 600; }
+.bot-row { display: flex; align-items: flex-start; gap: 12px; }
+.bot-avatar {
+  width: 30px; height: 30px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  flex-shrink: 0; margin-top: 2px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.7em; font-weight: 700; color: white;
+  box-shadow: 0 0 12px var(--glow);
+}
+.bot-content { flex: 1; min-width: 0; }
+.bot-name { font-size: 0.72em; font-weight: 700; color: var(--accent); letter-spacing: 0.1em; margin-bottom: 6px; font-family: var(--mono); }
+.bot-text {
+  font-size: 0.92em; line-height: 1.7; color: var(--text);
+}
+.bot-text strong { color: var(--accent); font-weight: 600; }
+.bot-text code { font-family: var(--mono); font-size: 0.88em; background: var(--bg4); padding: 2px 7px; border-radius: 5px; color: var(--accent3); border: 1px solid var(--border2); }
+.bot-text em { color: var(--text-dim); font-style: normal; font-size: 0.92em; }
 
-        /* Option buttons */
-        .options-wrap {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-            margin-top: 14px;
-        }
-        .opt-btn {
-            padding: 12px 16px;
-            background: rgba(0,212,255,0.03);
-            border: 1px solid rgba(0,212,255,0.15);
-            border-radius: 10px;
-            color: var(--txt3);
-            font-family: 'DM Sans', sans-serif;
-            font-size: 13px;
-            font-weight: 500;
-            cursor: pointer;
-            text-align: left;
-            transition: all .2s;
-            line-height: 1.4;
-        }
-        .opt-btn:hover {
-            border-color: var(--cyan);
-            color: var(--txt);
-            background: rgba(0,212,255,0.07);
-            transform: translateX(3px);
-        }
-        .opt-btn .opt-hint {
-            display: block;
-            font-size: 11px;
-            color: var(--txt2);
-            margin-top: 3px;
-            font-weight: 400;
-        }
+.opts-wrap { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+.opt-btn {
+  padding: 10px 18px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--accent);
+  font-size: 0.83em; font-weight: 600;
+  transition: var(--transition);
+  letter-spacing: 0.01em;
+}
+.opt-btn:hover { background: rgba(0,212,255,0.12); box-shadow: 0 0 16px var(--glow); transform: translateY(-1px); }
+.opt-btn:active { transform: translateY(0); }
 
-        /* Loader skeleton */
-        .loader-row {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-            padding-top: 4px;
-        }
-        .skel {
-            height: 14px;
-            border-radius: 4px;
-            background: linear-gradient(90deg, var(--bg3) 25%, var(--border) 50%, var(--bg3) 75%);
-            background-size: 300% 100%;
-            animation: skel-anim 1.6s infinite ease-in-out;
-        }
-        .skel:nth-child(1) { width: 75%; }
-        .skel:nth-child(2) { width: 55%; animation-delay: .1s; }
-        .skel:nth-child(3) { width: 65%; animation-delay: .2s; }
-        @keyframes skel-anim {
-            0%   { background-position: 300% 0; }
-            100% { background-position: -300% 0; }
-        }
+.skeleton-wrap { display: flex; flex-direction: column; gap: 8px; padding-top: 4px; }
+.skel { height: 14px; border-radius: 6px; background: linear-gradient(90deg, var(--bg3) 25%, var(--bg4) 50%, var(--bg3) 75%); background-size: 300% 100%; animation: shimmer 1.6s infinite; }
+.skel.short { width: 45%; }
+.skel.med { width: 70%; }
+.skel.long { width: 90%; }
+@keyframes shimmer { 0% { background-position: 300% 0; } 100% { background-position: -300% 0; } }
 
-        /* ═══════════════════════════════════════
-           CHART CONTAINER
-        ═══════════════════════════════════════ */
-        .chart-wrap {
-            margin-top: 16px;
-            border: 1px solid var(--border2);
-            border-radius: 12px;
-            overflow: hidden;
-            background: rgba(0,212,255,0.02);
-            box-shadow: var(--glow);
-        }
+.chart-wrap {
+  margin-top: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: rgba(0,0,0,0.25);
+  box-shadow: 0 0 40px rgba(0,212,255,0.05);
+}
+.chart-header {
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--border2);
+  font-size: 0.75em; font-family: var(--mono);
+  color: var(--text-dim); display: flex; align-items: center; gap: 10px;
+}
+.chart-dot { width: 8px; height: 8px; border-radius: 50%; }
 
-        /* ═══════════════════════════════════════
-           INPUT AREA
-        ═══════════════════════════════════════ */
-        .input-zone {
-            position: absolute;
-            bottom: 0; left: 0; right: 0;
-            z-index: 10;
-            background: linear-gradient(transparent, var(--bg) 28%);
-            padding: 32px max(32px, calc(50% - 380px)) 24px;
-        }
-        .input-wrap {
-            display: flex;
-            background: var(--panel);
-            border: 1px solid var(--border);
-            border-radius: 14px;
-            padding: 6px 6px 6px 18px;
-            box-shadow: 0 4px 24px rgba(0,0,0,0.3), var(--glow);
-            transition: border-color .2s;
-        }
-        .input-wrap:focus-within {
-            border-color: rgba(0,212,255,0.3);
-        }
-        #chat-input {
-            flex: 1;
-            background: transparent;
-            border: none;
-            color: var(--txt);
-            font-family: 'DM Sans', sans-serif;
-            font-size: 14px;
-            outline: none;
-            padding: 6px 0;
-            min-width: 0;
-        }
-        #chat-input::placeholder { color: var(--txt2); }
-        .send-btn {
-            width: 38px; height: 38px;
-            background: linear-gradient(135deg, var(--cyan), var(--cyan2));
-            border: none;
-            border-radius: 10px;
-            cursor: pointer;
-            display: flex; align-items: center; justify-content: center;
-            transition: all .2s;
-            flex-shrink: 0;
-        }
-        .send-btn:hover { transform: scale(1.05); box-shadow: 0 0 16px rgba(0,212,255,0.4); }
-        .send-btn svg { color: #000; }
+#input-area {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  background: linear-gradient(to top, var(--bg) 60%, transparent);
+  padding: 24px 28px 28px;
+}
+.input-area-inner { max-width: 780px; margin: 0 auto; }
 
-        /* Bottom quick-chips row */
-        .chips-row {
-            display: flex;
-            gap: 8px;
-            flex-wrap: wrap;
-            margin-bottom: 10px;
-        }
-        .chip {
-            padding: 6px 14px;
-            background: var(--bg3);
-            border: 1px solid var(--border);
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 500;
-            color: var(--txt2);
-            cursor: pointer;
-            transition: all .2s;
-            white-space: nowrap;
-        }
-        .chip:hover {
-            border-color: rgba(0,212,255,0.3);
-            color: var(--cyan);
-            background: rgba(0,212,255,0.05);
-        }
+.chips-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.chip {
+  padding: 7px 14px;
+  background: var(--bg2);
+  border: 1px solid var(--border2);
+  border-radius: 99px;
+  font-size: 0.78em; color: var(--text-dim);
+  transition: var(--transition); white-space: nowrap;
+}
+.chip:hover { border-color: var(--border); color: var(--text); background: var(--bg3); }
 
-        /* ═══════════════════════════════════════
-           RESPONSIVE
-        ═══════════════════════════════════════ */
-        @media (max-width: 680px) {
-            #sidebar { display: none; }
-            #chat-box { padding: 20px 16px 200px; }
-            .input-zone { padding: 20px 16px 16px; }
-        }
-    </style>
+.input-box {
+  display: flex; align-items: flex-end; gap: 10px;
+  background: var(--bg2);
+  border: 1px solid var(--border2);
+  border-radius: 16px;
+  padding: 10px 10px 10px 20px;
+  transition: var(--transition);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+}
+.input-box:focus-within { border-color: var(--border); box-shadow: 0 0 0 3px var(--glow), 0 4px 20px rgba(0,0,0,0.3); }
+#msg-input {
+  flex: 1; background: transparent; border: none;
+  font-family: var(--font); font-size: 0.93em;
+  color: var(--text); outline: none; resize: none;
+  min-height: 22px; max-height: 120px; line-height: 1.5;
+  padding: 2px 0;
+}
+#msg-input::placeholder { color: var(--text-dimmer); }
+.send-btn {
+  width: 38px; height: 38px; border-radius: 11px;
+  background: var(--accent); border: none;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; color: #000; font-size: 1em;
+  transition: var(--transition);
+  box-shadow: 0 0 16px var(--glow);
+}
+.send-btn:hover { background: #33dcff; box-shadow: 0 0 24px var(--glow-strong); transform: scale(1.05); }
+.send-btn:active { transform: scale(0.95); }
+.send-btn:disabled { background: var(--bg4); color: var(--text-dimmer); box-shadow: none; cursor: not-allowed; }
+
+.result-card {
+  background: linear-gradient(135deg, rgba(0,212,255,0.06), rgba(124,58,237,0.06));
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px 20px;
+  margin-top: 14px;
+}
+.result-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
+.result-item {
+  background: var(--bg3); border: 1px solid var(--border2);
+  border-radius: 10px; padding: 12px 16px;
+}
+.result-label { font-size: 0.7em; color: var(--text-dim); font-family: var(--mono); letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 6px; }
+.result-val { font-size: 1.35em; font-weight: 700; color: var(--accent); font-family: var(--mono); }
+.result-unit { font-size: 0.7em; color: var(--text-dim); }
+
+.info-tag {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 0.7em; font-family: var(--mono); color: var(--text-dim);
+  background: var(--bg4); padding: 4px 10px; border-radius: 6px;
+  border: 1px solid var(--border2); margin-top: 10px;
+}
+
+@media (max-width: 680px) {
+  #sidebar { display: none; }
+  .welcome-cards { grid-template-columns: 1fr 1fr; }
+  .welcome-title { font-size: 1.8em; }
+  #chat-box { padding-bottom: 180px; }
+  .result-grid { grid-template-columns: 1fr; }
+}
+</style>
 </head>
 <body>
 
-<!-- ─── SIDEBAR ─────────────────────────────── -->
 <div id="sidebar">
-    <div class="logo">
-        <div class="logo-icon">PID</div>
-        <div>
-            <div class="logo-text">Tuning Bot</div>
-            <div class="logo-sub">AI Optimizer</div>
-        </div>
+  <div class="sidebar-logo">
+    <div class="logo-icon">⚙️</div>
+    <div>
+      <div class="logo-text">TUNING BOT</div>
+      <div class="logo-sub">PID Intelligence Engine</div>
     </div>
-    <div class="side-divider"></div>
+  </div>
 
-    <button class="side-btn" onclick="startNewChat()">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-        New Session
+  <div class="sidebar-section">
+    <button class="new-btn" onclick="startNew()">
+      <span class="plus">+</span> New Session
     </button>
+  </div>
 
-    <div class="status-box">
-        <div><span class="status-dot"></span><span class="status-label">ENGINE ONLINE</span></div>
-        <div class="status-detail" id="rules-count">Loading rules...</div>
-    </div>
+  <div class="sidebar-divider"></div>
 
-    <div class="side-divider" style="margin-top:8px"></div>
-    <div class="side-section-title">Quick Start</div>
-    <button class="quick-chip" onclick="sendChip('Km=2, Tm=10, Tau=2')">📊 Try example: Km=2 Tm=10 Tau=2</button>
-    <button class="quick-chip" onclick="sendChip('What tuning rules do you have?')">📋 List all tuning rules</button>
-    <button class="quick-chip" onclick="sendChip('What is PID control?')">🎓 Explain PID control</button>
-    <button class="quick-chip" onclick="sendChip('Explain FOPDT parameters')">🔬 Explain parameters</button>
-    <button class="quick-chip" onclick="sendChip('What is IAE and ISE?')">📐 Performance metrics</button>
+  <div class="quick-links">
+    <div class="sidebar-label">Quick Reference</div>
+    <button class="quick-link" onclick="sendMsg('What tuning rules do you have?')">
+      <span class="ql-icon">📋</span> Rule Database
+    </button>
+    <button class="quick-link" onclick="sendMsg('What is PID?')">
+      <span class="ql-icon">❓</span> What is PID?
+    </button>
+    <button class="quick-link" onclick="sendMsg('What is FOPDT?')">
+      <span class="ql-icon">📐</span> What is FOPDT?
+    </button>
+    <button class="quick-link" onclick="sendMsg('What is dead time?')">
+      <span class="ql-icon">⏱️</span> Dead Time
+    </button>
+    <button class="quick-link" onclick="sendMsg('What is overshoot?')">
+      <span class="ql-icon">📈</span> Overshoot
+    </button>
+    <button class="quick-link" onclick="sendMsg('What is robustness?')">
+      <span class="ql-icon">🛡️</span> Robustness
+    </button>
+    <button class="quick-link" onclick="sendMsg('Explain Ziegler-Nichols')">
+      <span class="ql-icon">🔬</span> Ziegler-Nichols
+    </button>
+    <button class="quick-link" onclick="sendMsg('Explain AMIGO tuning')">
+      <span class="ql-icon">🎯</span> AMIGO Method
+    </button>
+  </div>
 
-    <div class="side-spacer"></div>
-    <button class="theme-btn" onclick="toggleTheme()">☀️ / 🌙 &nbsp; Toggle Theme</button>
+  <div class="sidebar-spacer"></div>
+  <div class="sidebar-bottom">
+    <button class="theme-btn" onclick="toggleTheme()">
+      <span id="theme-icon">☀️</span>
+      <span id="theme-label">Switch to Light Mode</span>
+    </button>
+  </div>
 </div>
 
-<!-- ─── MAIN ─────────────────────────────────── -->
 <div id="main">
-    <div id="chat-box">
-        <div class="welcome" id="welcome-screen">
-            <div class="welcome-icon">PID</div>
-            <h1>TUNING BOT</h1>
-            <p>AI-powered PID controller optimization using 40+ rules from Aidan O'Dwyer's handbook. Provide your process parameters and I'll handle the rest.</p>
-        </div>
+  <div id="topbar">
+    <div class="tb-status">
+      <div class="status-dot"></div>
+      <span>AI Brain Active</span>
     </div>
+    <div class="tb-model">Random Forest + Gemini Hybrid NLP</div>
+  </div>
+  <div id="progress-bar-wrap"><div id="progress-bar" style="width:0%"></div></div>
 
-    <div class="input-zone">
-        <div class="chips-row">
-            <div class="chip" onclick="sendChip('What tuning rules do you have?')">What rules do you have?</div>
-            <div class="chip" onclick="sendChip('Km=2, Tm=10, Tau=2')">▶ Try an example</div>
-            <div class="chip" onclick="sendChip('Explain FOPDT parameters')">What is FOPDT?</div>
-            <div class="chip" onclick="sendChip('help')">Help me get started</div>
-        </div>
-        <div class="input-wrap">
-            <input
-                type="text"
-                id="chat-input"
-                placeholder="Enter Km, Tm, Tau or ask a question..."
-                autocomplete="off"
-                onkeydown="if(event.key==='Enter') sendMessage()"
-            />
-            <button class="send-btn" onclick="sendMessage()" title="Send">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
-            </button>
-        </div>
+  <div id="chat-box">
+    <div class="chat-inner" id="chat-inner">
     </div>
+  </div>
+
+  <div id="input-area">
+    <div class="input-area-inner">
+      <div class="chips-row" id="chips-row">
+        <button class="chip" onclick="sendMsg('Km=2, Tm=10, Tau=2')">⚡ Quick Test (Km=2, Tm=10, Tau=2)</button>
+        <button class="chip" onclick="sendMsg('What is PID?')">❓ What is PID?</button>
+        <button class="chip" onclick="sendMsg('What tuning rules do you have?')">📋 View Rules</button>
+      </div>
+      <div class="input-box">
+        <textarea id="msg-input" rows="1" placeholder="Describe your process or enter parameters…" 
+          oninput="autoResize(this)"
+          onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();handleSend();}"></textarea>
+        <button class="send-btn" id="send-btn" onclick="handleSend()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script>
-    const API_URL = 'https://process-control-project.onrender.com/api/chat';
+const API_URL = 'https://process-control-project.onrender.com/api/chat';
+let isWelcome = true;
 
-    // ── INIT ──────────────────────────────────────
-    window.onload = () => {
-        if (localStorage.getItem('tb_theme') === 'light') document.body.classList.add('light');
-        startNewChat();
-    };
+function toggleTheme() {
+  document.body.classList.toggle('light');
+  const isLight = document.body.classList.contains('light');
+  document.getElementById('theme-icon').textContent = isLight ? '🌙' : '☀️';
+  document.getElementById('theme-label').textContent = isLight ? 'Switch to Dark Mode' : 'Switch to Light Mode';
+  localStorage.setItem('tb_theme', isLight ? 'light' : 'dark');
+}
+if (localStorage.getItem('tb_theme') === 'light') toggleTheme();
 
-    function toggleTheme() {
-        document.body.classList.toggle('light');
-        localStorage.setItem('tb_theme', document.body.classList.contains('light') ? 'light' : 'dark');
-        // Re-render any visible charts with correct theme
-        document.querySelectorAll('.plotly-chart').forEach(el => {
-            const isLight = document.body.classList.contains('light');
-            Plotly.relayout(el, {
-                'font.color': isLight ? '#333' : '#a0aec0',
-                'xaxis.gridcolor': isLight ? '#e2e8f0' : '#1e2a3a',
-                'yaxis.gridcolor': isLight ? '#e2e8f0' : '#1e2a3a',
-            });
-        });
-    }
+function autoResize(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+}
 
-    // ── NEW SESSION ───────────────────────────────
-    function startNewChat() {
-        document.getElementById('chat-box').innerHTML = `
-            <div class="welcome" id="welcome-screen">
-                <div class="welcome-icon">PID</div>
-                <h1>TUNING BOT</h1>
-                <p>AI-powered PID controller optimization using 40+ rules from Aidan O'Dwyer's handbook. Provide your process parameters and I'll handle the rest.</p>
-            </div>`;
-        fetch(API_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message: 'reset' })
-        })
-        .then(r => r.json())
-        .then(d => {
-            // Update status bar with rule count from a rules query (optional, silent)
-            const countEl = document.getElementById('rules-count');
-            if (countEl) countEl.textContent = 'Random Forest — 40+ O\'Dwyer rules';
-        })
-        .catch(() => {});
-    }
+function showWelcome() {
+  isWelcome = true;
+  document.getElementById('chat-inner').innerHTML = `
+    <div id="welcome">
+      <div class="welcome-badge">⚙️ &nbsp; O'DWYER PID TUNING ENGINE &nbsp; v2.0</div>
+      <div class="welcome-title">What process<br>can I tune today?</div>
+      <div class="welcome-sub">Give me your FOPDT parameters or describe your process — I'll find the optimal PID settings using 50+ tuning rules.</div>
+      <div class="welcome-cards">
+        <div class="wcard" onclick="sendMsg('Km=2, Tm=10, Tau=2')">
+          <div class="wcard-icon">🧪</div>
+          <div class="wcard-title">Quick Test</div>
+          <div class="wcard-sub">Km=2, Tm=10, Tau=2</div>
+        </div>
+        <div class="wcard" onclick="sendMsg('I have a water tank that needs to be smooth and safe')">
+          <div class="wcard-icon">💧</div>
+          <div class="wcard-title">Water Tank</div>
+          <div class="wcard-sub">Describe in plain English</div>
+        </div>
+        <div class="wcard" onclick="sendMsg('What tuning rules do you have?')">
+          <div class="wcard-icon">📋</div>
+          <div class="wcard-title">View Rules</div>
+          <div class="wcard-sub">Browse the rule database</div>
+        </div>
+      </div>
+    </div>
+  `;
+}
 
-    // ── SEND HELPERS ──────────────────────────────
-    function sendChip(text) {
-        document.getElementById('chat-input').value = text;
-        sendMessage();
-    }
+function startNew() {
+  fetch(API_URL, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({message: 'reset'})
+  }).catch(() => {});
+  showWelcome();
+  setProgress(0);
+  setChips(["⚡ Quick Test (Km=2, Tm=10, Tau=2)", "❓ What is PID?", "📋 View Rules"]);
+}
 
-    function sendOption(val) {
-        document.getElementById('chat-input').value = val;
-        sendMessage();
-    }
+function sendMsg(text) {
+  document.getElementById('msg-input').value = text;
+  handleSend();
+}
 
-    // ── RENDER BOT MESSAGE ───────────────────────
-    function renderBotMsg(text, opts = [], chart = null) {
-        // Remove welcome screen on first bot message
-        const ws = document.getElementById('welcome-screen');
-        if (ws) ws.remove();
+function setProgress(p) {
+  const wrap = document.getElementById('progress-bar-wrap');
+  const bar = document.getElementById('progress-bar');
+  if (p > 0 && p < 1) {
+    wrap.style.display = 'block';
+    bar.style.width = (p * 100) + '%';
+  } else {
+    wrap.style.display = 'none';
+    bar.style.width = '0%';
+  }
+}
 
-        const optsHtml = opts.length > 0
-            ? `<div class="options-wrap">${opts.map(o => {
-                // Split hint from label if present (label has hint after newline or in parens)
-                const lines = o.label.split('\n');
-                const mainLabel = lines[0];
-                return `<button class="opt-btn" onclick="sendOption('${o.val}')">${mainLabel}</button>`;
-              }).join('')}</div>`
-            : '';
+function setChips(chips) {
+  const row = document.getElementById('chips-row');
+  if (!chips || chips.length === 0) {
+    row.innerHTML = '';
+    return;
+  }
+  row.innerHTML = chips.map(c => `<button class="chip" onclick="sendMsg('${c.replace(/'/g, "\\'")}')">${c}</button>`).join('');
+}
 
-        const row = document.createElement('div');
-        row.className = 'msg bot-row';
-        row.innerHTML = `
-            <div class="bot-avatar">TB</div>
-            <div class="bot-content">
-                <div class="bot-name">Tuning Bot</div>
-                <div class="bot-text">${text}${optsHtml}</div>
-            </div>`;
-        document.getElementById('chat-box').appendChild(row);
+function parseMarkdown(text) {
+  return text
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/_(.*?)_/g, '<em>$1</em>')
+    .replace(/\n/g, '<br>');
+}
 
-        if (chart) renderChart(chart, row);
-        scrollBottom();
-    }
+function appendUser(text) {
+  clearWelcome();
+  const ci = document.getElementById('chat-inner');
+  const row = document.createElement('div');
+  row.className = 'msg-row user-row';
+  row.innerHTML = `<div class="user-bubble">${escHtml(text)}</div>`;
+  ci.appendChild(row);
+  scrollDown();
+}
 
-    // ── RENDER CHART ──────────────────────────────
-    function renderChart(cData, afterEl) {
-        const chartId = 'chart-' + Date.now();
-        const wrap = document.createElement('div');
-        wrap.className = 'msg chart-wrap';
-        wrap.innerHTML = `<div id="${chartId}" class="plotly-chart" style="width:100%; height:340px;"></div>`;
-        document.getElementById('chat-box').appendChild(wrap);
+function appendSkeleton() {
+  const ci = document.getElementById('chat-inner');
+  const id = 'skel_' + Date.now();
+  const row = document.createElement('div');
+  row.className = 'msg-row bot-row';
+  row.id = id;
+  row.innerHTML = `
+    <div class="bot-avatar">TB</div>
+    <div class="bot-content">
+      <div class="bot-name">TUNING BOT</div>
+      <div class="skeleton-wrap">
+        <div class="skel long"></div>
+        <div class="skel med"></div>
+        <div class="skel short"></div>
+      </div>
+    </div>`;
+  ci.appendChild(row);
+  scrollDown();
+  return id;
+}
 
-        try {
-            let parsed = typeof cData === 'string' ? JSON.parse(cData) : cData;
-            const isLight = document.body.classList.contains('light');
-            parsed.layout.font = { color: isLight ? '#334155' : '#a0aec0', family: 'DM Sans, sans-serif', size: 12 };
-            parsed.layout.xaxis.gridcolor = isLight ? '#e2e8f0' : '#1e2a3a';
-            parsed.layout.yaxis.gridcolor = isLight ? '#e2e8f0' : '#1e2a3a';
-            parsed.layout.xaxis.color = isLight ? '#64748b' : '#64748b';
-            parsed.layout.yaxis.color = isLight ? '#64748b' : '#64748b';
-            parsed.layout.plot_bgcolor = isLight ? 'rgba(248,250,252,0.8)' : 'rgba(10,14,20,0.6)';
-            Plotly.newPlot(chartId, parsed.data, parsed.layout, { responsive: true, displayModeBar: false });
-            setTimeout(scrollBottom, 200);
-        } catch(e) {
-            console.error('Chart render error:', e);
-        }
-    }
+function replaceSkeleton(id, data) {
+  const el = document.getElementById(id);
+  if (!el) return;
 
-    // ── MAIN SEND ─────────────────────────────────
-    async function sendMessage() {
-        const input = document.getElementById('chat-input');
-        const text  = input.value.trim();
-        if (!text) return;
-        input.value = '';
+  const { reply, options, chart, chips, progress } = data;
+  
+  if (typeof progress === 'number') setProgress(progress);
+  else setProgress(0);
 
-        // Remove welcome screen
-        const ws = document.getElementById('welcome-screen');
-        if (ws) ws.remove();
+  if (chips) setChips(chips);
 
-        // User bubble
-        const userEl = document.createElement('div');
-        userEl.className = 'msg user-msg';
-        userEl.textContent = text;
-        document.getElementById('chat-box').appendChild(userEl);
+  let optsHtml = '';
+  if (options && options.length > 0) {
+    optsHtml = `<div class="opts-wrap">` +
+      options.map(o => `<button class="opt-btn" onclick="sendMsg('${o.val}')">${o.label}</button>`).join('') +
+      `</div>`;
+  }
 
-        // Typing indicator
-        const typingId = 'typ-' + Date.now();
-        const typingEl = document.createElement('div');
-        typingEl.id = typingId;
-        typingEl.className = 'msg bot-row';
-        typingEl.innerHTML = `
-            <div class="bot-avatar">TB</div>
-            <div class="bot-content">
-                <div class="bot-name">Tuning Bot</div>
-                <div class="loader-row">
-                    <div class="skel"></div>
-                    <div class="skel"></div>
-                    <div class="skel"></div>
-                </div>
-            </div>`;
-        document.getElementById('chat-box').appendChild(typingEl);
-        scrollBottom();
+  let resultHtml = '';
+  const kcMatch = reply.match(/Kc[^`]*`([^`]+)`/);
+  const tiMatch = reply.match(/Ti[^`]*`([^`]+)`/);
+  const ruleMatch = reply.match(/AI Brain Selected:\*\*\s*(.+)/);
+  if (kcMatch && tiMatch) {
+    resultHtml = `
+      <div class="result-card">
+        <div style="font-size:0.75em;color:var(--text-dim);font-family:var(--mono);margin-bottom:4px;">TUNING RESULT</div>
+        ${ruleMatch ? `<div style="font-size:0.9em;font-weight:600;color:var(--accent);margin-bottom:12px;">${ruleMatch[1].trim()}</div>` : ''}
+        <div class="result-grid">
+          <div class="result-item">
+            <div class="result-label">Kc — Proportional Gain</div>
+            <div class="result-val">${kcMatch[1]}</div>
+          </div>
+          <div class="result-item">
+            <div class="result-label">Ti — Integral Time</div>
+            <div class="result-val">${tiMatch[1]} <span class="result-unit">s</span></div>
+          </div>
+        </div>
+      </div>`;
+  }
 
-        try {
-            const res  = await fetch(API_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ message: text })
-            });
-            const data = await res.json();
-            document.getElementById(typingId)?.remove();
-            renderBotMsg(data.reply, data.options || [], data.chart || null);
-        } catch(e) {
-            document.getElementById(typingId)?.remove();
-            renderBotMsg(
-                '⚠️ <strong>Connection failed.</strong> The server may be spinning up (it uses a free host that sleeps). Please wait 30 seconds and try again.',
-                [], null
-            );
-        }
-    }
+  
+  let chartHtml = '';
+  if (chart) {
+    const cid = 'chart_' + Date.now();
+    chartHtml = `
+      <div class="chart-wrap">
+        <div class="chart-header">
+          <div class="chart-dot" style="background:var(--accent)"></div>
+          <span>Closed-Loop Step Response Simulation</span>
+          <div style="margin-left:auto;display:flex;gap:12px;">
+            <span style="display:flex;align-items:center;gap:5px;"><div class="chart-dot" style="background:var(--accent);width:20px;height:2px;border-radius:99px;"></div> PV</span>
+            <span style="display:flex;align-items:center;gap:5px;"><div class="chart-dot" style="background:var(--red);width:20px;height:2px;border-radius:99px;border-top:2px dashed var(--red);"></div> SP</span>
+          </div>
+        </div>
+        <div id="${cid}" style="width:100%;height:300px;"></div>
+      </div>`;
+    setTimeout(() => renderChart(cid, chart), 50);
+  }
 
-    function scrollBottom() {
-        const box = document.getElementById('chat-box');
-        box.scrollTo({ top: box.scrollHeight, behavior: 'smooth' });
-    }
+  el.innerHTML = `
+    <div class="bot-avatar">TB</div>
+    <div class="bot-content">
+      <div class="bot-name">TUNING BOT</div>
+      <div class="bot-text">${parseMarkdown(reply)}</div>
+      ${optsHtml}
+      ${resultHtml}
+      ${chartHtml}
+    </div>`;
+  scrollDown();
+}
+
+function renderChart(cid, chartData) {
+  const el = document.getElementById(cid);
+  if (!el) return;
+  let parsed = typeof chartData === 'string' ? JSON.parse(chartData) : chartData;
+  const isLight = document.body.classList.contains('light');
+  parsed.layout.paper_bgcolor = 'transparent';
+  parsed.layout.plot_bgcolor = isLight ? 'rgba(0,0,0,0.03)' : 'rgba(0,0,0,0.2)';
+  parsed.layout.font = { color: isLight ? '#334155' : '#c9d1d9', family: 'JetBrains Mono, monospace', size: 11 };
+  parsed.layout.xaxis.gridcolor = isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.07)';
+  parsed.layout.yaxis.gridcolor = isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.07)';
+  parsed.layout.xaxis.linecolor = 'transparent';
+  parsed.layout.yaxis.linecolor = 'transparent';
+  Plotly.newPlot(cid, parsed.data, parsed.layout, {responsive: true, displayModeBar: false});
+}
+
+function clearWelcome() {
+  if (isWelcome) {
+    document.getElementById('chat-inner').innerHTML = '';
+    isWelcome = false;
+  }
+}
+function escHtml(t) { return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function scrollDown() { const b = document.getElementById('chat-box'); b.scrollTop = b.scrollHeight; }
+
+async function handleSend() {
+  const input = document.getElementById('msg-input');
+  const text = input.value.trim();
+  if (!text) return;
+
+  input.value = '';
+  input.style.height = 'auto';
+  const btn = document.getElementById('send-btn');
+  btn.disabled = true;
+
+  appendUser(text);
+  const skelId = appendSkeleton();
+
+  try {
+    const res = await fetch(API_URL, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({message: text})
+    });
+    const data = await res.json();
+    replaceSkeleton(skelId, data);
+  } catch(e) {
+    replaceSkeleton(skelId, {
+      reply: '⚠️ Connection error. Is the server running?\n\nCheck: `' + API_URL + '`',
+      options: [], chart: null
+    });
+  } finally {
+    btn.disabled = false;
+    input.focus();
+  }
+}
+
+window.onload = () => {
+  showWelcome();
+};
 </script>
 </body>
 </html>
