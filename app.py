@@ -2,11 +2,14 @@ import os
 import re
 import json
 import pickle
+import math
 import numpy as np
 import traceback
 import google.generativeai as genai
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.svm import LinearSVC
 
 app = Flask(__name__)
 CORS(app)
@@ -23,218 +26,129 @@ try:
         rules_db = json.load(f)
     with open(os.path.join(current_dir, 'ai_brain.pkl'), 'rb') as f:
         rf_model = pickle.load(f)
-    print("SUCCESS: Database and AI Brain loaded.")
+    print(f"SUCCESS: Loaded {len(rules_db)} tuning rules and AI Brain.")
 except Exception as e:
     print(f"STARTUP ERROR: {e}")
     rf_model = None
     rules_db = {}
 
-# ─────────────────────────────────────────────
-# STATE MEMORY
-# ─────────────────────────────────────────────
+nlp_training_data = [
+    ("hi", "greeting"), ("hello", "greeting"), ("hey", "greeting"),
+    ("good morning", "greeting"), ("good evening", "greeting"), ("howdy", "greeting"),
+    ("who are you", "identity"), ("what can you do", "identity"),
+    ("what is tuning bot", "identity"), ("tell me about yourself", "identity"),
+    ("what are you", "identity"), ("how do you work", "identity"),
+    ("what tuning rules do you have", "rules"), ("show me the rules", "rules"),
+    ("list rules", "rules"), ("what rules are available", "rules"),
+    ("show all rules", "rules"), ("how many rules", "rules"),
+    ("what is pid", "pid_explain"), ("explain pid", "pid_explain"),
+    ("what does pid mean", "pid_explain"), ("how does pid work", "pid_explain"),
+    ("what is proportional integral derivative", "pid_explain"),
+    ("what is km", "param_explain"), ("what is gain", "param_explain"),
+    ("what is tm", "param_explain"), ("what is lag time", "param_explain"),
+    ("what is tau", "param_explain"), ("what is dead time", "param_explain"),
+    ("what is fopdt", "param_explain"), ("explain fopdt", "param_explain"),
+    ("what is ziegler nichols", "rule_explain"), ("explain cohen coon", "rule_explain"),
+    ("what is imc", "rule_explain"), ("what is lambda tuning", "rule_explain"),
+    ("what is amigo", "rule_explain"), ("what is skogestad", "rule_explain"),
+    ("what is iae", "metric_explain"), ("what is ise", "metric_explain"),
+    ("what is itae", "metric_explain"), ("explain performance metrics", "metric_explain"),
+    ("help", "help"), ("how do i use this", "help"), ("guide me", "help"),
+    ("what should i do", "help"), ("where do i start", "help"),
+]
+texts, labels = zip(*nlp_training_data)
+intent_vectorizer = TfidfVectorizer(ngram_range=(1, 2))
+X_nlp = intent_vectorizer.fit_transform(texts)
+intent_model = LinearSVC()
+intent_model.fit(X_nlp, labels)
+
+KNOWLEDGE_BASE = {
+    "identity": (
+        "<strong>I'm TUNING BOT</strong> — an AI-powered PID controller optimization engine.<br><br>"
+        "I use a <strong>Random Forest AI model</strong> trained on Aidan O'Dwyer's definitive handbook of 40+ industrial tuning rules. "
+        "Give me your process parameters, answer a few smart questions, and I'll prescribe the mathematically optimal PID settings — "
+        "plus simulate the closed-loop response with a live graph.<br><br>"
+        "No control theory expertise required. I handle the math."
+    ),
+    "pid_explain": (
+        "<strong>PID stands for Proportional–Integral–Derivative.</strong> It's the most widely used control algorithm in industry.<br><br>"
+        "Think of it like a smart thermostat for any industrial process:<br>"
+        "• <strong>Proportional (Kc):</strong> Reacts to the current error — the bigger the gap, the harder it pushes<br>"
+        "• <strong>Integral (Ti):</strong> Corrects accumulated past errors — eliminates persistent offsets<br>"
+        "• <strong>Derivative (Td):</strong> Predicts future error — dampens oscillations<br><br>"
+        "Getting these three numbers right (<em>tuning</em>) is what I do."
+    ),
+    "param_explain": (
+        "FOPDT stands for <strong>First Order Plus Dead Time</strong> — the standard model for most industrial processes.<br><br>"
+        "It needs three numbers from you:<br>"
+        "• <strong>Km (Process Gain):</strong> How much the output changes per unit of input. E.g., if you open a valve 10% and temperature rises 5°C → Km = 0.5<br>"
+        "• <strong>Tm (Time Constant / Lag):</strong> How quickly the process responds — time to reach ~63% of its final value (in seconds or minutes)<br>"
+        "• <strong>Tau (Dead Time / Delay):</strong> The pure delay before any response starts — like the time for fluid to travel through a pipe<br><br>"
+        "These are found via a simple <em>step test</em> on your process."
+    ),
+    "rule_explain": (
+        "I have <strong>40+ tuning rules</strong> from Aidan O'Dwyer's handbook, each designed for different scenarios:<br><br>"
+        "• <strong>Ziegler-Nichols:</strong> The classic — aggressive, fast, high overshoot<br>"
+        "• <strong>Cohen-Coon:</strong> Good for processes with large dead time<br>"
+        "• <strong>Skogestad IMC:</strong> Robust and predictable for safety-critical systems<br>"
+        "• <strong>AMIGO:</strong> Auto-tuning standard, balances performance and robustness<br>"
+        "• <strong>Lambda Tuning:</strong> You control the speed — great for cascade loops<br>"
+        "• <strong>Rovira (IAE/ISE/ITAE):</strong> Mathematically minimizes error integrals<br><br>"
+        "My AI picks the best one for <em>your specific process</em>."
+    ),
+    "metric_explain": (
+        "Performance metrics measure <em>how much error accumulates</em> during a transient. Lower = better.<br><br>"
+        "• <strong>IAE (Integral of Absolute Error):</strong> Weights all errors equally → smooth, moderate response. Best for most processes.<br>"
+        "• <strong>ISE (Integral of Squared Error):</strong> Penalizes large errors heavily → aggressive, fast response, but may overshoot.<br>"
+        "• <strong>ITAE (Integral of Time × Absolute Error):</strong> Penalizes errors that persist over time → best long-term settling, minimal oscillation.<br><br>"
+        "Not sure which to pick? I'll ask you about your <em>process behavior</em> and choose for you."
+    ),
+    "help": (
+        "Getting started is easy — no engineering degree needed!<br><br>"
+        "<strong>Step 1:</strong> Tell me your three process numbers: <em>Km</em> (gain), <em>Tm</em> (lag), and <em>Tau</em> (dead time).<br>"
+        "Example: <code>Km=2, Tm=10, Tau=2</code><br><br>"
+        "<strong>Step 2:</strong> I'll ask you a few plain-English questions about your system's behavior.<br><br>"
+        "<strong>Step 3:</strong> I compute your optimal PID settings and show a live simulation graph.<br><br>"
+        "💡 Tip: Use the suggestion chips below to try an example instantly!"
+    ),
+}
+
 bot_memory = {
     "km": None, "tm": None, "taum": None, "tau_c": None,
-    "mode": None, "overshoot": None, "robust": None, "metric": None,
-    "preferences_set": False,
-    "stage": "greet",          # greet → params → q1 → q2 → q3 → tune
-    "q_index": 0,
-    "answers": {}
+    "mode": None, "metric": None, "robust": None, "overshoot": None,
+    "interview_stage": 0
 }
 
-# ─────────────────────────────────────────────
-# SMART QUESTION FUNNEL
-# Each question has a user-friendly framing and maps answers to feature values
-# ─────────────────────────────────────────────
-QUESTION_FUNNEL = [
-    {
-        "id": "response_style",
-        "text": "⚡ How fast should your system respond to a change?",
-        "subtitle": "Think of it like a car's throttle — instant punch or smooth cruise?",
-        "options": [
-            {"label": "🚀 React instantly — speed matters most", "val": "aggressive",
-             "features": {"mode": 1, "overshoot": 2, "robust": 0, "metric": 2}},
-            {"label": "🎯 Settle quickly but stay controlled", "val": "balanced",
-             "features": {"mode": 1, "overshoot": 1, "robust": 0, "metric": 3}},
-            {"label": "🛡️ Take time, but never overshoot or oscillate", "val": "smooth",
-             "features": {"mode": 0, "overshoot": 0, "robust": 1, "metric": 1}},
-        ]
-    },
-    {
-        "id": "disturbance_type",
-        "text": "🌊 What kind of disruptions does your process face?",
-        "subtitle": "Does something external push your system off-target, or do you mainly change the target itself?",
-        "options": [
-            {"label": "🔧 External disturbances hit constantly (load changes, pressure drops)", "val": "regulatory",
-             "features": {"mode": 0}},
-            {"label": "🎚️ I mostly change the setpoint / target value", "val": "servo",
-             "features": {"mode": 1}},
-            {"label": "🔄 Both happen equally", "val": "both",
-             "features": {"mode": 0}},
-        ]
-    },
-    {
-        "id": "safety_priority",
-        "text": "🏭 How critical is safety and stability for this process?",
-        "subtitle": "Some processes (like chemical reactors) must never oscillate. Others can tolerate some wiggle.",
-        "options": [
-            {"label": "🔴 Critical — oscillation or overshoot is dangerous", "val": "critical",
-             "features": {"robust": 1, "overshoot": 0}},
-            {"label": "🟡 Moderate — some overshoot is acceptable", "val": "moderate",
-             "features": {"robust": 0, "overshoot": 1}},
-            {"label": "🟢 Relaxed — performance matters more than caution", "val": "relaxed",
-             "features": {"robust": 0, "overshoot": 2}},
-        ]
-    }
-]
-
-# ─────────────────────────────────────────────
-# KNOWLEDGE BASE FOR OFFLINE Q&A
-# ─────────────────────────────────────────────
-KNOWLEDGE_BASE = {
-    "what is pid": "A **PID controller** has three parts: **P** (Proportional) reacts to current error, **I** (Integral) eliminates steady-state offset, and **D** (Derivative) predicts future error. Together they keep your process at the desired setpoint.",
-    "what is kc": "**Kc (Controller Gain)** is how aggressively the controller reacts. A high Kc = fast response but risk of oscillation. A low Kc = sluggish but stable.",
-    "what is ti": "**Ti (Integral Time)** controls how fast the controller corrects steady-state error. Smaller Ti = faster correction but can cause instability.",
-    "what is km": "**Km (Process Gain)** is how much the process output changes per unit of controller output. It describes your process's sensitivity.",
-    "what is tm": "**Tm (Time Constant)** is how long your process takes to reach ~63% of its final value after a step change — basically its 'speed of response'.",
-    "what is tau": "**Tau (Dead Time / θ)** is the delay before your process starts responding at all. High dead time makes control harder.",
-    "what is fopdt": "**FOPDT (First Order Plus Dead Time)** is the standard model for most industrial processes. It captures three key behaviors: process gain (Km), lag (Tm), and delay (Tau).",
-    "what is ziegler nichols": "**Ziegler-Nichols** is one of the oldest tuning rules (1942). It's aggressive and great for fast response but can overshoot significantly. Best for non-critical processes.",
-    "what is cohen coon": "**Cohen-Coon** is an improvement over Z-N for processes with large dead time. It's more robust while still being relatively fast.",
-    "what is imc": "**IMC (Internal Model Control)** like Skogestad's method is model-based and highly reliable. It's gentle and robust — ideal for critical processes.",
-    "what is lambda tuning": "**Lambda Tuning** lets you directly set the desired closed-loop speed (Lambda). Slower Lambda = more robust. Faster Lambda = better performance.",
-    "what is amigo": "**AMIGO** (Approximate M-constrained Integral Gain Optimization) is a modern robust method that balances performance and stability margins.",
-    "what is iae": "**IAE (Integral Absolute Error)** minimizes the total absolute error over time. Rules optimizing for IAE tend to be moderately aggressive.",
-    "what is ise": "**ISE (Integral Squared Error)** penalizes large errors more heavily, producing faster but potentially oscillatory responses.",
-    "what is itae": "**ITAE (Integral Time-weighted Absolute Error)** penalizes errors that persist for a long time, producing well-damped, smooth responses.",
-    "what is overshoot": "**Overshoot** is how much your process variable exceeds the setpoint before settling. High overshoot is dangerous for temperature-sensitive or pressure-critical systems.",
-    "what is robustness": "**Robustness** means the controller still works even if your process model isn't perfectly accurate. Robust tuning trades some speed for reliability.",
-    "what is servo": "**Servo control** focuses on following setpoint changes quickly. Used when you frequently change your target value.",
-    "what is regulatory": "**Regulatory control** focuses on rejecting disturbances and keeping the process steady at a fixed setpoint despite external upsets.",
-}
-
-def find_knowledge_answer(msg):
-    msg_lower = msg.lower()
-    # Check for "what is X" patterns
-    for key, answer in KNOWLEDGE_BASE.items():
-        words = key.split()
-        if all(w in msg_lower for w in words):
-            return answer
-    # Fuzzy fallback — check if any topic keyword appears
-    topic_map = {
-        "pid": "what is pid", "controller": "what is pid",
-        "kc": "what is kc", "gain": "what is kc",
-        "ti": "what is ti", "integral time": "what is ti",
-        "km": "what is km", "process gain": "what is km",
-        "tm": "what is tm", "time constant": "what is tm",
-        "tau": "what is tau", "dead time": "what is tau", "delay": "what is tau",
-        "fopdt": "what is fopdt", "first order": "what is fopdt",
-        "ziegler": "what is ziegler nichols", "z-n": "what is ziegler nichols",
-        "cohen": "what is cohen coon",
-        "imc": "what is imc", "skogestad": "what is imc",
-        "lambda": "what is lambda tuning",
-        "amigo": "what is amigo",
-        "iae": "what is iae",
-        "ise": "what is ise",
-        "itae": "what is itae",
-        "overshoot": "what is overshoot",
-        "robust": "what is robustness",
-        "servo": "what is servo",
-        "regulatory": "what is regulatory",
-    }
-    for kw, kb_key in topic_map.items():
-        if kw in msg_lower:
-            return KNOWLEDGE_BASE[kb_key]
-    return None
-
-# ─────────────────────────────────────────────
-# ADVANCED PARAMETER EXTRACTION
-# ─────────────────────────────────────────────
-def local_regex_extract(msg):
-    ext = {"km": None, "tm": None, "taum": None}
-    msg_lower = msg.lower()
-    
-    # Km patterns: "km=2", "gain is 2", "k = 2.5", "process gain of 3"
-    km_patterns = [
-        r'\bkm\s*[=:is\s]+\s*(\d+\.?\d*)',
-        r'\bk\s*[=:]\s*(\d+\.?\d*)\b',
-        r'(?:process\s+gain|gain)\s+(?:is|of|=)?\s*(\d+\.?\d*)',
-    ]
-    for p in km_patterns:
-        m = re.search(p, msg_lower)
-        if m: ext["km"] = float(m.group(1)); break
-
-    # Tm patterns: "tm=10", "lag=10", "time constant of 5"
-    tm_patterns = [
-        r'\btm\s*[=:is\s]+\s*(\d+\.?\d*)',
-        r'(?:time\s+constant|lag)\s+(?:is|of|=)?\s*(\d+\.?\d*)',
-        r'\bt\s*[=:]\s*(\d+\.?\d*)\b(?!\s*au)',
-    ]
-    for p in tm_patterns:
-        m = re.search(p, msg_lower)
-        if m: ext["tm"] = float(m.group(1)); break
-
-    # Tau/dead time patterns: "tau=2", "dead time=3", "delay of 1.5"
-    tau_patterns = [
-        r'\btau[m]?\s*[=:is\s]+\s*(\d+\.?\d*)',
-        r'(?:dead\s*time|delay|theta)\s+(?:is|of|=)?\s*(\d+\.?\d*)',
-    ]
-    for p in tau_patterns:
-        m = re.search(p, msg_lower)
-        if m: ext["taum"] = float(m.group(1)); break
-
-    return ext
-
-# ─────────────────────────────────────────────
-# LOCAL PREFERENCE EXTRACTION (no LLM needed)
-# ─────────────────────────────────────────────
-PREFERENCE_MAP = {
-    # Aggressive patterns
-    "aggressive|fast|quick|rapid|speed|ise|urgent|instant": {"mode": 1, "overshoot": 2, "robust": 0, "metric": 2},
-    # Smooth/safe patterns
-    "smooth|safe|gentle|slow|stable|careful|conservative|iae|no overshoot": {"mode": 1, "overshoot": 0, "robust": 1, "metric": 1},
-    # Balanced patterns
-    "balance|standard|moderate|normal|itae|typical|medium": {"mode": 0, "overshoot": 1, "robust": 0, "metric": 3},
-    # Servo patterns
-    "setpoint|servo|tracking|follow": {"mode": 1},
-    # Regulatory patterns
-    "disturbance|regulatory|reject|load|upset": {"mode": 0},
-}
-
-def local_preference_extract(msg):
-    msg_lower = msg.lower()
-    merged = {}
-    for pattern_group, features in PREFERENCE_MAP.items():
-        for kw in pattern_group.split("|"):
-            if kw in msg_lower:
-                merged.update(features)
-                break
-    return merged
-
-# ─────────────────────────────────────────────
-# SIMULATOR (untouched)
-# ─────────────────────────────────────────────
 def simulate_step(kc, ti, km, tm, taum):
-    t = np.linspace(0, (tm + taum) * 6, 400)
+    t = np.linspace(0, (tm + taum) * 8, 500)
     dt = t[1] - t[0]
     pv, mv_hist = np.zeros_like(t), np.zeros_like(t)
     err_sum = 0
-    d_steps = int(taum / dt)
+    d_steps = max(1, int(taum / dt))
     ti_val = ti if ti > 0 else 0.001
 
     for i in range(1, len(t)):
-        err = 1.0 - pv[i-1]
+        err = 1.0 - pv[i - 1]
         err_sum += err * dt
-        mv = max(0, min(100, kc * (err + (1/ti_val) * err_sum)))
+        mv = max(0, min(100, kc * (err + (1 / ti_val) * err_sum)))
         mv_hist[i] = mv
         d_idx = i - d_steps
         d_mv = mv_hist[d_idx] if d_idx >= 0 else 0
-        dpv = ((km * d_mv) - pv[i-1]) / tm
-        pv[i] = pv[i-1] + dpv * dt
+        dpv = ((km * d_mv) - pv[i - 1]) / tm
+        pv[i] = pv[i - 1] + dpv * dt
 
-    settling_time = None
-    for i in range(len(pv)-1, 0, -1):
+    os_val = 0.0
+    try:
+        os_val = round(max(0, (np.max(pv) - 1.0) * 100), 1)
+        if math.isnan(os_val) or math.isinf(os_val):
+            os_val = 0.0
+    except:
+        pass
+
+    settling_time = t[-1]
+    for i in range(len(pv) - 1, 0, -1):
         if abs(pv[i] - 1.0) > 0.02:
-            settling_time = round(t[i], 2)
+            settling_time = round(t[i], 1)
             break
 
     graph_data = {
@@ -242,320 +156,438 @@ def simulate_step(kc, ti, km, tm, taum):
             {
                 "x": t.tolist(), "y": pv.tolist(),
                 "type": "scatter", "name": "Process Output",
-                "line": {"color": "#00d4ff", "width": 3},
-                "fill": "tozeroy", "fillcolor": "rgba(0,212,255,0.05)"
+                "line": {"color": "#00d4ff", "width": 2.5},
+                "fill": "tozeroy", "fillcolor": "rgba(0,212,255,0.04)"
             },
             {
                 "x": [t[0], t[-1]], "y": [1.0, 1.0],
                 "type": "scatter", "name": "Setpoint",
-                "line": {"color": "#ff6b6b", "dash": "dash", "width": 2}
+                "line": {"color": "#ff4d6d", "dash": "dash", "width": 1.5}
+            },
+            {
+                "x": [t[0], t[-1]], "y": [1.02, 1.02],
+                "type": "scatter", "name": "+2% Band",
+                "line": {"color": "rgba(255,255,255,0.15)", "dash": "dot", "width": 1},
+                "showlegend": False
+            },
+            {
+                "x": [t[0], t[-1]], "y": [0.98, 0.98],
+                "type": "scatter", "name": "-2% Band",
+                "line": {"color": "rgba(255,255,255,0.15)", "dash": "dot", "width": 1},
+                "showlegend": False
             }
         ],
         "layout": {
             "title": {"text": "Closed-Loop Step Response", "font": {"size": 14}},
-            "xaxis": {"title": "Time (s)", "gridcolor": "rgba(255,255,255,0.07)", "zeroline": False},
-            "yaxis": {"title": "Process Variable (normalized)", "gridcolor": "rgba(255,255,255,0.07)", "zeroline": False},
+            "xaxis": {"title": "Time (s)", "gridcolor": "#1e2a3a", "zerolinecolor": "#333"},
+            "yaxis": {"title": "Normalized Process Variable", "gridcolor": "#1e2a3a", "zerolinecolor": "#333"},
             "paper_bgcolor": "transparent",
-            "plot_bgcolor": "rgba(0,0,0,0.2)",
-            "font": {"color": "#c9d1d9", "family": "JetBrains Mono, monospace"},
-            "margin": {"l": 50, "r": 20, "t": 50, "b": 50},
-            "legend": {"bgcolor": "transparent"},
+            "plot_bgcolor": "rgba(10,14,20,0.6)",
+            "font": {"color": "#a0aec0"},
+            "legend": {"bgcolor": "rgba(0,0,0,0)", "bordercolor": "rgba(255,255,255,0.1)", "borderwidth": 1},
+            "margin": {"l": 50, "r": 20, "t": 45, "b": 45},
             "hovermode": "x unified"
         }
     }
-    os_est = round(max(0, (np.max(pv) - 1.0) * 100), 1)
-    return json.dumps(graph_data), os_est, settling_time
+    return json.dumps(graph_data), os_val, settling_time
 
-# ─────────────────────────────────────────────
-# INTENT ROUTER
-# ─────────────────────────────────────────────
-def detect_intent(msg):
-    ml = msg.lower().strip()
-    if ml in ["reset", "start over", "new session", "restart"]:
-        return "reset"
-    if any(k in ml for k in ["rules", "what do you have", "what rules", "list rules", "available rules"]):
-        return "list_rules"
-    if any(k in ml for k in ["what is", "explain", "tell me about", "what does", "how does", "define"]):
-        return "knowledge"
-    if any(k in ml for k in ["help", "how to use", "guide", "tutorial"]):
-        return "help"
-    # Check if message contains process description keywords (for LLM routing)
-    process_keywords = ["tank", "reactor", "furnace", "boiler", "flow", "temperature", "pressure",
-                        "level", "heat", "pump", "valve", "column", "distillation", "pH", "speed",
-                        "motor", "conveyor", "humidity", "concentration"]
-    if any(kw in ml for kw in process_keywords) and not any(k in ml for k in ["km", "tm", "tau", "gain"]):
-        return "process_description"
-    return "general"
+def local_regex_extract(msg):
+    ext = {"km": None, "tm": None, "taum": None}
+    msg_lower = msg.lower()
+    km_m = re.search(r'(km|gain|process\s*gain|k(?!c|p))\s*(is|:|=)?\s*([+-]?\d+\.?\d*)', msg_lower)
+    tm_m = re.search(r'(tm|lag|time\s*constant|t(?!au|d))\s*(is|:|=)?\s*([+-]?\d+\.?\d*)', msg_lower)
+    tau_m = re.search(r'(tau|dead\s*time|delay|θ)\s*(is|:|=)?\s*([+-]?\d+\.?\d*)', msg_lower)
+    if km_m:  ext["km"]   = float(km_m.group(4))
+    if tm_m:  ext["tm"]   = float(tm_m.group(4))
+    if tau_m: ext["taum"] = float(tau_m.group(4))
+    return ext
 
-# ─────────────────────────────────────────────
-# RESET STATE
-# ─────────────────────────────────────────────
-def reset_memory():
-    return {
-        "km": None, "tm": None, "taum": None, "tau_c": None,
-        "mode": None, "overshoot": None, "robust": None, "metric": None,
-        "preferences_set": False, "stage": "params", "q_index": 0, "answers": {}
+INTERVIEW = {
+    1: {
+        "text": (
+            "Great, parameters locked in! Now let me understand your system.<br><br>"
+            "<strong>Question 1 of 3 — What is this control loop doing?</strong><br>"
+            "In most systems, the controller's main job is one of two things:"
+        ),
+        "options": [
+            {
+                "label": "🎯 Following a target — I change the setpoint and need it to track accurately",
+                "val": "servo",
+                "hint": "e.g. robot arm position, temperature profile, flow rate setpoint changes"
+            },
+            {
+                "label": "🛡️ Holding steady — setpoint is fixed; I want to reject disturbances",
+                "val": "regulator",
+                "hint": "e.g. pressure vessel, boiler level, conveyor speed under varying load"
+            }
+        ],
+        "map": {"servo": {"mode": 1}, "regulator": {"mode": 0}}
+    },
+    2: {
+        "text": (
+            "<strong>Question 2 of 3 — How should the response feel?</strong><br>"
+            "Imagine you change the target (or a disturbance hits). Which description fits your process best?"
+        ),
+        "options": [
+            {
+                "label": "⚡ Snap to it fast — I want the fastest possible response, even if it slightly overshoots",
+                "val": "fast",
+                "hint": "Prioritizes speed. Accepts ≤ 20% overshoot. Best for batch reactors, fast flow loops"
+            },
+            {
+                "label": "🌊 Glide in smoothly — no overshoot, no oscillations, steady approach",
+                "val": "smooth",
+                "hint": "Eliminates overshoot entirely. Best for level control, furnaces, biological processes"
+            },
+            {
+                "label": "⚖️ Balanced — reasonably fast but settles cleanly",
+                "val": "balanced",
+                "hint": "The engineering sweet spot. Works well for most general-purpose loops"
+            }
+        ],
+        "map": {
+            "fast":     {"metric": 2, "overshoot": 2, "robust": 0},
+            "smooth":   {"metric": 1, "overshoot": 0, "robust": 1},
+            "balanced": {"metric": 3, "overshoot": 1, "robust": 0}
+        }
+    },
+    3: {
+        "text": (
+            "<strong>Question 3 of 3 — How much do you trust your process model?</strong><br>"
+            "When you measured Km, Tm, and Tau — how confident are you those numbers are accurate?"
+        ),
+        "options": [
+            {
+                "label": "🔬 Very confident — I ran a careful step test and the model is accurate",
+                "val": "confident",
+                "hint": "Allows more aggressive tuning — full performance extraction"
+            },
+            {
+                "label": "📊 Roughly correct — estimated from historical data or a quick test",
+                "val": "estimated",
+                "hint": "Balanced tuning with moderate detuning factor"
+            },
+            {
+                "label": "🤔 Uncertain — rough guess, process varies a lot in real operation",
+                "val": "uncertain",
+                "hint": "Robust tuning — leaves safety margin for model uncertainty"
+            }
+        ],
+        "map": {
+            "confident": {"robust": 0},
+            "estimated": {"robust": 0},
+            "uncertain": {"robust": 1}
+        }
     }
+}
 
-# ─────────────────────────────────────────────
-# MAIN CHAT ENDPOINT
-# ─────────────────────────────────────────────
+INTERVIEW_ANSWER_PATTERNS = {
+    1: {
+        "servo":     ["servo", "setpoint", "track", "follow", "target", "change", "position", "profile"],
+        "regulator": ["regulator", "disturbance", "hold", "steady", "reject", "fixed", "constant", "stable"]
+    },
+    2: {
+        "fast":     ["fast", "quick", "aggressive", "speed", "snap", "ise", "overshoot"],
+        "smooth":   ["smooth", "safe", "slow", "no overshoot", "gentle", "iae", "soft", "glide"],
+        "balanced": ["balance", "balanced", "standard", "normal", "itae", "moderate", "typical"]
+    },
+    3: {
+        "confident": ["confident", "accurate", "careful", "step test", "measured", "certain", "precise"],
+        "estimated": ["estimated", "roughly", "approximate", "historical", "quick", "average"],
+        "uncertain": ["uncertain", "unsure", "rough", "guess", "varies", "not sure", "unknown"]
+    }
+}
+
+def parse_interview_answer(stage, msg_lower):
+    patterns = INTERVIEW_ANSWER_PATTERNS.get(stage, {})
+    for ans, keywords in patterns.items():
+        if any(kw in msg_lower for kw in keywords):
+            return ans
+    return None
+
 @app.route('/api/chat', methods=['POST'])
 def chat():
     global bot_memory
     try:
-        user_msg = request.json.get('message', '').strip()
-        if not user_msg:
-            return jsonify({"reply": "Please type a message!", "options": [], "chart": None})
-        
-        user_msg_lower = user_msg.lower()
-        intent = detect_intent(user_msg)
+        user_msg = request.json.get('message', '')
+        user_msg_lower = user_msg.lower().strip()
 
-        # ── RESET ──────────────────────────────────────
-        if intent == "reset":
-            bot_memory = reset_memory()
-            return jsonify({
-                "reply": "Session reset! Let's start fresh.\n\nPlease give me your **FOPDT process parameters**:\n- **Km** (Process Gain)\n- **Tm** (Time Constant in seconds)\n- **Tau** (Dead Time in seconds)\n\nYou can write something like: `Km=2, Tm=10, Tau=2`",
-                "options": [], "chart": None,
-                "chips": ["Km=2, Tm=10, Tau=2", "What is Km?", "What is FOPDT?"]
-            })
-
-        # ── LIST RULES ─────────────────────────────────
-        if intent == "list_rules":
-            rule_names = list(rules_db.keys()) if rules_db else []
-            categories = {
-                "⚡ Fast Response": ["ziegler_nichols", "cohen_coon", "hazebroek_duyser"],
-                "🎯 Minimum Error (IAE/ISE/ITAE)": ["rovira", "zhuang_atherton", "wang_juang_chan"],
-                "🛡️ Robust & Safe": ["skogestad_imc", "amigo", "chun"],
-                "🔬 Model-Based": ["lambda_tuning", "direct_synthesis"]
+        if user_msg_lower == "reset":
+            bot_memory = {
+                "km": None, "tm": None, "taum": None, "tau_c": None,
+                "mode": None, "metric": None, "robust": None, "overshoot": None,
+                "interview_stage": 0
             }
-            reply = "**My tuning rule database (O'Dwyer's Handbook):**\n\n"
-            for cat, rules in categories.items():
-                reply += f"**{cat}**\n"
-                for r in rules:
-                    if r in rules_db:
-                        reply += f"  • {rules_db[r].get('name', r)}\n"
-            reply += f"\n_Total: {len(rule_names)} rules available. My AI brain picks the best one for your process._"
-            return jsonify({"reply": reply, "options": [], "chart": None,
-                           "chips": ["Explain Ziegler-Nichols", "What is IMC?", "Start tuning"]})
-
-        # ── KNOWLEDGE Q&A ──────────────────────────────
-        if intent == "knowledge":
-            answer = find_knowledge_answer(user_msg)
-            if answer:
-                return jsonify({"reply": answer, "options": [], "chart": None,
-                               "chips": ["Start tuning", "What rules do you have?", "What is FOPDT?"]})
-            # Fall through to LLM for unknown questions
-
-        # ── HELP ───────────────────────────────────────
-        if intent == "help":
             return jsonify({
-                "reply": "**How to use Tuning Bot:**\n\n**Step 1:** Give me your process parameters (Km, Tm, Tau)\n**Step 2:** I'll ask you 3 simple questions about how you want your system to behave\n**Step 3:** My AI brain picks the best rule and calculates your PID gains\n**Step 4:** You get Kc and Ti values + a live simulation graph\n\n💡 You don't need to know any control theory — just answer in plain English!",
-                "options": [], "chart": None,
-                "chips": ["Km=2, Tm=10, Tau=2", "What tuning rules do you have?"]
+                "reply": (
+                    "Session reset. I'm ready for a new process.<br><br>"
+                    "Please provide your FOPDT parameters: <strong>Km</strong> (process gain), "
+                    "<strong>Tm</strong> (time constant), and <strong>Tau</strong> (dead time).<br>"
+                    "Example: <code>Km=2, Tm=10, Tau=2</code>"
+                ),
+                "options": [], "chart": None
             })
 
-        # ── PROCESS DESCRIPTION (LLM extracts params from context) ────
-        if intent == "process_description":
-            ai_prompt = f"""
-You are an expert process control engineer. A user described their process in plain language.
-Extract FOPDT parameters if mentioned, and give an empathetic, helpful reply asking for what's missing.
+        has_digits = any(ch.isdigit() for ch in user_msg_lower)
+        word_count = len(user_msg_lower.split())
 
-User said: "{user_msg}"
-Current memory: {json.dumps({k: bot_memory[k] for k in ['km','tm','taum']})}
-
-Rules:
-- If user mentions "water tank" with no numbers, Km is typically 1-3, Tm 20-60s, Tau 2-10s — hint at typical ranges
-- Never fabricate exact numbers unless the user stated them
-- Be friendly and non-technical
-
-OUTPUT ONLY JSON: {{"km": float_or_null, "tm": float_or_null, "taum": float_or_null, "reply": "helpful string"}}
-"""
+        if word_count < 12 and not has_digits:
             try:
-                res = llm_model.generate_content(ai_prompt)
-                ext = json.loads(res.text.replace('```json','').replace('```','').strip())
-                for k in ["km", "tm", "taum"]:
-                    if ext.get(k) is not None:
-                        bot_memory[k] = ext[k]
-                reply_text = ext.get('reply', "I'd need Km, Tm, and Tau to proceed. Can you share those values?")
-                return jsonify({"reply": reply_text, "options": [], "chart": None})
+                vec = intent_vectorizer.transform([user_msg_lower])
+                local_intent = intent_model.predict(vec)[0]
+                confidence = max(intent_model.decision_function(vec)[0])
             except:
-                pass
+                local_intent, confidence = "none", 0
 
-        # ── EXTRACT PARAMETERS (always try regex first) ────────────────
+            if local_intent == "greeting" and confidence > 0.3:
+                return jsonify({
+                    "reply": (
+                        "Hello! I'm <strong>TUNING BOT</strong> — your AI-powered PID tuning assistant.<br><br>"
+                        "To get started, share your process parameters:<br>"
+                        "<code>Km=&lt;value&gt;, Tm=&lt;value&gt;, Tau=&lt;value&gt;</code><br><br>"
+                        "Not sure what those are? Just type <em>\"explain parameters\"</em> and I'll guide you."
+                    ),
+                    "options": [], "chart": None
+                })
+
+            if local_intent in KNOWLEDGE_BASE and confidence > 0.2:
+                return jsonify({"reply": KNOWLEDGE_BASE[local_intent], "options": [], "chart": None})
+
+            if local_intent == "rules" and confidence > 0.2:
+                return _build_rules_response()
+
+        if any(kw in user_msg_lower for kw in ["what rules", "show rules", "list rules", "how many rules", "rules do you"]):
+            return _build_rules_response()
+
         regex_data = local_regex_extract(user_msg)
         for k in ["km", "tm", "taum"]:
             if regex_data[k] is not None:
                 bot_memory[k] = regex_data[k]
 
-        # ── EXTRACT PREFERENCES (regex first) ──────────────────────────
-        pref = local_preference_extract(user_msg)
-        if pref:
-            bot_memory.update(pref)
-            if all(k in pref for k in ["mode", "overshoot", "robust", "metric"]):
-                bot_memory["preferences_set"] = True
-
-        km, tm, taum = bot_memory['km'], bot_memory['tm'], bot_memory['taum']
-
-        # ── IF WE HAVE PARAMS: CHECK STAGE ────────────────────────────
-        if not all([km, tm, taum]):
-            # Need to collect parameters
-            missing = [k.upper() for k in ['km', 'tm', 'taum'] if not bot_memory[k]]
-            
-            # Try LLM for complex parameter extraction
-            if any(c.isdigit() for c in user_msg):
-                ai_prompt = f"""
-Extract FOPDT parameters from user message. Only extract values explicitly stated.
-User said: "{user_msg}"
-OUTPUT ONLY JSON: {{"km": float_or_null, "tm": float_or_null, "taum": float_or_null, "reply": "string asking for what's still missing"}}
-Missing parameters: {missing}
-"""
-                try:
-                    res = llm_model.generate_content(ai_prompt)
-                    ext = json.loads(res.text.replace('```json','').replace('```','').strip())
-                    for k in ["km", "tm", "taum"]:
-                        if ext.get(k) is not None:
-                            bot_memory[k] = ext[k]
-                    km, tm, taum = bot_memory['km'], bot_memory['tm'], bot_memory['taum']
-                    if not all([km, tm, taum]):
-                        return jsonify({"reply": ext.get('reply', f"Still need: {', '.join(missing)}"), "options": [], "chart": None})
-                except:
-                    pass
-
-            if not all([km, tm, taum]):
-                still_missing = [k.upper() for k in ['km', 'tm', 'taum'] if not bot_memory[k]]
-                hints = {
-                    "KM": "Process Gain — how much does the output change per unit input? (e.g., 2)",
-                    "TM": "Time Constant — how many seconds to reach ~63% of final value? (e.g., 10)",
-                    "TAUM": "Dead Time — how many seconds before the process starts responding? (e.g., 2)"
-                }
-                reply = "I need a few numbers to tune your system. Here's what's still missing:\n\n"
-                for param in still_missing:
-                    reply += f"**{param}** — {hints[param]}\n"
-                reply += "\nExample: `Km=2, Tm=10, Tau=2`"
-                return jsonify({"reply": reply, "options": [], "chart": None,
-                               "chips": ["Km=2, Tm=10, Tau=2", "What is Km?", "What is dead time?"]})
-
-        km, tm, taum = bot_memory['km'], bot_memory['tm'], bot_memory['taum']
-        ratio = taum / tm
-
-        # ── PARAMETER CONFIRMED — START QUESTION FUNNEL ───────────────
-        if all([km, tm, taum]) and not bot_memory['preferences_set']:
-            q_idx = bot_memory.get('q_index', 0)
-
-            # Check if user answered a funnel question via option button
-            for q in QUESTION_FUNNEL:
-                for opt in q["options"]:
-                    if user_msg_lower == opt["val"] or user_msg_lower == opt["label"].lower():
-                        bot_memory["answers"][q["id"]] = opt["val"]
-                        bot_memory.update(opt["features"])
-                        # advance question
-                        current_q_ids = [qq["id"] for qq in QUESTION_FUNNEL]
-                        if q["id"] in current_q_ids:
-                            q_idx = current_q_ids.index(q["id"]) + 1
-                            bot_memory["q_index"] = q_idx
-
-            # Check if all 3 questions answered
-            answered = len(bot_memory["answers"])
-            
-            if answered >= len(QUESTION_FUNNEL):
-                # Merge all feature answers
-                for q in QUESTION_FUNNEL:
-                    if q["id"] in bot_memory["answers"]:
-                        val = bot_memory["answers"][q["id"]]
-                        for opt in q["options"]:
-                            if opt["val"] == val:
-                                bot_memory.update(opt["features"])
-                # Set defaults for any missing features
-                if bot_memory.get("mode") is None: bot_memory["mode"] = 1
-                if bot_memory.get("overshoot") is None: bot_memory["overshoot"] = 1
-                if bot_memory.get("robust") is None: bot_memory["robust"] = 0
-                if bot_memory.get("metric") is None: bot_memory["metric"] = 1
-                bot_memory["preferences_set"] = True
-            else:
-                # Ask next unanswered question
-                unanswered = [q for q in QUESTION_FUNNEL if q["id"] not in bot_memory["answers"]]
-                if unanswered:
-                    next_q = unanswered[0]
-                    q_num = QUESTION_FUNNEL.index(next_q) + 1
-                    opts = [{"label": o["label"], "val": o["val"]} for o in next_q["options"]]
-                    
-                    prefix = ""
-                    if q_num == 1:
-                        prefix = f"Parameters locked ✓ (Km={km}, Tm={tm}s, Tau={taum}s)\n\nDead time ratio: **{round(ratio,2)}** {'⚠️ — high dead time, robustness matters!' if ratio > 0.5 else '✓ — good controllability'}\n\n"
-                    else:
-                        prefix = f"Got it! ({answered}/{len(QUESTION_FUNNEL)} questions done)\n\n"
-                    
-                    return jsonify({
-                        "reply": f"{prefix}**Question {q_num} of {len(QUESTION_FUNNEL)}:** {next_q['text']}\n_{next_q['subtitle']}_",
-                        "options": opts,
-                        "chart": None,
-                        "progress": answered / len(QUESTION_FUNNEL)
-                    })
-
-        # ── PREFERENCES SET — RUN AI BRAIN AND TUNE ───────────────────
-        if all([km, tm, taum]) and bot_memory['preferences_set']:
-            mode = bot_memory.get('mode', 1)
-            os_val = bot_memory.get('overshoot', 0)
-            rob = bot_memory.get('robust', 0)
-            met = bot_memory.get('metric', 1)
-
-            features = np.array([[km, tm, taum, ratio, mode, os_val, rob, met]])
-
-            best_rule = rf_model.predict(features)[0] if rf_model else "ziegler_nichols"
-            r = rules_db.get(best_rule, rules_db.get("ziegler_nichols", {}))
-
-            safe_env = {"km": km, "tm": tm, "taum": taum, "tau_c": max(0.1*tm, taum), "min": min, "max": max}
+        if not all([bot_memory['km'], bot_memory['tm'], bot_memory['taum']]) and has_digits:
             try:
-                if r.get('kc_math') == "SPECIAL_LOOKUP":
-                    kc = (0.85 * tm) / (km * taum)
-                    ti = 2.4 * taum
-                else:
-                    kc = eval(r['kc_math'], {"__builtins__": None}, safe_env)
-                    ti = eval(r['ti_math'], {"__builtins__": None}, safe_env)
-            except Exception as e:
-                kc = (0.9 / km) * (tm / taum)
-                ti = 3.33 * taum
+                prompt = f"""
+                You are an expert process control assistant. Extract FOPDT parameters from the user's message.
+                User said: "{user_msg}"
+                Current memory: km={bot_memory['km']}, tm={bot_memory['tm']}, taum={bot_memory['taum']}
 
-            chart, os_est, settle = simulate_step(kc, ti, km, tm, taum)
-            
-            rule_name = r.get('name', best_rule)
-            
-            # Generate contextual interpretation
-            os_comment = "✅ No significant overshoot" if os_est < 2 else f"⚠️ Overshoot: {os_est}%"
-            settle_comment = f"📉 Settling time: ~{settle}s" if settle else ""
-            
-            final_reply = (
-                f"🧠 **AI Brain Selected:** {rule_name}\n\n"
-                f"**Your PID Parameters:**\n"
-                f"• **Kc (Proportional Gain):** `{round(kc, 4)}`\n"
-                f"• **Ti (Integral Time):** `{round(ti, 4)} s`\n\n"
-                f"**Simulation Results:**\n"
-                f"• {os_comment}\n"
-                f"• {settle_comment}\n\n"
-                f"_Rule picked based on your process ratio τ/T = {round(ratio,2)} and performance preferences._"
-            )
-            
-            # Reset for next session
-            bot_memory = reset_memory()
-            
+                OUTPUT JSON ONLY:
+                {{"km": float_or_null, "tm": float_or_null, "taum": float_or_null}}
+                """
+                res = llm_model.generate_content(prompt)
+                ext = json.loads(res.text.replace('```json','').replace('```','').strip())
+                for k in ["km", "tm", "taum"]:
+                    if ext.get(k) is not None:
+                        bot_memory[k] = ext[k]
+            except:
+                pass
+
+        km, tm, taum = bot_memory['km'], bot_memory['tm'], bot_memory['taum']
+        missing = []
+        if not km:   missing.append("<strong>Km</strong> (process gain)")
+        if not tm:   missing.append("<strong>Tm</strong> (time constant / lag)")
+        if not taum: missing.append("<strong>Tau</strong> (dead time / delay)")
+
+        if missing:
+            if len(missing) == 3:
+                return jsonify({
+                    "reply": (
+                        "To tune your PID controller, I need three numbers from your process model.<br><br>"
+                        "Please provide:<br>"
+                        f"{'<br>'.join(f'• {m}' for m in missing)}<br><br>"
+                        "Format: <code>Km=2, Tm=10, Tau=2</code><br>"
+                        "Type <em>\"explain parameters\"</em> if you need help finding these values."
+                    ),
+                    "options": [], "chart": None
+                })
+            else:
+                return jsonify({
+                    "reply": (
+                        f"Almost there! I still need: {', '.join(missing)}<br><br>"
+                        "Provide the remaining values to continue."
+                    ),
+                    "options": [], "chart": None
+                })
+
+        stage = bot_memory['interview_stage']
+
+        if stage > 0:
+            interview_q = INTERVIEW[stage]
+            answer = None
+
+            for opt in interview_q["options"]:
+                if user_msg_lower == opt["val"]:
+                    answer = opt["val"]
+                    break
+
+            if not answer:
+                answer = parse_interview_answer(stage, user_msg_lower)
+
+            if answer:
+                updates = interview_q["map"][answer]
+                bot_memory.update(updates)
+                bot_memory['interview_stage'] += 1
+                stage = bot_memory['interview_stage']
+
+                if stage <= 3:
+                    next_q = INTERVIEW[stage]
+                    return jsonify({
+                        "reply": next_q["text"],
+                        "options": [{"label": o["label"], "val": o["val"]} for o in next_q["options"]],
+                        "chart": None
+                    })
+                else:
+                    return _run_tuning_engine()
+            else:
+                return jsonify({
+                    "reply": f"I didn't quite catch that. {interview_q['text']}",
+                    "options": [{"label": o["label"], "val": o["val"]} for o in interview_q["options"]],
+                    "chart": None
+                })
+
+        if stage == 0:
+            bot_memory['interview_stage'] = 1
+            q = INTERVIEW[1]
+            ratio = taum / tm
+            ratio_insight = ""
+            if ratio < 0.2:
+                ratio_insight = f" Your dead-time ratio (τ/T = {round(ratio,2)}) is <strong>low</strong> — this process is very controllable."
+            elif ratio < 0.5:
+                ratio_insight = f" Your dead-time ratio (τ/T = {round(ratio,2)}) is <strong>moderate</strong> — standard tuning applies."
+            else:
+                ratio_insight = f" Your dead-time ratio (τ/T = {round(ratio,2)}) is <strong>high</strong> — I'll apply dead-time compensating rules."
+
             return jsonify({
-                "reply": final_reply,
-                "chart": chart,
-                "options": [],
-                "chips": ["Tune another process", "Explain this rule", "What is overshoot?"]
+                "reply": (
+                    f"Parameters confirmed: <strong>Km={km}, Tm={tm}s, Tau={taum}s</strong>.{ratio_insight}<br><br>"
+                    f"{q['text']}"
+                ),
+                "options": [{"label": o["label"], "val": o["val"]} for o in q["options"]],
+                "chart": None
             })
 
         return jsonify({
-            "reply": "Something went wrong in my reasoning. Let's start over!",
-            "options": [],
-            "chart": None,
-            "chips": ["Start over"]
+            "reply": "Something went wrong in the state machine. Please reset and try again.",
+            "options": [], "chart": None
         })
 
     except Exception as e:
-        traceback.print_exc()
-        return jsonify({"reply": f"An internal error occurred. Please reset and try again.", "options": [], "chart": None})
+        print(traceback.format_exc())
+        return jsonify({"reply": "System error. Please reset and try again.", "options": []})
+
+def _build_rules_response():
+    categories = {
+        "🎯 Servo / Setpoint Tracking": [],
+        "🛡️ Regulatory / Disturbance Rejection": [],
+        "⚖️ General Purpose / Hybrid": []
+    }
+    for k, v in rules_db.items():
+        mode_val = v.get("mode", -1)
+        if mode_val == 1:
+            categories["🎯 Servo / Setpoint Tracking"].append(v.get("name", k.replace("_", " ").title()))
+        elif mode_val == 0:
+            categories["🛡️ Regulatory / Disturbance Rejection"].append(v.get("name", k.replace("_", " ").title()))
+        else:
+            categories["⚖️ General Purpose / Hybrid"].append(v.get("name", k.replace("_", " ").title()))
+
+    reply = f"<strong>My tuning database contains {len(rules_db)} rules</strong> from Aidan O'Dwyer's handbook:<br><br>"
+    num = 1
+    for cat, rule_list in categories.items():
+        if rule_list:
+            reply += f"<strong>{cat}</strong><br>"
+            for r in rule_list:
+                reply += f"{num}. {r}<br>"
+                num += 1
+            reply += "<br>"
+
+    reply += "<em>My Random Forest AI selects the optimal rule for your specific process and objectives.</em>"
+    return jsonify({"reply": reply, "options": [], "chart": None})
+
+def _run_tuning_engine():
+    global bot_memory
+    km   = bot_memory['km']
+    tm   = bot_memory['tm']
+    taum = bot_memory['taum']
+    mode = bot_memory.get('mode', 1)
+    os_v = bot_memory.get('overshoot', 0)
+    rob  = bot_memory.get('robust', 0)
+    met  = bot_memory.get('metric', 1)
+
+    ratio    = taum / tm
+    features = np.array([[km, tm, taum, ratio, mode, os_v, rob, met]])
+
+    best_rule = rf_model.predict(features)[0] if rf_model else "ziegler_nichols"
+    r = rules_db.get(best_rule, rules_db.get("ziegler_nichols", {}))
+
+    tau_c_val = max(0.1, taum)
+    safe_env = {
+        "km": km, "tm": tm, "taum": taum,
+        "tau_c": tau_c_val,
+        "min": min, "max": max,
+        "exp": np.exp, "log": np.log, "sqrt": np.sqrt,
+        "np": np, "math": math
+    }
+
+    try:
+        if r.get('kc_math') == "SPECIAL_LOOKUP":
+            kc = (0.85 * tm) / (km * taum)
+            ti = 2.4 * taum
+        else:
+            kc = eval(r['kc_math'], {"__builtins__": None}, safe_env)
+            ti = eval(r['ti_math'], {"__builtins__": None}, safe_env)
+            if not ti or ti <= 0:
+                ti = 0.001
+    except Exception as e:
+        print(f"Math eval error: {e}")
+        kc = (1.2 * tm) / (km * taum)
+        ti = 2.0 * taum
+        r  = {"name": f"Ziegler-Nichols (Fallback)"}
+
+    chart, os_est, settling = simulate_step(kc, ti, km, tm, taum)
+
+    mode_str   = "Servo (Setpoint Tracking)" if mode == 1 else "Regulatory (Disturbance Rejection)"
+    metric_str = {"1": "IAE — smooth, no overshoot", "2": "ISE — fast, aggressive", "3": "ITAE — balanced, minimal long-term error"}.get(str(met), "IAE")
+    robust_str = "Robust (model-uncertainty tolerant)" if rob == 1 else "Performance-optimized"
+
+    rule_name = r.get('name', best_rule)
+
+    rule_insights = {
+        "ziegler_nichols": "a classic rule ideal for quick initial tuning, though it tends to be aggressive.",
+        "cohen_coon": "specifically designed for processes with significant dead time — very appropriate for your τ/T ratio.",
+        "skogestad": "a robust IMC-based rule that provides predictable, safe closed-loop behavior.",
+        "amigo": "the AMIGO rule, derived from modern robust control theory and validated on hundreds of industrial loops.",
+        "lambda": "Lambda (Direct Synthesis) tuning, where you control the closed-loop speed via τ_c.",
+        "rovira_iae": "Rovira's IAE-optimal rule, mathematically minimizing the integral of absolute error.",
+        "rovira_ise": "Rovira's ISE-optimal rule, prioritizing elimination of large initial errors.",
+        "rovira_itae": "Rovira's ITAE-optimal rule, minimizing long-term integrated error for clean settling.",
+    }
+    insight = next((v for k, v in rule_insights.items() if k in best_rule.lower()), "a highly specialized rule from O'Dwyer's handbook.")
+
+    final_reply = (
+        f"<strong>✅ Optimization Complete</strong><br><br>"
+        f"<strong>Process Analysis:</strong><br>"
+        f"• Mode: {mode_str}<br>"
+        f"• Performance objective: {metric_str}<br>"
+        f"• Tuning philosophy: {robust_str}<br>"
+        f"• Dead-time ratio (τ/T): {round(ratio, 3)}<br><br>"
+        f"<strong>AI Selection:</strong> My Random Forest evaluated all {len(rules_db)} candidate rules and selected "
+        f"<strong>{rule_name}</strong> — {insight}<br><br>"
+        f"<strong>🎛️ PID Parameters:</strong><br>"
+        f"• Proportional Gain <strong>Kc = {round(kc, 4)}</strong><br>"
+        f"• Integral Time <strong>Ti = {round(ti, 4)} s</strong><br><br>"
+        f"<strong>📊 Predicted Closed-Loop Performance:</strong><br>"
+        f"• Overshoot: <strong>{os_est}%</strong><br>"
+        f"• Estimated Settling Time: <strong>{settling} s</strong><br><br>"
+        f"Step response simulation below ↓"
+    )
+
+    bot_memory = {
+        "km": None, "tm": None, "taum": None, "tau_c": None,
+        "mode": None, "metric": None, "robust": None, "overshoot": None,
+        "interview_stage": 0
+    }
+
+    return jsonify({"reply": final_reply, "chart": chart, "options": []})
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
