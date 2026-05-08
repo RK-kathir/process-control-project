@@ -197,11 +197,11 @@ def local_regex_extract(msg):
     km_m = re.search(r'(km|gain|process\s*gain|k(?!c|p))\s*(is|:|=)?\s*([+-]?\d+\.?\d*)', msg_lower)
     tm_m = re.search(r'(tm|lag|time\s*constant|t(?!au|d))\s*(is|:|=)?\s*([+-]?\d+\.?\d*)', msg_lower)
     tau_m = re.search(r'(tau|dead\s*time|delay|θ)\s*(is|:|=)?\s*([+-]?\d+\.?\d*)', msg_lower)
-    if km_m:  ext["km"]   = float(km_m.group(4))
-    if tm_m:  ext["tm"]   = float(tm_m.group(4))
-    if tau_m: ext["taum"] = float(tau_m.group(4))
+    
+    if km_m:  ext["km"]   = float(km_m.group(3))
+    if tm_m:  ext["tm"]   = float(tm_m.group(3))
+    if tau_m: ext["taum"] = float(tau_m.group(3))
     return ext
-
 INTERVIEW = {
     1: {
         "text": (
