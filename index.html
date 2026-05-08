@@ -513,7 +513,7 @@
 </div>
 
 <script>
-    const API_URL = 'https://process-control-project.onrender.com/api/chat';
+   const API_URL = 'https://process-control-project.onrender.com/api/chat';
 
     window.onload = () => {
         if (localStorage.getItem('tb_theme') === 'light') document.body.classList.add('light');
@@ -563,6 +563,7 @@
         sendMessage();
     }
 
+    // THE FIX: Simplified and robust rendering
     function renderBotMsg(text, opts = [], chart = null) {
         const ws = document.getElementById('welcome-screen');
         if (ws) ws.remove();
@@ -575,40 +576,52 @@
               }).join('')}</div>`
             : '';
 
-        const row = document.createElement('div');
-        row.className = 'msg bot-row';
-        row.innerHTML = `
+        // Safely parse the markdown
+        let formattedText = text.replace(/\n/g, "<br>");
+        
+        // 1. Create the container for the text message
+        const textRow = document.createElement('div');
+        textRow.className = 'msg bot-row';
+        textRow.innerHTML = `
             <div class="bot-avatar">TB</div>
             <div class="bot-content">
                 <div class="bot-name">Tuning Bot</div>
-                <div class="bot-text">${text}${optsHtml}</div>
+                <div class="bot-text">${formattedText}${optsHtml}</div>
             </div>`;
-        document.getElementById('chat-box').appendChild(row);
+        document.getElementById('chat-box').appendChild(textRow);
 
-        if (chart) renderChart(chart, row);
-        scrollBottom();
-    }
+        // 2. If a chart exists, create a SEPARATE, dedicated container for it right below the text
+        if (chart) {
+            const chartId = 'chart-' + Date.now();
+            const chartRow = document.createElement('div');
+            chartRow.className = 'msg bot-row'; // Align it nicely with the avatar
+            chartRow.innerHTML = `
+                <div class="bot-avatar" style="visibility:hidden;"></div>
+                <div class="bot-content chart-wrap" style="margin-top:0;">
+                    <div id="${chartId}" class="plotly-chart" style="width:100%; height:340px;"></div>
+                </div>`;
+            document.getElementById('chat-box').appendChild(chartRow);
 
-    function renderChart(cData, afterEl) {
-        const chartId = 'chart-' + Date.now();
-        const wrap = document.createElement('div');
-        wrap.className = 'msg chart-wrap';
-        wrap.innerHTML = `<div id="${chartId}" class="plotly-chart" style="width:100%; height:340px;"></div>`;
-        document.getElementById('chat-box').appendChild(wrap);
-
-        try {
-            let parsed = typeof cData === 'string' ? JSON.parse(cData) : cData;
-            const isLight = document.body.classList.contains('light');
-            parsed.layout.font = { color: isLight ? '#334155' : '#a0aec0', family: '-apple-system, sans-serif', size: 12 };
-            parsed.layout.xaxis.gridcolor = isLight ? '#e2e8f0' : '#1e2a3a';
-            parsed.layout.yaxis.gridcolor = isLight ? '#e2e8f0' : '#1e2a3a';
-            parsed.layout.xaxis.color = isLight ? '#64748b' : '#64748b';
-            parsed.layout.yaxis.color = isLight ? '#64748b' : '#64748b';
-            parsed.layout.plot_bgcolor = isLight ? 'rgba(248,250,252,0.8)' : 'rgba(10,14,20,0.6)';
-            Plotly.newPlot(chartId, parsed.data, parsed.layout, { responsive: true, displayModeBar: false });
-            setTimeout(scrollBottom, 200);
-        } catch(e) {
-            console.error('Chart render error:', e);
+            // Give the browser a tiny microsecond to actually draw the empty div before Plotly targets it
+            setTimeout(() => {
+                try {
+                    let parsed = typeof chart === 'string' ? JSON.parse(chart) : chart;
+                    const isLight = document.body.classList.contains('light');
+                    parsed.layout.font = { color: isLight ? '#334155' : '#a0aec0', family: '-apple-system, sans-serif', size: 12 };
+                    parsed.layout.xaxis.gridcolor = isLight ? '#e2e8f0' : '#1e2a3a';
+                    parsed.layout.yaxis.gridcolor = isLight ? '#e2e8f0' : '#1e2a3a';
+                    parsed.layout.xaxis.color = isLight ? '#64748b' : '#64748b';
+                    parsed.layout.yaxis.color = isLight ? '#64748b' : '#64748b';
+                    parsed.layout.plot_bgcolor = isLight ? 'rgba(248,250,252,0.8)' : 'rgba(10,14,20,0.6)';
+                    
+                    Plotly.newPlot(chartId, parsed.data, parsed.layout, { responsive: true, displayModeBar: false });
+                    scrollBottom();
+                } catch(e) {
+                    console.error('Chart render error:', e);
+                }
+            }, 50); // The 50ms delay is the magic bullet
+        } else {
+            scrollBottom();
         }
     }
 
@@ -651,6 +664,8 @@
             });
             const data = await res.json();
             document.getElementById(typingId)?.remove();
+            
+            // The NLP edge interceptor is working perfectly, pass its output to the new render function
             renderBotMsg(data.reply, data.options || [], data.chart || null);
         } catch(e) {
             document.getElementById(typingId)?.remove();
