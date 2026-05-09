@@ -471,10 +471,10 @@
 
     <div class="side-divider" style="margin-top:8px"></div>
     <div class="side-section-title">Quick Start</div>
-    <button class="quick-chip" onclick="sendChip('Km=2, Tm=10, Tau=2')">📊 Try example: Km=2 Tm=10 Tau=2</button>
+    <button class="quick-chip" onclick="sendChip('Km=2, Tm=10, Tau=2')"> Try example: Km=2 Tm=10 Tau=2</button>
     <button class="quick-chip" onclick="sendChip('What tuning rules do you have?')">📋 List all tuning rules</button>
     <button class="quick-chip" onclick="sendChip('What is PID control?')">🎓 Explain PID control</button>
-    <button class="quick-chip" onclick="sendChip('Explain FOPDT parameters')">🔬 Explain parameters</button>
+    <button class="quick-chip" onclick="sendChip('Explain FOPDT parameters')"> Explain parameters</button>
     <button class="quick-chip" onclick="sendChip('What is IAE and ISE?')">📐 Performance metrics</button>
 
     <div class="side-spacer"></div>
@@ -486,7 +486,7 @@
         <div class="welcome" id="welcome-screen">
             <div class="welcome-icon">PID</div>
             <h1>TUNING BOT</h1>
-            <p>AI-powered PID controller optimization using 40+ rules from Aidan O'Dwyer's handbook. Provide your process parameters and I'll handle the rest.</p>
+            <p>AI-Pwered chatbot.</p>
         </div>
     </div>
 
@@ -494,7 +494,7 @@
         <div class="chips-row">
             <div class="chip" onclick="sendChip('What tuning rules do you have?')">What rules do you have?</div>
             <div class="chip" onclick="sendChip('Km=2, Tm=10, Tau=2')">▶ Try an example</div>
-            <div class="chip" onclick="sendChip('Explain FOPDT parameters')">What is FOPDT?</div>
+            <div class="chip" onclick="sendChip('Explain FOPDT parameters')">What is FOPDT(first order + dead time)?</div>
             <div class="chip" onclick="sendChip('help')">Help me get started</div>
         </div>
         <div class="input-wrap">
@@ -538,7 +538,7 @@
             <div class="welcome" id="welcome-screen">
                 <div class="welcome-icon">PID</div>
                 <h1>TUNING BOT</h1>
-                <p>AI-powered PID controller optimization using 40+ rules from Aidan O'Dwyer's handbook. Provide your process parameters and I'll handle the rest.</p>
+                <p>AI-powered chatbot. Provide your process parameters and I'll handle the rest.</p>
             </div>`;
         fetch(API_URL, {
             method: 'POST',
@@ -548,7 +548,7 @@
         .then(r => r.json())
         .then(d => {
             const countEl = document.getElementById('rules-count');
-            if (countEl) countEl.textContent = 'Random Forest — 40+ O\'Dwyer rules';
+            if (countEl) countEl.textContent = 'Random Forest — fopdt O\'Dwyer rules';
         })
         .catch(() => {});
     }
@@ -670,7 +670,7 @@
         } catch(e) {
             document.getElementById(typingId)?.remove();
             renderBotMsg(
-                '⚠️ <strong>Connection failed.</strong> The server may be spinning up. Please wait 30 seconds and try again.',
+                '⚠️ <strong>Connection failed.</strong> (SORRY FOR THE INTERUPTION )The server may be spinning up. Please wait 30 seconds and try again.',
                 [], null
             );
         }
