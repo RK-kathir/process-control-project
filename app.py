@@ -64,59 +64,60 @@ intent_model.fit(X_nlp, labels)
 
 KNOWLEDGE_BASE = {
     "identity": (
-        "<strong>I'm TUNING BOT</strong> — an AI-powered PID controller optimization engine.<br><br>"
-        "I use a <strong>Random Forest AI model</strong> trained n odeyars . "
-        "Give me your process parameters, answer a few smart questions, and I'll prescribe the mathematically optimal PID settings — "
-        "plus simulate the closed-loop response with a live graph(using the plotify).<br><br>"
-        "No requirement in the process controlprior knowledge. I handle the math."
+        "<strong>I am TUNING BOT</strong> — an AI-powered PID controller optimization engine.<br><br>"
+        "I use a <strong>Random Forest AI model</strong> trained on O'Dwyer's handbook. "
+        "Give me your process parameters, answer a few structured questions, and I will prescribe the mathematically optimal PID settings — "
+        "plus simulate the closed-loop response with a live graph.<br><br>"
+        "No prior knowledge of process control required. I handle the mathematics."
     ),
     "pid_explain": (
-        "<strong>PID stands for Proportional–Integral–Derivative.</strong> It's the most widely used control algorithm in industry.<br><br>"
-        "Think of it like a smart thermostat for any industrial process:<br>"
-        "• <strong>Proportional (Kc):</strong> Reacts to the current error — the bigger the gap, the harder it pushes<br>"
-        "• <strong>Integral (Ti):</strong> Corrects accumulated past errors — eliminates persistent offsets<br>"
-        "• <strong>Derivative (Td):</strong> Predicts future error — dampens oscillations<br><br>"
-        "Getting these three numbers right (<em>tuning</em>) is what I do."
+        "<strong>PID stands for Proportional-Integral-Derivative.</strong> It is the most widely used control algorithm in industry.<br><br>"
+        "Think of it as a smart regulator for any industrial process:<br>"
+        "- <strong>Proportional (Kc):</strong> Reacts to the current error — the larger the gap, the harder it corrects<br>"
+        "- <strong>Integral (Ti):</strong> Corrects accumulated past errors — eliminates persistent offsets<br>"
+        "- <strong>Derivative (Td):</strong> Predicts future error — dampens oscillations<br><br>"
+        "Getting these three numbers right is what I do."
     ),
     "param_explain": (
         "FOPDT stands for <strong>First Order Plus Dead Time</strong> — the standard model for most industrial processes.<br><br>"
-        "It needs three numbers from you:<br>"
-        "• <strong>Km (Process Gain):</strong> How much the output changes per unit of input. E.g., if you open a valve 10% and temperature rises 5°C → Km = 0.5<br>"
-        "• <strong>Tm (Time Constant / Lag):</strong> How quickly the process responds — time to reach ~63% of its final value (in seconds or minutes)<br>"
-        "• <strong>Tau (Dead Time / Delay):</strong> The pure delay before any response starts — like the time for fluid to travel through a pipe<br><br>"
-        "These are found via a simple <em>step test</em> on your process."
+        "It requires three numbers from your process:<br>"
+        "- <strong>Km (Process Gain):</strong> How much the output changes per unit of input. If you open a valve 10% and temperature rises 5 degrees, then Km = 0.5<br>"
+        "- <strong>Tm (Time Constant):</strong> How quickly the process responds — time to reach approximately 63% of its final value<br>"
+        "- <strong>Tau (Dead Time):</strong> The pure delay before any response begins — like fluid travel time through a pipe<br><br>"
+        "These values are obtained via a step test on your process."
     ),
     "rule_explain": (
-        "I have <strong>40+ tuning rules</strong> from O'Dwyer's handbook, each designed for different scenarios:<br><br>"
-        "• <strong>Ziegler-Nichols:</strong> The classic — aggressive, fast, high overshoot<br>"
-        "• <strong>Cohen-Coon:</strong> Good for processes with large dead time<br>"
-        "• <strong>Skogestad IMC:</strong> Robust and predictable for safety-critical systems<br>"
-        "• <strong>AMIGO:</strong> Auto-tuning standard, balances performance and robustness<br>"
-        "• <strong>Lambda Tuning:</strong> You control the speed — great for cascade loops<br>"
-        "• <strong>Rovira (IAE/ISE/ITAE):</strong> Mathematically minimizes error integrals<br><br>"
-        "My AI picks the best one for <em>your specific process</em>."
+        "I have <strong>50 plus tuning rules</strong> from O'Dwyer's handbook, each designed for different scenarios:<br><br>"
+        "- <strong>Ziegler-Nichols:</strong> The classic — aggressive, fast, high overshoot<br>"
+        "- <strong>Cohen-Coon:</strong> Designed for processes with large dead time<br>"
+        "- <strong>Skogestad IMC:</strong> Robust and predictable for safety-critical systems<br>"
+        "- <strong>Lambda Tuning:</strong> User-controlled speed via closed-loop time constant<br>"
+        "- <strong>Rovira (IAE/ISE/ITAE):</strong> Mathematically minimizes error integrals<br>"
+        "- <strong>Miluse et al.:</strong> Exact overshoot specification from 0% to 50%<br><br>"
+        "My AI selects the optimal rule for your specific process and objectives."
     ),
     "metric_explain": (
-        "Performance metrics measure <em>how much error accumulates</em> during a transient. Lower = better.<br><br>"
-        "• <strong>IAE (Integral of Absolute Error):</strong> Weights all errors equally → smooth, moderate response. Best for most processes.<br>"
-        "• <strong>ISE (Integral of Squared Error):</strong> Penalizes large errors heavily → aggressive, fast response, but may overshoot.<br>"
-        "• <strong>ITAE (Integral of Time × Absolute Error):</strong> Penalizes errors that persist over time → best long-term settling, minimal oscillation.<br><br>"
-        "Not sure which to pick? I'll ask you about your <em>process behavior</em> and choose for you."
+        "Performance metrics measure how much error accumulates during a transient. Lower values indicate better performance.<br><br>"
+        "- <strong>IAE (Integral of Absolute Error):</strong> Weights all errors equally — smooth, moderate response. Recommended for most processes.<br>"
+        "- <strong>ISE (Integral of Squared Error):</strong> Penalizes large errors heavily — aggressive, fast response with possible overshoot.<br>"
+        "- <strong>ITAE (Integral of Time x Absolute Error):</strong> Penalizes errors that persist over time — best long-term settling, minimal oscillation.<br><br>"
+        "Not certain which to select? I will ask about your process behavior and choose for you."
     ),
     "help": (
-        "Getting started is easy — no engineering degree needed!<br><br>"
-        "<strong>Step 1:</strong> Tell me your three process numbers: <em>Km</em> (gain), <em>Tm</em> (lag), and <em>Tau</em> (dead time).<br>"
+        "Getting started requires no engineering background.<br><br>"
+        "<strong>Step 1:</strong> Provide your three process numbers: Km (gain), Tm (lag), and Tau (dead time).<br>"
         "Example: <code>Km=2, Tm=10, Tau=2</code><br><br>"
-        "<strong>Step 2:</strong> I'll ask you a few plain-English questions about your system's behavior.<br><br>"
-        "<strong>Step 3:</strong> I compute your optimal PID settings and show a live simulation graph.<br><br>"
-        "💡 Tip: Use the suggestion chips below to try an example instantly!"
+        "<strong>Step 2:</strong> Answer a few plain-language questions about your system's behavior.<br><br>"
+        "<strong>Step 3:</strong> I compute your optimal PID settings and display a live simulation graph.<br><br>"
+        "Use the suggestion chips below to try an example instantly."
     ),
 }
 
 bot_memory = {
     "km": None, "tm": None, "taum": None, "tau_c": None,
     "mode": None, "metric": None, "robust": None, "overshoot": None,
-    "interview_stage": 0
+    "interview_stage": 0,
+    "allows_overshoot": False
 }
 
 def simulate_step(kc, ti, km, tm, taum):
@@ -194,29 +195,29 @@ def simulate_step(kc, ti, km, tm, taum):
 def local_regex_extract(msg):
     ext = {"km": None, "tm": None, "taum": None}
     msg_lower = msg.lower()
-    km_m = re.search(r'(km|gain|process\s*gain|k(?!c|p))\s*(is|:|=)?\s*([+-]?\d+\.?\d*)', msg_lower)
-    tm_m = re.search(r'(tm|lag|time\s*constant|t(?!au|d))\s*(is|:|=)?\s*([+-]?\d+\.?\d*)', msg_lower)
-    tau_m = re.search(r'(tau|dead\s*time|delay|θ)\s*(is|:|=)?\s*([+-]?\d+\.?\d*)', msg_lower)
-    
+    km_m  = re.search(r'(km|gain|process\s*gain|k(?!c|p))\s*(is|:|=)?\s*([+-]?\d+\.?\d*)', msg_lower)
+    tm_m  = re.search(r'(tm|lag|time\s*constant|t(?!au|d))\s*(is|:|=)?\s*([+-]?\d+\.?\d*)', msg_lower)
+    tau_m = re.search(r'(tau|dead\s*time|delay|theta)\s*(is|:|=)?\s*([+-]?\d+\.?\d*)', msg_lower)
     if km_m:  ext["km"]   = float(km_m.group(3))
     if tm_m:  ext["tm"]   = float(tm_m.group(3))
     if tau_m: ext["taum"] = float(tau_m.group(3))
     return ext
+
 INTERVIEW = {
     1: {
         "text": (
-            "Great, parameters locked in! Now let me understand your system and i have to ask few questions about your project.<br><br>"
-            "<strong>Question 1 of 3 — What is this control loop doing?</strong><br>"
-            "In most systems, the controller's main job is one of two things:"
+            "Parameters confirmed. Let me understand your control objective before selecting a rule.<br><br>"
+            "<strong>Question 1 of 4 — What is this control loop doing?</strong><br>"
+            "The controller's primary function determines the entire tuning strategy:"
         ),
         "options": [
             {
-                "label": "🎯 Following a target — I change the setpoint and need it to track accurately",
+                "label": "Following a target — I change the setpoint and need it to track accurately",
                 "val": "servo",
                 "hint": "e.g. robot arm position, temperature profile, flow rate setpoint changes"
             },
             {
-                "label": "🛡️ Holding steady — setpoint is fixed; I want to reject disturbances",
+                "label": "Holding steady — setpoint is fixed; I want to reject external disturbances",
                 "val": "regulator",
                 "hint": "e.g. pressure vessel, boiler level, conveyor speed under varying load"
             }
@@ -225,24 +226,24 @@ INTERVIEW = {
     },
     2: {
         "text": (
-            "<strong>Question 2 of 3 — How should the response feel?</strong><br>"
-            "Imagine you change the target (or a disturbance hits). Which description fits your process best?"
+            "<strong>Question 2 of 4 — How should the response behave?</strong><br>"
+            "When a setpoint change or disturbance occurs, which response profile best fits your requirements?"
         ),
         "options": [
             {
-                "label": "⚡ make it to fast — I want the fastest possible response, even if it slightly overshoots",
+                "label": "Maximum speed — fastest possible response, overshoot is acceptable",
                 "val": "fast",
-                "hint": "Prioritizes speed. Accepts ≤ 20% overshoot. Best for batch reactors, fast flow loops"
+                "hint": "Prioritizes speed. Accepts overshoot. Best for batch reactors, fast flow loops"
             },
             {
-                "label": " Glide in smoothly — no overshoot, no oscillations, steady approach",
+                "label": "Smooth approach — no overshoot, no oscillation, steady convergence",
                 "val": "smooth",
                 "hint": "Eliminates overshoot entirely. Best for level control, furnaces, biological processes"
             },
             {
-                "label": "⚖️ Balanced — reasonably fast but settles cleanly",
+                "label": "Balanced — reasonably fast but settles cleanly without excessive oscillation",
                 "val": "balanced",
-                "hint": "The engineering sweet spot. Works well for most general-purpose loops"
+                "hint": "The engineering standard. Works well for most general-purpose control loops"
             }
         ],
         "map": {
@@ -253,24 +254,24 @@ INTERVIEW = {
     },
     3: {
         "text": (
-            "<strong>Question 3 of 3 — How much do you trust your process model?</strong><br>"
-            "When you measured Km, Tm, and Tau — how confident are you those numbers are accurate?"
+            "<strong>Question 3 of 4 — How confident are you in your process model?</strong><br>"
+            "When you measured Km, Tm, and Tau — how accurate are those numbers likely to be?"
         ),
         "options": [
             {
-                "label": "🔬 Very confident — I ran a careful step test and the model is accurate",
+                "label": "Very confident — careful step test was performed, model is accurate",
                 "val": "confident",
                 "hint": "Allows more aggressive tuning — full performance extraction"
             },
             {
-                "label": "📊 Roughly correct — estimated from historical data or a quick test",
+                "label": "Approximately correct — estimated from historical data or a quick test",
                 "val": "estimated",
-                "hint": "Balanced tuning with moderate detuning factor"
+                "hint": "Balanced tuning with a moderate detuning factor"
             },
             {
-                "label": "🤔 Uncertain — rough guess, process varies a lot in real operation",
+                "label": "Uncertain — rough estimate, process varies significantly in real operation",
                 "val": "uncertain",
-                "hint": "Robust tuning — leaves safety margin for model uncertainty"
+                "hint": "Robust tuning — leaves a safety margin for model uncertainty"
             }
         ],
         "map": {
@@ -278,7 +279,50 @@ INTERVIEW = {
             "estimated": {"robust": 0},
             "uncertain": {"robust": 1}
         }
+    },
+    4: {
+        "text": (
+            "<strong>Question 4 of 4 — What is your acceptable overshoot limit?</strong><br>"
+            "You selected a response profile that permits some overshoot. "
+            "Overshoot is how far the process variable exceeds the setpoint before settling. "
+            "Select the maximum overshoot your process can safely tolerate:"
+        ),
+        "options": [
+            {
+                "label": "Up to 5% overshoot — nearly no-overshoot, very controlled",
+                "val": "os_5",
+                "hint": "Miluse 5% rule — precise overshoot specification"
+            },
+            {
+                "label": "Up to 10% overshoot — moderate, still well-damped",
+                "val": "os_10",
+                "hint": "Miluse 10% rule — good speed with controlled oscillation"
+            },
+            {
+                "label": "Up to 20% overshoot — faster response, standard industrial tolerance",
+                "val": "os_20",
+                "hint": "Chien/Miluse 20% rule — typical for most industrial loops"
+            },
+            {
+                "label": "Up to 30% or more — maximum speed, overshoot is acceptable",
+                "val": "os_30",
+                "hint": "Miluse 30% / Ziegler-Nichols class — aggressive, maximum speed"
+            }
+        ],
+        "map": {
+            "os_5":  {"overshoot": 1},
+            "os_10": {"overshoot": 1},
+            "os_20": {"overshoot": 2},
+            "os_30": {"overshoot": 3}
+        }
     }
+}
+
+OVERSHOOT_RULE_OVERRIDE = {
+    "os_5":  "miluse_5os",
+    "os_10": "miluse_10os",
+    "os_20": "miluse_20os",
+    "os_30": "miluse_30os"
 }
 
 INTERVIEW_ANSWER_PATTERNS = {
@@ -295,6 +339,12 @@ INTERVIEW_ANSWER_PATTERNS = {
         "confident": ["confident", "accurate", "careful", "step test", "measured", "certain", "precise"],
         "estimated": ["estimated", "roughly", "approximate", "historical", "quick", "average"],
         "uncertain": ["uncertain", "unsure", "rough", "guess", "varies", "not sure", "unknown"]
+    },
+    4: {
+        "os_5":  ["5", "five", "5%", "nearly", "almost none", "very controlled"],
+        "os_10": ["10", "ten", "10%", "moderate", "well damped"],
+        "os_20": ["20", "twenty", "20%", "standard", "industrial", "typical"],
+        "os_30": ["30", "thirty", "30%", "maximum", "aggressive", "fast"]
     }
 }
 
@@ -316,11 +366,13 @@ def chat():
             bot_memory = {
                 "km": None, "tm": None, "taum": None, "tau_c": None,
                 "mode": None, "metric": None, "robust": None, "overshoot": None,
-                "interview_stage": 0
+                "interview_stage": 0,
+                "allows_overshoot": False,
+                "overshoot_answer": None
             }
             return jsonify({
                 "reply": (
-                    "Session reset. I'm ready for a new process.<br><br>"
+                    "Session reset. Ready for a new process.<br><br>"
                     "Please provide your FOPDT parameters: <strong>Km</strong> (process gain), "
                     "<strong>Tm</strong> (time constant), and <strong>Tau</strong> (dead time).<br>"
                     "Example: <code>Km=2, Tm=10, Tau=2</code>"
@@ -342,10 +394,10 @@ def chat():
             if local_intent == "greeting" and confidence > 0.3:
                 return jsonify({
                     "reply": (
-                        "Hello! I'm <strong>TUNING BOT</strong> — your AI-powered PID tuning assistant.<br><br>"
-                        "To get started, share your process parameters:<br>"
-                        "<code>Km=&lt;value&gt;, Tm=&lt;value&gt;, Tau=&lt;value&gt;</code><br><br>"
-                        "Not sure what those are? Just type <em>\"explain parameters\"</em> and I'll guide you."
+                        "Hello. I am <strong>TUNING BOT</strong> — your AI-powered PID tuning assistant.<br><br>"
+                        "To begin, share your process parameters:<br>"
+                        "<code>Km=value, Tm=value, Tau=value</code><br><br>"
+                        "Not sure what those are? Type <em>explain parameters</em> and I will guide you."
                     ),
                     "options": [], "chart": None
                 })
@@ -370,7 +422,6 @@ def chat():
                 You are an expert process control assistant. Extract FOPDT parameters from the user's message.
                 User said: "{user_msg}"
                 Current memory: km={bot_memory['km']}, tm={bot_memory['tm']}, taum={bot_memory['taum']}
-
                 OUTPUT JSON ONLY:
                 {{"km": float_or_null, "tm": float_or_null, "taum": float_or_null}}
                 """
@@ -385,25 +436,25 @@ def chat():
         km, tm, taum = bot_memory['km'], bot_memory['tm'], bot_memory['taum']
         missing = []
         if not km:   missing.append("<strong>Km</strong> (process gain)")
-        if not tm:   missing.append("<strong>Tm</strong> (time constant / lag)")
-        if not taum: missing.append("<strong>Tau</strong> (dead time / delay)")
+        if not tm:   missing.append("<strong>Tm</strong> (time constant)")
+        if not taum: missing.append("<strong>Tau</strong> (dead time)")
 
         if missing:
             if len(missing) == 3:
                 return jsonify({
                     "reply": (
-                        "To tune your PID controller, I need three numbers from your process model.<br><br>"
+                        "To tune your PID controller I need three numbers from your process model.<br><br>"
                         "Please provide:<br>"
-                        f"{'<br>'.join(f'• {m}' for m in missing)}<br><br>"
+                        f"{'<br>'.join(f'- {m}' for m in missing)}<br><br>"
                         "Format: <code>Km=2, Tm=10, Tau=2</code><br>"
-                        "Type <em>\"explain parameters\"</em> if you need help finding these values."
+                        "Type <em>explain parameters</em> if you need help finding these values."
                     ),
                     "options": [], "chart": None
                 })
             else:
                 return jsonify({
                     "reply": (
-                        f"Almost there! I still need: {', '.join(missing)}<br><br>"
+                        f"Almost there. I still need: {', '.join(missing)}<br><br>"
                         "Provide the remaining values to continue."
                     ),
                     "options": [], "chart": None
@@ -426,10 +477,24 @@ def chat():
             if answer:
                 updates = interview_q["map"][answer]
                 bot_memory.update(updates)
+
+                if stage == 2:
+                    if answer == "fast":
+                        bot_memory['allows_overshoot'] = True
+                    else:
+                        bot_memory['allows_overshoot'] = False
+
+                if stage == 4:
+                    bot_memory['overshoot_answer'] = answer
+
                 bot_memory['interview_stage'] += 1
                 stage = bot_memory['interview_stage']
 
-                if stage <= 3:
+                if stage == 4 and not bot_memory.get('allows_overshoot', False):
+                    bot_memory['interview_stage'] = 5
+                    return _run_tuning_engine()
+
+                if stage <= 4:
                     next_q = INTERVIEW[stage]
                     return jsonify({
                         "reply": next_q["text"],
@@ -440,7 +505,7 @@ def chat():
                     return _run_tuning_engine()
             else:
                 return jsonify({
-                    "reply": f"I didn't quite catch that. {interview_q['text']}",
+                    "reply": f"I did not recognise that selection. {interview_q['text']}",
                     "options": [{"label": o["label"], "val": o["val"]} for o in interview_q["options"]],
                     "chart": None
                 })
@@ -449,13 +514,12 @@ def chat():
             bot_memory['interview_stage'] = 1
             q = INTERVIEW[1]
             ratio = taum / tm
-            ratio_insight = ""
             if ratio < 0.2:
-                ratio_insight = f" Your dead-time ratio (τ/T = {round(ratio,2)}) is <strong>low</strong> — this process is very controllable."
+                ratio_insight = f" Your dead-time ratio (tau/T = {round(ratio,2)}) is <strong>low</strong> — this process is very controllable."
             elif ratio < 0.5:
-                ratio_insight = f" Your dead-time ratio (τ/T = {round(ratio,2)}) is <strong>moderate</strong> — standard tuning applies."
+                ratio_insight = f" Your dead-time ratio (tau/T = {round(ratio,2)}) is <strong>moderate</strong> — standard tuning applies."
             else:
-                ratio_insight = f" Your dead-time ratio (τ/T = {round(ratio,2)}) is <strong>high</strong> — I'll apply dead-time compensating rules."
+                ratio_insight = f" Your dead-time ratio (tau/T = {round(ratio,2)}) is <strong>high</strong> — I will apply dead-time compensating rules."
 
             return jsonify({
                 "reply": (
@@ -467,7 +531,7 @@ def chat():
             })
 
         return jsonify({
-            "reply": "Something went wrong in the state machine. Please reset and try again.",
+            "reply": "State machine error. Please reset and try again.",
             "options": [], "chart": None
         })
 
@@ -477,20 +541,20 @@ def chat():
 
 def _build_rules_response():
     categories = {
-        "🎯 Servo / Setpoint Tracking": [],
-        "🛡️ Regulatory / Disturbance Rejection": [],
-        "⚖️ General Purpose / Hybrid": []
+        "Servo / Setpoint Tracking": [],
+        "Regulatory / Disturbance Rejection": [],
+        "General Purpose": []
     }
     for k, v in rules_db.items():
         mode_val = v.get("mode", -1)
         if mode_val == 1:
-            categories["🎯 Servo / Setpoint Tracking"].append(v.get("name", k.replace("_", " ").title()))
+            categories["Servo / Setpoint Tracking"].append(v.get("name", k.replace("_", " ").title()))
         elif mode_val == 0:
-            categories["🛡️ Regulatory / Disturbance Rejection"].append(v.get("name", k.replace("_", " ").title()))
+            categories["Regulatory / Disturbance Rejection"].append(v.get("name", k.replace("_", " ").title()))
         else:
-            categories["⚖️ General Purpose / Hybrid"].append(v.get("name", k.replace("_", " ").title()))
+            categories["General Purpose"].append(v.get("name", k.replace("_", " ").title()))
 
-    reply = f"<strong>My tuning database contains {len(rules_db)} rules</strong> from Aidan O'Dwyer's handbook:<br><br>"
+    reply = f"<strong>Tuning database: {len(rules_db)} rules</strong> from Aidan O'Dwyer's handbook:<br><br>"
     num = 1
     for cat, rule_list in categories.items():
         if rule_list:
@@ -500,7 +564,7 @@ def _build_rules_response():
                 num += 1
             reply += "<br>"
 
-    reply += "<em>My Random Forest AI selects the optimal rule for your specific process and objectives.</em>"
+    reply += "<em>The Random Forest AI selects the optimal rule for your specific process and objectives.</em>"
     return jsonify({"reply": reply, "options": [], "chart": None})
 
 def _run_tuning_engine():
@@ -512,11 +576,18 @@ def _run_tuning_engine():
     os_v = bot_memory.get('overshoot', 0)
     rob  = bot_memory.get('robust', 0)
     met  = bot_memory.get('metric', 1)
+    overshoot_answer = bot_memory.get('overshoot_answer', None)
 
     ratio    = taum / tm
     features = np.array([[km, tm, taum, ratio, mode, os_v, rob, met]])
 
     best_rule = rf_model.predict(features)[0] if rf_model else "ziegler_nichols"
+
+    if overshoot_answer and overshoot_answer in OVERSHOOT_RULE_OVERRIDE:
+        override_key = OVERSHOOT_RULE_OVERRIDE[overshoot_answer]
+        if override_key in rules_db:
+            best_rule = override_key
+
     r = rules_db.get(best_rule, rules_db.get("ziegler_nichols", {}))
 
     tau_c_val = max(0.1, taum)
@@ -541,50 +612,49 @@ def _run_tuning_engine():
         print(f"Math eval error: {e}")
         kc = (1.2 * tm) / (km * taum)
         ti = 2.0 * taum
-        r  = {"name": f"Ziegler-Nichols (Fallback)"}
+        r  = {"name": "Ziegler-Nichols (Fallback)"}
 
     chart, os_est, settling = simulate_step(kc, ti, km, tm, taum)
 
     mode_str   = "Servo (Setpoint Tracking)" if mode == 1 else "Regulatory (Disturbance Rejection)"
-    metric_str = {"1": "IAE — smooth, no overshoot", "2": "ISE — fast, aggressive", "3": "ITAE — balanced, minimal long-term error"}.get(str(met), "IAE")
+    metric_map = {"1": "IAE — smooth, minimal overshoot", "2": "ISE — fast, aggressive", "3": "ITAE — balanced, minimal long-term error"}
+    metric_str = metric_map.get(str(met), "IAE")
     robust_str = "Robust (model-uncertainty tolerant)" if rob == 1 else "Performance-optimized"
 
     rule_name = r.get('name', best_rule)
+    rule_description = r.get('unique_feature', 'a specialized rule from O\'Dwyer\'s handbook.')
 
-    rule_insights = {
-        "ziegler_nichols": "a classic rule ideal for quick initial tuning, though it tends to be aggressive.",
-        "cohen_coon": "specifically designed for processes with significant dead time — very appropriate for your τ/T ratio.",
-        "skogestad": "a robust IMC-based rule that provides predictable, safe closed-loop behavior.",
-        "amigo": "the AMIGO rule, derived from modern robust control theory and validated on hundreds of industrial loops.",
-        "lambda": "Lambda (Direct Synthesis) tuning, where you control the closed-loop speed via τ_c.",
-        "rovira_iae": "Rovira's IAE-optimal rule, mathematically minimizing the integral of absolute error.",
-        "rovira_ise": "Rovira's ISE-optimal rule, prioritizing elimination of large initial errors.",
-        "rovira_itae": "Rovira's ITAE-optimal rule, minimizing long-term integrated error for clean settling.",
-    }
-    insight = next((v for k, v in rule_insights.items() if k in best_rule.lower()), "a highly specialized rule from O'Dwyer's handbook.")
+    overshoot_note = ""
+    if overshoot_answer:
+        os_pct_map = {"os_5": "5%", "os_10": "10%", "os_20": "20%", "os_30": "30%"}
+        pct = os_pct_map.get(overshoot_answer, "")
+        overshoot_note = f"- Overshoot specification: <strong>{pct} target</strong><br>"
 
     final_reply = (
-        f"<strong>✅ Optimization Complete</strong><br><br>"
+        f"<strong>Optimization Complete</strong><br><br>"
         f"<strong>Process Analysis:</strong><br>"
-        f"• Mode: {mode_str}<br>"
-        f"• Performance objective: {metric_str}<br>"
-        f"• Tuning philosophy: {robust_str}<br>"
-        f"• Dead-time ratio (τ/T): {round(ratio, 3)}<br><br>"
-        f"<strong>AI Selection:</strong> My Random Forest evaluated all {len(rules_db)} candidate rules and selected "
-        f"<strong>{rule_name}</strong> — {insight}<br><br>"
-        f"<strong>🎛️ PID Parameters:</strong><br>"
-        f"• Proportional Gain <strong>Kc = {round(kc, 4)}</strong><br>"
-        f"• Integral Time <strong>Ti = {round(ti, 4)} s</strong><br><br>"
-        f"<strong>📊 Predicted Closed-Loop Performance:</strong><br>"
-        f"• Overshoot: <strong>{os_est}%</strong><br>"
-        f"• Estimated Settling Time: <strong>{settling} s</strong><br><br>"
-        f"Step response simulation below ↓"
+        f"- Mode: {mode_str}<br>"
+        f"- Performance objective: {metric_str}<br>"
+        f"- Tuning philosophy: {robust_str}<br>"
+        f"{overshoot_note}"
+        f"- Dead-time ratio (tau/T): {round(ratio, 3)}<br><br>"
+        f"<strong>AI Selection:</strong> Random Forest evaluated all {len(rules_db)} candidate rules and selected "
+        f"<strong>{rule_name}</strong> — {rule_description}<br><br>"
+        f"<strong>PID Parameters:</strong><br>"
+        f"- Proportional Gain <strong>Kc = {round(kc, 4)}</strong><br>"
+        f"- Integral Time <strong>Ti = {round(ti, 4)} s</strong><br><br>"
+        f"<strong>Predicted Closed-Loop Performance:</strong><br>"
+        f"- Overshoot: <strong>{os_est}%</strong><br>"
+        f"- Estimated Settling Time: <strong>{settling} s</strong><br><br>"
+        f"Step response simulation below."
     )
 
     bot_memory = {
         "km": None, "tm": None, "taum": None, "tau_c": None,
         "mode": None, "metric": None, "robust": None, "overshoot": None,
-        "interview_stage": 0
+        "interview_stage": 0,
+        "allows_overshoot": False,
+        "overshoot_answer": None
     }
 
     return jsonify({"reply": final_reply, "chart": chart, "options": []})
