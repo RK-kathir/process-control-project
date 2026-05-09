@@ -65,10 +65,10 @@ intent_model.fit(X_nlp, labels)
 KNOWLEDGE_BASE = {
     "identity": (
         "<strong>I'm TUNING BOT</strong> — an AI-powered PID controller optimization engine.<br><br>"
-        "I use a <strong>Random Forest AI model</strong> trained on Aidan O'Dwyer's definitive handbook of 40+ industrial tuning rules. "
+        "I use a <strong>Random Forest AI model</strong> trained n odeyars . "
         "Give me your process parameters, answer a few smart questions, and I'll prescribe the mathematically optimal PID settings — "
-        "plus simulate the closed-loop response with a live graph.<br><br>"
-        "No control theory expertise required. I handle the math."
+        "plus simulate the closed-loop response with a live graph(using the plotify).<br><br>"
+        "No requirement in the process controlprior knowledge. I handle the math."
     ),
     "pid_explain": (
         "<strong>PID stands for Proportional–Integral–Derivative.</strong> It's the most widely used control algorithm in industry.<br><br>"
@@ -87,7 +87,7 @@ KNOWLEDGE_BASE = {
         "These are found via a simple <em>step test</em> on your process."
     ),
     "rule_explain": (
-        "I have <strong>40+ tuning rules</strong> from Aidan O'Dwyer's handbook, each designed for different scenarios:<br><br>"
+        "I have <strong>40+ tuning rules</strong> from O'Dwyer's handbook, each designed for different scenarios:<br><br>"
         "• <strong>Ziegler-Nichols:</strong> The classic — aggressive, fast, high overshoot<br>"
         "• <strong>Cohen-Coon:</strong> Good for processes with large dead time<br>"
         "• <strong>Skogestad IMC:</strong> Robust and predictable for safety-critical systems<br>"
@@ -205,7 +205,7 @@ def local_regex_extract(msg):
 INTERVIEW = {
     1: {
         "text": (
-            "Great, parameters locked in! Now let me understand your system.<br><br>"
+            "Great, parameters locked in! Now let me understand your system and i have to ask few questions about your project.<br><br>"
             "<strong>Question 1 of 3 — What is this control loop doing?</strong><br>"
             "In most systems, the controller's main job is one of two things:"
         ),
@@ -230,12 +230,12 @@ INTERVIEW = {
         ),
         "options": [
             {
-                "label": "⚡ Snap to it fast — I want the fastest possible response, even if it slightly overshoots",
+                "label": "⚡ make it to fast — I want the fastest possible response, even if it slightly overshoots",
                 "val": "fast",
                 "hint": "Prioritizes speed. Accepts ≤ 20% overshoot. Best for batch reactors, fast flow loops"
             },
             {
-                "label": "🌊 Glide in smoothly — no overshoot, no oscillations, steady approach",
+                "label": " Glide in smoothly — no overshoot, no oscillations, steady approach",
                 "val": "smooth",
                 "hint": "Eliminates overshoot entirely. Best for level control, furnaces, biological processes"
             },
