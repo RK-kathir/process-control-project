@@ -4,473 +4,157 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TUNING BOT — AI PID Optimizer</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
     <script src="https://cdn.plot.ly/plotly-2.24.1.min.js"></script>
+    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
     <style>
         :root {
-            --bg:        #07090f;
-            --bg2:       #0b0e17;
-            --bg3:       #111520;
-            --panel:     #0d1119;
-            --border:    rgba(255,255,255,0.06);
-            --border2:   rgba(0,200,255,0.22);
-            --txt:       #d8e0ee;
-            --txt2:      #4a5568;
-            --txt3:      #8899aa;
-            --cyan:      #00c8ff;
-            --cyan2:     #0ea5e9;
-            --purple:    #7c8cff;
-            --green:     #2dd4a0;
-            --red:       #f87171;
-            --user-bg:   #141b2a;
-            --glow:      0 0 40px rgba(0,200,255,0.08);
-            --font-mono: 'DM Mono', monospace;
-            --font-body: 'DM Sans', sans-serif;
-            --font-serif:'Instrument Serif', Georgia, serif;
+            --bg:#07090f; --bg2:#0b0e17; --bg3:#111520; --panel:#0d1119;
+            --border:rgba(255,255,255,0.06); --border2:rgba(0,200,255,0.22);
+            --txt:#d8e0ee; --txt2:#4a5568; --txt3:#8899aa;
+            --cyan:#00c8ff; --cyan2:#0ea5e9; --purple:#7c8cff;
+            --green:#2dd4a0; --red:#f87171; --amber:#f59e0b;
+            --user-bg:#141b2a; --glow:0 0 40px rgba(0,200,255,0.08);
+            --font-mono:'DM Mono',monospace; --font-body:'DM Sans',sans-serif;
+            --font-serif:'Instrument Serif',Georgia,serif;
         }
         body.light {
-            --bg:        #f2f5fb;
-            --bg2:       #e8edf6;
-            --bg3:       #dde3ef;
-            --panel:     #ffffff;
-            --border:    rgba(0,0,0,0.07);
-            --border2:   rgba(14,165,233,0.28);
-            --txt:       #1a2035;
-            --txt2:      #94a3b8;
-            --txt3:      #4b5a6e;
-            --cyan:      #0284c7;
-            --cyan2:     #0369a1;
-            --purple:    #5b6ee1;
-            --green:     #059669;
-            --user-bg:   #e2e8f5;
-            --glow:      0 2px 24px rgba(0,0,0,0.06);
+            --bg:#f2f5fb; --bg2:#e8edf6; --bg3:#dde3ef; --panel:#ffffff;
+            --border:rgba(0,0,0,0.07); --border2:rgba(14,165,233,0.28);
+            --txt:#1a2035; --txt2:#94a3b8; --txt3:#4b5a6e;
+            --cyan:#0284c7; --cyan2:#0369a1; --purple:#5b6ee1;
+            --green:#059669; --user-bg:#e2e8f5; --glow:0 2px 24px rgba(0,0,0,0.06);
         }
+        *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+        html,body{height:100%;overflow:hidden}
+        body{font-family:var(--font-body);background:var(--bg);color:var(--txt);display:flex;transition:background .35s,color .35s}
 
-        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-        html, body { height: 100%; overflow: hidden; }
-        body {
-            font-family: var(--font-body);
-            background: var(--bg);
-            color: var(--txt);
-            display: flex;
-            transition: background .35s, color .35s;
-        }
+        /* ── Sidebar ── */
+        #sidebar{width:238px;flex-shrink:0;background:var(--panel);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
+        .logo{padding:22px 18px 18px;display:flex;align-items:center;gap:11px;border-bottom:1px solid var(--border)}
+        .logo-mark{width:34px;height:34px;background:linear-gradient(140deg,var(--cyan) 0%,var(--purple) 100%);border-radius:9px;display:flex;align-items:center;justify-content:center;font-family:var(--font-mono);font-size:11px;font-weight:500;color:#000;flex-shrink:0;box-shadow:0 0 20px rgba(0,200,255,0.18)}
+        .logo-title{font-family:var(--font-mono);font-size:11px;font-weight:500;letter-spacing:2px;color:var(--txt);text-transform:uppercase}
+        .logo-sub{font-family:var(--font-body);font-size:10px;font-weight:300;color:var(--txt2);margin-top:2px}
+        .side-btn{margin:10px 12px 0;padding:10px 13px;background:transparent;border:1px solid var(--border);border-radius:8px;color:var(--txt3);font-family:var(--font-body);font-size:12.5px;cursor:pointer;display:flex;align-items:center;gap:9px;transition:all .2s;text-align:left}
+        .side-btn:hover{border-color:var(--border2);color:var(--cyan);background:rgba(0,200,255,0.04)}
+        .status-card{margin:12px 12px 0;padding:10px 13px;background:rgba(45,212,160,0.05);border:1px solid rgba(45,212,160,0.18);border-radius:8px}
+        .pulse-dot{width:6px;height:6px;background:var(--green);border-radius:50%;box-shadow:0 0 8px var(--green);animation:pulse-dot 2.2s ease-in-out infinite}
+        @keyframes pulse-dot{0%,100%{opacity:1}50%{opacity:.3}}
+        .status-txt{font-family:var(--font-mono);font-size:10px;font-weight:500;color:var(--green);letter-spacing:.8px}
+        .status-sub{font-family:var(--font-body);font-size:10px;color:var(--txt2);margin-top:3px;font-weight:300}
+        .side-label{padding:16px 18px 5px;font-family:var(--font-mono);font-size:9px;font-weight:500;letter-spacing:2.5px;color:var(--txt2);text-transform:uppercase}
+        .quick-item{margin:3px 12px;padding:8px 12px;background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--txt3);font-family:var(--font-body);font-size:11.5px;cursor:pointer;transition:all .2s;text-align:left;width:calc(100% - 24px);line-height:1.4}
+        .quick-item:hover{border-color:var(--border2);color:var(--txt);background:rgba(0,200,255,0.03)}
+        .side-spacer{flex:1}
+        .theme-btn{margin:6px 12px 8px;padding:9px 13px;background:var(--bg3);border:1px solid var(--border);border-radius:7px;color:var(--txt3);font-family:var(--font-body);font-size:11.5px;cursor:pointer;text-align:center;transition:all .2s}
+        .theme-btn:hover{border-color:var(--border2);color:var(--txt)}
 
-        #sidebar {
-            width: 238px;
-            flex-shrink: 0;
-            background: var(--panel);
-            border-right: 1px solid var(--border);
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-        }
+        /* ── Mode toggle button ── */
+        .mode-toggle-btn{margin:6px 12px 0;padding:10px 13px;border:1px solid rgba(245,158,11,0.3);border-radius:8px;background:rgba(245,158,11,0.06);color:var(--amber);font-family:var(--font-mono);font-size:10px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:8px;letter-spacing:1px;text-transform:uppercase;transition:all .2s}
+        .mode-toggle-btn:hover{border-color:rgba(245,158,11,0.5);background:rgba(245,158,11,0.1)}
+        .mode-dot{width:6px;height:6px;background:var(--amber);border-radius:50%;animation:pulse-dot 1.8s ease-in-out infinite}
 
-        .logo {
-            padding: 22px 18px 18px;
-            display: flex;
-            align-items: center;
-            gap: 11px;
-            border-bottom: 1px solid var(--border);
-        }
-        .logo-mark {
-            width: 34px; height: 34px;
-            background: linear-gradient(140deg, var(--cyan) 0%, var(--purple) 100%);
-            border-radius: 9px;
-            display: flex; align-items: center; justify-content: center;
-            font-family: var(--font-mono);
-            font-size: 11px; font-weight: 500; color: #000;
-            letter-spacing: -0.5px;
-            flex-shrink: 0;
-            box-shadow: 0 0 20px rgba(0,200,255,0.18);
-        }
-        .logo-label { line-height: 1.2; }
-        .logo-title {
-            font-family: var(--font-mono);
-            font-size: 11px; font-weight: 500;
-            letter-spacing: 2px;
-            color: var(--txt);
-            text-transform: uppercase;
-        }
-        .logo-sub {
-            font-family: var(--font-body);
-            font-size: 10px; font-weight: 300;
-            color: var(--txt2);
-            letter-spacing: 0.5px;
-            margin-top: 2px;
-        }
+        /* ── Main area ── */
+        #main{flex:1;display:flex;flex-direction:column;position:relative;min-width:0}
 
-        .side-btn {
-            margin: 10px 12px 0;
-            padding: 10px 13px;
-            background: transparent;
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            color: var(--txt3);
-            font-family: var(--font-body);
-            font-size: 12.5px; font-weight: 400;
-            cursor: pointer;
-            display: flex; align-items: center; gap: 9px;
-            transition: all .2s;
-            text-align: left;
-        }
-        .side-btn:hover { border-color: var(--border2); color: var(--cyan); background: rgba(0,200,255,0.04); }
+        /* ── CHAT MODE ── */
+        #chat-pane{flex:1;overflow-y:auto;padding:40px max(40px,calc(50% - 400px));padding-bottom:210px;display:flex;flex-direction:column;gap:22px;scroll-behavior:smooth}
+        #chat-pane::-webkit-scrollbar{width:3px}
+        #chat-pane::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
 
-        .status-card {
-            margin: 12px 12px 0;
-            padding: 10px 13px;
-            background: rgba(45,212,160,0.05);
-            border: 1px solid rgba(45,212,160,0.18);
-            border-radius: 8px;
-        }
-        .status-row { display: flex; align-items: center; gap: 7px; }
-        .pulse-dot {
-            width: 6px; height: 6px;
-            background: var(--green);
-            border-radius: 50%;
-            box-shadow: 0 0 8px var(--green);
-            animation: pulse-dot 2.2s ease-in-out infinite;
-        }
-        @keyframes pulse-dot { 0%,100%{opacity:1} 50%{opacity:.3} }
-        .status-txt { font-family: var(--font-mono); font-size: 10px; font-weight: 500; color: var(--green); letter-spacing: 0.8px; }
-        .status-sub { font-family: var(--font-body); font-size: 10px; color: var(--txt2); margin-top: 3px; font-weight: 300; }
+        .welcome-screen{display:flex;flex-direction:column;align-items:center;padding:70px 20px 30px;text-align:center;gap:16px;animation:fade-rise .7s ease-out both}
+        @keyframes fade-rise{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+        .welcome-orb{width:68px;height:68px;background:linear-gradient(140deg,var(--cyan) 0%,var(--purple) 100%);border-radius:18px;display:flex;align-items:center;justify-content:center;font-family:var(--font-mono);font-size:16px;font-weight:500;color:#000;box-shadow:0 0 60px rgba(0,200,255,0.25);animation:orb-breathe 3.5s ease-in-out infinite;margin-bottom:6px}
+        @keyframes orb-breathe{0%,100%{box-shadow:0 0 60px rgba(0,200,255,0.25)}50%{box-shadow:0 0 80px rgba(0,200,255,0.4)}}
+        .welcome-title{font-family:var(--font-serif);font-size:28px;font-style:italic;color:var(--txt)}
+        .welcome-sub{font-family:var(--font-body);font-size:13.5px;font-weight:300;color:var(--txt3);max-width:380px;line-height:1.7}
+        .welcome-sub strong{color:var(--txt);font-weight:500}
+        .welcome-tags{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:4px}
+        .welcome-tag{padding:5px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:20px;font-family:var(--font-mono);font-size:10px;color:var(--txt2);letter-spacing:.5px}
 
-        .side-label {
-            padding: 16px 18px 5px;
-            font-family: var(--font-mono);
-            font-size: 9px; font-weight: 500;
-            letter-spacing: 2.5px;
-            color: var(--txt2);
-            text-transform: uppercase;
-        }
-        .quick-item {
-            margin: 3px 12px;
-            padding: 8px 12px;
-            background: transparent;
-            border: 1px solid var(--border);
-            border-radius: 6px;
-            color: var(--txt3);
-            font-family: var(--font-body);
-            font-size: 11.5px; font-weight: 400;
-            cursor: pointer;
-            transition: all .2s;
-            text-align: left;
-            width: calc(100% - 24px);
-            line-height: 1.4;
-        }
-        .quick-item:hover { border-color: var(--border2); color: var(--txt); background: rgba(0,200,255,0.03); }
+        .msg{animation:msg-in .22s ease-out both}
+        @keyframes msg-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+        .user-msg{align-self:flex-end;max-width:72%;background:var(--user-bg);border:1px solid var(--border);border-radius:16px 16px 4px 16px;padding:11px 17px;font-family:var(--font-body);font-size:13.5px;line-height:1.65;color:var(--txt)}
+        .bot-row{display:flex;gap:11px;align-items:flex-start;max-width:100%}
+        .bot-av{width:28px;height:28px;background:linear-gradient(140deg,var(--cyan),var(--purple));border-radius:8px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-family:var(--font-mono);font-size:9px;font-weight:500;color:#000;margin-top:2px}
+        .bot-inner{flex:1;min-width:0}
+        .bot-label{font-family:var(--font-mono);font-size:10px;font-weight:500;letter-spacing:1.5px;color:var(--cyan);text-transform:uppercase;margin-bottom:7px}
+        .bot-text{font-family:var(--font-body);font-size:13.5px;font-weight:400;line-height:1.78;color:var(--txt)}
+        .bot-text code{font-family:var(--font-mono);font-size:12px;background:rgba(0,200,255,0.07);border:1px solid rgba(0,200,255,0.18);padding:1px 7px;border-radius:4px;color:var(--cyan)}
+        .bot-text strong{color:var(--txt);font-weight:600}
+        .bot-text em{font-family:var(--font-serif);font-style:italic;color:var(--txt3)}
+        .opts-stack{display:flex;flex-direction:column;gap:7px;margin-top:14px}
+        .opt-card{padding:12px 16px;background:rgba(0,200,255,0.025);border:1px solid rgba(0,200,255,0.12);border-radius:9px;color:var(--txt3);font-family:var(--font-body);font-size:13px;cursor:pointer;text-align:left;transition:all .2s;line-height:1.5}
+        .opt-card:hover{border-color:var(--cyan);color:var(--txt);background:rgba(0,200,255,0.06);transform:translateX(4px)}
+        .thinking-wrap{display:flex;align-items:center;gap:14px;padding:6px 0}
+        .thinking-label{font-family:var(--font-mono);font-size:10px;color:var(--txt2);letter-spacing:1px;text-transform:uppercase;animation:think-blink 1.4s ease-in-out infinite}
+        @keyframes think-blink{0%,100%{opacity:.4}50%{opacity:1}}
+        .wave-bars{display:flex;align-items:flex-end;gap:3px;height:22px}
+        .wave-bar{width:3px;background:var(--cyan);border-radius:2px;opacity:.7;animation:wave-anim 1s ease-in-out infinite;transform-origin:bottom}
+        .wave-bar:nth-child(1){animation-delay:0s;height:6px} .wave-bar:nth-child(2){animation-delay:.1s;height:10px}
+        .wave-bar:nth-child(3){animation-delay:.2s;height:16px} .wave-bar:nth-child(4){animation-delay:.3s;height:10px}
+        .wave-bar:nth-child(5){animation-delay:.4s;height:6px} .wave-bar:nth-child(6){animation-delay:.5s;height:12px}
+        .wave-bar:nth-child(7){animation-delay:.6s;height:18px} .wave-bar:nth-child(8){animation-delay:.7s;height:10px}
+        .wave-bar:nth-child(9){animation-delay:.8s;height:6px}
+        @keyframes wave-anim{0%,100%{transform:scaleY(.4);opacity:.4}50%{transform:scaleY(1);opacity:1}}
+        .chart-frame{margin-top:14px;border:1px solid var(--border2);border-radius:12px;overflow:hidden;background:rgba(0,200,255,0.018);box-shadow:var(--glow)}
 
-        .side-spacer { flex: 1; }
+        /* ── INPUT BAR ── */
+        .input-zone{position:absolute;bottom:0;left:0;right:0;z-index:10;background:linear-gradient(transparent,var(--bg) 26%);padding:36px max(40px,calc(50% - 400px)) 22px}
+        .chips-bar{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:10px}
+        .chip{padding:6px 13px;background:var(--bg3);border:1px solid var(--border);border-radius:20px;font-family:var(--font-body);font-size:11.5px;color:var(--txt2);cursor:pointer;transition:all .2s;white-space:nowrap}
+        .chip:hover{border-color:rgba(0,200,255,0.3);color:var(--cyan);background:rgba(0,200,255,0.04)}
+        .input-bar{display:flex;background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:6px 6px 6px 17px;box-shadow:0 4px 28px rgba(0,0,0,0.28),var(--glow);transition:border-color .2s}
+        .input-bar:focus-within{border-color:rgba(0,200,255,0.28)}
+        #chat-input{flex:1;background:transparent;border:none;color:var(--txt);font-family:var(--font-body);font-size:13.5px;outline:none;padding:7px 0}
+        #chat-input::placeholder{color:var(--txt2);font-weight:300}
+        .send-btn{width:38px;height:38px;background:linear-gradient(135deg,var(--cyan),var(--cyan2));border:none;border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .2s;flex-shrink:0}
+        .send-btn:hover{transform:scale(1.06);box-shadow:0 0 18px rgba(0,200,255,0.4)}
 
-        .theme-btn {
-            margin: 10px 12px 16px;
-            padding: 9px 13px;
-            background: var(--bg3);
-            border: 1px solid var(--border);
-            border-radius: 7px;
-            color: var(--txt3);
-            font-family: var(--font-body);
-            font-size: 11.5px; font-weight: 400;
-            cursor: pointer;
-            text-align: center;
-            transition: all .2s;
-            letter-spacing: 0.3px;
-        }
-        .theme-btn:hover { border-color: var(--border2); color: var(--txt); }
+        /* ══ DASHBOARD MODE ══════════════════════════════════════════════════ */
+        #dashboard-pane{flex:1;display:none;flex-direction:column;overflow:hidden;padding:16px}
+        #dashboard-pane.active{display:flex}
 
-        #main { flex: 1; display: flex; flex-direction: column; position: relative; min-width: 0; }
+        .dash-header{display:flex;align-items:center;gap:12px;margin-bottom:12px;flex-shrink:0}
+        .dash-title{font-family:var(--font-mono);font-size:12px;font-weight:500;color:var(--amber);letter-spacing:1.5px;text-transform:uppercase}
+        .ws-status{display:flex;align-items:center;gap:6px;padding:4px 10px;border:1px solid rgba(245,158,11,0.2);border-radius:20px;background:rgba(245,158,11,0.06)}
+        .ws-dot{width:6px;height:6px;border-radius:50%;background:var(--txt2);transition:background .3s}
+        .ws-dot.connected{background:var(--green);box-shadow:0 0 6px var(--green);animation:pulse-dot 2s infinite}
+        .ws-dot.error{background:var(--red)}
+        .ws-label{font-family:var(--font-mono);font-size:10px;color:var(--txt3);letter-spacing:.8px}
 
-        #chat-box {
-            flex: 1;
-            overflow-y: auto;
-            padding: 40px max(40px, calc(50% - 400px));
-            padding-bottom: 210px;
-            display: flex;
-            flex-direction: column;
-            gap: 22px;
-            scroll-behavior: smooth;
-        }
-        #chat-box::-webkit-scrollbar { width: 3px; }
-        #chat-box::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+        .dash-kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px;flex-shrink:0}
+        .kpi-card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:10px 14px}
+        .kpi-label{font-family:var(--font-mono);font-size:9px;color:var(--txt2);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:4px}
+        .kpi-value{font-family:var(--font-mono);font-size:20px;font-weight:500;color:var(--cyan);line-height:1}
+        .kpi-unit{font-size:11px;color:var(--txt3);margin-left:3px}
+        .kpi-sub{font-family:var(--font-body);font-size:10px;color:var(--txt2);margin-top:3px}
 
-        .welcome-screen {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            padding: 70px 20px 30px;
-            text-align: center;
-            gap: 16px;
-            animation: fade-rise .7s ease-out both;
-        }
-        @keyframes fade-rise {
-            from { opacity: 0; transform: translateY(20px); }
-            to   { opacity: 1; transform: translateY(0); }
-        }
+        .dash-charts{display:grid;grid-template-columns:1fr 1fr;gap:10px;flex:1;min-height:0}
+        .dash-chart-card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:10px;display:flex;flex-direction:column}
+        .dash-chart-label{font-family:var(--font-mono);font-size:9px;color:var(--txt2);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px;flex-shrink:0}
+        .dash-chart-card .plotly-chart{flex:1;min-height:0}
 
-        .welcome-orb {
-            width: 68px; height: 68px;
-            background: linear-gradient(140deg, var(--cyan) 0%, var(--purple) 100%);
-            border-radius: 18px;
-            display: flex; align-items: center; justify-content: center;
-            font-family: var(--font-mono);
-            font-size: 16px; font-weight: 500; color: #000;
-            box-shadow: 0 0 60px rgba(0,200,255,0.25), 0 0 0 1px rgba(0,200,255,0.1);
-            animation: orb-breathe 3.5s ease-in-out infinite;
-            margin-bottom: 6px;
-        }
-        @keyframes orb-breathe {
-            0%,100% { box-shadow: 0 0 60px rgba(0,200,255,0.25), 0 0 0 1px rgba(0,200,255,0.1); }
-            50%      { box-shadow: 0 0 80px rgba(0,200,255,0.4),  0 0 0 1px rgba(0,200,255,0.2); }
-        }
+        .dash-log{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:10px;margin-top:10px;flex-shrink:0;max-height:100px;overflow-y:auto}
+        .log-item{font-family:var(--font-mono);font-size:10px;color:var(--txt3);padding:2px 0;border-bottom:1px solid var(--border)}
+        .log-item:last-child{border:none}
+        .log-item .ts{color:var(--txt2);margin-right:8px}
+        .log-item .rule{color:var(--cyan)}
+        .log-item .warn{color:var(--amber)}
+        .log-item .ok{color:var(--green)}
 
-        .welcome-title {
-            font-family: var(--font-serif);
-            font-size: 28px;
-            font-weight: 400;
-            font-style: italic;
-            color: var(--txt);
-            letter-spacing: -0.3px;
-            animation: fade-rise .8s .1s ease-out both;
-        }
-        .welcome-sub {
-            font-family: var(--font-body);
-            font-size: 13.5px; font-weight: 300;
-            color: var(--txt3);
-            max-width: 360px;
-            line-height: 1.7;
-            animation: fade-rise .8s .2s ease-out both;
-        }
-        .welcome-sub strong { color: var(--txt); font-weight: 500; }
+        /* MATLAB code block */
+        .matlab-block{background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:12px 16px;font-family:var(--font-mono);font-size:11px;color:var(--txt3);line-height:1.7;margin-top:8px;white-space:pre;overflow-x:auto}
+        .matlab-block .c{color:var(--txt2)}
+        .matlab-block .kw{color:var(--purple)}
+        .matlab-block .str{color:var(--green)}
 
-        .welcome-tags {
-            display: flex; gap: 8px; flex-wrap: wrap; justify-content: center;
-            animation: fade-rise .8s .35s ease-out both;
-            margin-top: 4px;
-        }
-        .welcome-tag {
-            padding: 5px 12px;
-            background: var(--bg3);
-            border: 1px solid var(--border);
-            border-radius: 20px;
-            font-family: var(--font-mono);
-            font-size: 10px; font-weight: 500;
-            color: var(--txt2);
-            letter-spacing: 0.5px;
-        }
-
-        .msg { animation: msg-in .22s ease-out both; }
-        @keyframes msg-in {
-            from { opacity: 0; transform: translateY(8px); }
-            to   { opacity: 1; transform: translateY(0); }
-        }
-
-        .user-msg {
-            align-self: flex-end;
-            max-width: 72%;
-            background: var(--user-bg);
-            border: 1px solid var(--border);
-            border-radius: 16px 16px 4px 16px;
-            padding: 11px 17px;
-            font-family: var(--font-body);
-            font-size: 13.5px; font-weight: 400;
-            line-height: 1.65;
-            color: var(--txt);
-        }
-
-        .bot-row {
-            display: flex;
-            gap: 11px;
-            align-items: flex-start;
-            max-width: 100%;
-        }
-        .bot-av {
-            width: 28px; height: 28px;
-            background: linear-gradient(140deg, var(--cyan), var(--purple));
-            border-radius: 8px;
-            flex-shrink: 0;
-            display: flex; align-items: center; justify-content: center;
-            font-family: var(--font-mono);
-            font-size: 9px; font-weight: 500; color: #000;
-            margin-top: 2px;
-        }
-        .bot-inner { flex: 1; min-width: 0; }
-        .bot-label {
-            font-family: var(--font-mono);
-            font-size: 10px; font-weight: 500;
-            letter-spacing: 1.5px;
-            color: var(--cyan);
-            text-transform: uppercase;
-            margin-bottom: 7px;
-        }
-        .bot-text {
-            font-family: var(--font-body);
-            font-size: 13.5px; font-weight: 400;
-            line-height: 1.78;
-            color: var(--txt);
-        }
-        .bot-text code {
-            font-family: var(--font-mono);
-            font-size: 12px;
-            background: rgba(0,200,255,0.07);
-            border: 1px solid rgba(0,200,255,0.18);
-            padding: 1px 7px;
-            border-radius: 4px;
-            color: var(--cyan);
-        }
-        .bot-text strong { color: var(--txt); font-weight: 600; }
-        .bot-text em { font-family: var(--font-serif); font-style: italic; color: var(--txt3); }
-
-        .opts-stack {
-            display: flex;
-            flex-direction: column;
-            gap: 7px;
-            margin-top: 14px;
-        }
-        .opt-card {
-            padding: 12px 16px;
-            background: rgba(0,200,255,0.025);
-            border: 1px solid rgba(0,200,255,0.12);
-            border-radius: 9px;
-            color: var(--txt3);
-            font-family: var(--font-body);
-            font-size: 13px; font-weight: 400;
-            cursor: pointer;
-            text-align: left;
-            transition: all .2s;
-            line-height: 1.5;
-        }
-        .opt-card:hover {
-            border-color: var(--cyan);
-            color: var(--txt);
-            background: rgba(0,200,255,0.06);
-            transform: translateX(4px);
-        }
-        .opt-hint {
-            display: block;
-            font-size: 11px;
-            color: var(--txt2);
-            margin-top: 3px;
-            font-weight: 300;
-        }
-
-        .thinking-wrap {
-            display: flex;
-            align-items: center;
-            gap: 14px;
-            padding: 6px 0;
-        }
-        .thinking-label {
-            font-family: var(--font-mono);
-            font-size: 10px;
-            color: var(--txt2);
-            letter-spacing: 1px;
-            text-transform: uppercase;
-            animation: think-blink 1.4s ease-in-out infinite;
-        }
-        @keyframes think-blink { 0%,100%{opacity:.4} 50%{opacity:1} }
-
-        .wave-bars {
-            display: flex;
-            align-items: flex-end;
-            gap: 3px;
-            height: 22px;
-        }
-        .wave-bar {
-            width: 3px;
-            background: var(--cyan);
-            border-radius: 2px;
-            opacity: 0.7;
-            animation: wave-anim 1s ease-in-out infinite;
-            transform-origin: bottom;
-        }
-        .wave-bar:nth-child(1) { animation-delay: 0s;    height: 6px; }
-        .wave-bar:nth-child(2) { animation-delay: .1s;   height: 10px; }
-        .wave-bar:nth-child(3) { animation-delay: .2s;   height: 16px; }
-        .wave-bar:nth-child(4) { animation-delay: .3s;   height: 10px; }
-        .wave-bar:nth-child(5) { animation-delay: .4s;   height: 6px; }
-        .wave-bar:nth-child(6) { animation-delay: .5s;   height: 12px; }
-        .wave-bar:nth-child(7) { animation-delay: .6s;   height: 18px; }
-        .wave-bar:nth-child(8) { animation-delay: .7s;   height: 10px; }
-        .wave-bar:nth-child(9) { animation-delay: .8s;   height: 6px; }
-        @keyframes wave-anim {
-            0%,100% { transform: scaleY(0.4); opacity: 0.4; }
-            50%      { transform: scaleY(1.0); opacity: 1.0; }
-        }
-
-        .chart-frame {
-            margin-top: 14px;
-            border: 1px solid var(--border2);
-            border-radius: 12px;
-            overflow: hidden;
-            background: rgba(0,200,255,0.018);
-            box-shadow: var(--glow);
-        }
-
-        .input-zone {
-            position: absolute;
-            bottom: 0; left: 0; right: 0;
-            z-index: 10;
-            background: linear-gradient(transparent, var(--bg) 26%);
-            padding: 36px max(40px, calc(50% - 400px)) 22px;
-        }
-        .chips-bar {
-            display: flex; gap: 7px; flex-wrap: wrap;
-            margin-bottom: 10px;
-        }
-        .chip {
-            padding: 6px 13px;
-            background: var(--bg3);
-            border: 1px solid var(--border);
-            border-radius: 20px;
-            font-family: var(--font-body);
-            font-size: 11.5px; font-weight: 400;
-            color: var(--txt2);
-            cursor: pointer;
-            transition: all .2s;
-            white-space: nowrap;
-        }
-        .chip:hover { border-color: rgba(0,200,255,0.3); color: var(--cyan); background: rgba(0,200,255,0.04); }
-
-        .input-bar {
-            display: flex;
-            background: var(--panel);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 6px 6px 6px 17px;
-            box-shadow: 0 4px 28px rgba(0,0,0,0.28), var(--glow);
-            transition: border-color .2s;
-        }
-        .input-bar:focus-within { border-color: rgba(0,200,255,0.28); }
-        #chat-input {
-            flex: 1; background: transparent; border: none;
-            color: var(--txt);
-            font-family: var(--font-body);
-            font-size: 13.5px; font-weight: 400;
-            outline: none; padding: 7px 0;
-        }
-        #chat-input::placeholder { color: var(--txt2); font-weight: 300; }
-        .send-btn {
-            width: 38px; height: 38px;
-            background: linear-gradient(135deg, var(--cyan), var(--cyan2));
-            border: none; border-radius: 8px;
-            cursor: pointer;
-            display: flex; align-items: center; justify-content: center;
-            transition: all .2s; flex-shrink: 0;
-        }
-        .send-btn:hover { transform: scale(1.06); box-shadow: 0 0 18px rgba(0,200,255,0.4); }
-        .send-btn svg { color: #000; }
-
-        @media (max-width: 680px) {
-            #sidebar { display: none; }
-            #chat-box { padding: 20px 16px 210px; }
-            .input-zone { padding: 24px 16px 18px; }
-        }
+        @media(max-width:680px){#sidebar{display:none}#chat-pane{padding:20px 16px 210px}.input-zone{padding:24px 16px 18px}.dash-kpi-row{grid-template-columns:repeat(2,1fr)}.dash-charts{grid-template-columns:1fr}}
     </style>
 </head>
 <body>
 
+<!-- ═══════════════════════ SIDEBAR ═══════════════════════ -->
 <div id="sidebar">
     <div class="logo">
         <div class="logo-mark">PID</div>
@@ -485,28 +169,37 @@
         New Session
     </button>
 
+    <!-- Mode toggle -->
+    <button class="mode-toggle-btn" id="mode-toggle-btn" onclick="toggleDashboard()">
+        <div class="mode-dot"></div>
+        <span id="mode-toggle-label">Simulink Telemetry</span>
+    </button>
+
     <div class="status-card">
-        <div class="status-row">
+        <div class="status-row" style="display:flex;align-items:center;gap:7px">
             <div class="pulse-dot"></div>
             <span class="status-txt">ENGINE ONLINE</span>
         </div>
-        <div class="status-sub">Random Forest — O'Dwyer rules</div>
+        <div class="status-sub">RF Model — O'Dwyer rules</div>
     </div>
 
     <div class="side-label">Quick Start</div>
     <button class="quick-item" onclick="sendChip('Km=2, Tm=10, Tau=2')">Try example: Km=2, Tm=10, Tau=2</button>
     <button class="quick-item" onclick="sendChip('What tuning rules do you have?')">List all tuning rules</button>
     <button class="quick-item" onclick="sendChip('What is PID control?')">Explain PID control</button>
-    <button class="quick-item" onclick="sendChip('Explain FOPDT parameters')">Explain FOPDT parameters</button>
-    <button class="quick-item" onclick="sendChip('What is IAE and ISE?')">Performance metrics guide</button>
+    <button class="quick-item" onclick="sendChip('Explain FOPDT parameters')">Explain FOPDT</button>
+    <button class="quick-item" onclick="sendChip('What is IAE and ISE?')">Performance metrics</button>
 
     <div class="side-spacer"></div>
     <button class="theme-btn" onclick="toggleTheme()">Toggle Light / Dark</button>
 </div>
 
+<!-- ═══════════════════════ MAIN ═══════════════════════ -->
 <div id="main">
-    <div id="chat-box"></div>
-    <div class="input-zone">
+
+    <!-- ── CHAT PANE ── -->
+    <div id="chat-pane"></div>
+    <div class="input-zone" id="input-zone">
         <div class="chips-bar">
             <div class="chip" onclick="sendChip('What tuning rules do you have?')">All tuning rules</div>
             <div class="chip" onclick="sendChip('Km=2, Tm=10, Tau=2')">Run example</div>
@@ -514,193 +207,431 @@
             <div class="chip" onclick="sendChip('help')">Help me start</div>
         </div>
         <div class="input-bar">
-            <input
-                type="text"
-                id="chat-input"
-                placeholder="Enter Km, Tm, Tau — or ask any question..."
-                autocomplete="off"
-                onkeydown="if(event.key==='Enter') sendMessage()"
-            />
-            <button class="send-btn" onclick="sendMessage()" title="Send">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                    <line x1="12" y1="19" x2="12" y2="5"/>
-                    <polyline points="5 12 12 5 19 12"/>
-                </svg>
+            <input type="text" id="chat-input" placeholder="Enter Km, Tm, Tau — or ask any question..." autocomplete="off" onkeydown="if(event.key==='Enter') sendMessage()"/>
+            <button class="send-btn" onclick="sendMessage()">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
             </button>
+        </div>
+    </div>
+
+    <!-- ── DASHBOARD PANE ── -->
+    <div id="dashboard-pane">
+        <div class="dash-header">
+            <span class="dash-title">Simulink Telemetry</span>
+            <div class="ws-status">
+                <div class="ws-dot" id="ws-dot"></div>
+                <span class="ws-label" id="ws-label">DISCONNECTED</span>
+            </div>
+            <button class="side-btn" style="margin:0;padding:6px 12px;font-size:11px" onclick="connectWebSocket()">Connect</button>
+            <button class="side-btn" style="margin:0;padding:6px 12px;font-size:11px" onclick="showMatlabGuide()">MATLAB Guide</button>
+        </div>
+
+        <div class="dash-kpi-row">
+            <div class="kpi-card">
+                <div class="kpi-label">Kc (Gain)</div>
+                <div class="kpi-value" id="kpi-kc">—<span class="kpi-unit"></span></div>
+                <div class="kpi-sub" id="kpi-kc-sub">Awaiting tune</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-label">Ti (Integral)</div>
+                <div class="kpi-value" id="kpi-ti">—<span class="kpi-unit">s</span></div>
+                <div class="kpi-sub" id="kpi-ti-sub">Awaiting tune</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-label">Overshoot est.</div>
+                <div class="kpi-value" id="kpi-os">—<span class="kpi-unit">%</span></div>
+                <div class="kpi-sub" id="kpi-os-sub">—</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-label">Active rule</div>
+                <div class="kpi-value" style="font-size:12px;line-height:1.3" id="kpi-rule">—</div>
+                <div class="kpi-sub" id="kpi-rule-sub">—</div>
+            </div>
+        </div>
+
+        <div class="dash-charts">
+            <div class="dash-chart-card">
+                <div class="dash-chart-label">PV / SP live trace</div>
+                <div id="live-pv-chart" class="plotly-chart" style="height:100%"></div>
+            </div>
+            <div class="dash-chart-card">
+                <div class="dash-chart-label">Manipulated variable (MV)</div>
+                <div id="live-mv-chart" class="plotly-chart" style="height:100%"></div>
+            </div>
+        </div>
+
+        <div class="dash-log" id="dash-log">
+            <div class="log-item"><span class="ts">--:--:--</span><span>Waiting for MATLAB connection…</span></div>
         </div>
     </div>
 </div>
 
 <script>
-    const API_URL = 'https://process-control-project.onrender.com/api/chat';
+// ═══════════════════════════════════════════════════════════════════════════
+//  CONFIG
+// ═══════════════════════════════════════════════════════════════════════════
+const API_URL = 'https://process-control-project.onrender.com/api/chat';
+const WS_URL  = 'https://process-control-project.onrender.com';
 
-    window.onload = () => {
-        if (localStorage.getItem('tb_theme') === 'light') document.body.classList.add('light');
-        showWelcome();
-        fetch(API_URL, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({message:'reset'}) }).catch(()=>{});
+let socket          = null;
+let dashMode        = false;
+let pvTraceInit     = false;
+let mvTraceInit     = false;
+
+const liveT  = [], livePV = [], liveSP = [], liveMV = [];
+const MAX_LIVE_POINTS = 400;
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════════════════════════════════════
+window.onload = () => {
+    if (localStorage.getItem('tb_theme') === 'light') document.body.classList.add('light');
+    showWelcome();
+    fetch(API_URL, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:'reset'})}).catch(()=>{});
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  THEME
+// ═══════════════════════════════════════════════════════════════════════════
+function toggleTheme() {
+    document.body.classList.toggle('light');
+    localStorage.setItem('tb_theme', document.body.classList.contains('light') ? 'light' : 'dark');
+    document.querySelectorAll('.plotly-chart').forEach(el => {
+        if (!el.data) return;
+        const isL = document.body.classList.contains('light');
+        Plotly.relayout(el, {'font.color':isL?'#334155':'#a0aec0','xaxis.gridcolor':isL?'#e2e8f0':'#1e2a3a','yaxis.gridcolor':isL?'#e2e8f0':'#1e2a3a'});
+    });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  DASHBOARD MODE TOGGLE
+// ═══════════════════════════════════════════════════════════════════════════
+function toggleDashboard() {
+    dashMode = !dashMode;
+    document.getElementById('chat-pane').style.display   = dashMode ? 'none' : '';
+    document.getElementById('input-zone').style.display  = dashMode ? 'none' : '';
+    document.getElementById('dashboard-pane').classList.toggle('active', dashMode);
+    document.getElementById('mode-toggle-label').textContent = dashMode ? 'Chat Mode' : 'Simulink Telemetry';
+
+    if (dashMode) {
+        initDashCharts();
+        // auto-connect
+        connectWebSocket();
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  WEBSOCKET
+// ═══════════════════════════════════════════════════════════════════════════
+function connectWebSocket() {
+    if (socket && socket.connected) { logDash('Already connected.', 'ok'); return; }
+    if (socket) { socket.disconnect(); }
+
+    setWsStatus('connecting', 'CONNECTING…');
+    socket = io(WS_URL, {transports: ['websocket'], reconnectionAttempts: 5});
+
+    socket.on('connect', () => {
+        setWsStatus('connected', 'CONNECTED');
+        logDash('Socket.IO connection established.', 'ok');
+    });
+    socket.on('disconnect', () => {
+        setWsStatus('disconnected', 'DISCONNECTED');
+        logDash('Disconnected from server.', 'warn');
+    });
+    socket.on('connect_error', (e) => {
+        setWsStatus('error', 'ERROR');
+        logDash('Connection error: ' + e.message, 'warn');
+    });
+    socket.on('status', (d) => logDash(d.message, 'ok'));
+
+    socket.on('telemetry_update', (d) => {
+        appendLiveData(d.t, d.pv, d.sp, d.mv);
+        updateLiveCharts();
+    });
+
+    socket.on('tune_response', (d) => {
+        if (d.status === 'error') { logDash('Tune error: ' + d.message, 'warn'); return; }
+        document.getElementById('kpi-kc').childNodes[0].textContent = d.kc;
+        document.getElementById('kpi-ti').childNodes[0].textContent = d.ti;
+        document.getElementById('kpi-os').childNodes[0].textContent = d.os_predicted;
+        document.getElementById('kpi-rule').textContent = d.rule;
+        document.getElementById('kpi-kc-sub').textContent = 'Updated ' + nowStr();
+        document.getElementById('kpi-ti-sub').textContent = 'Settling ' + d.settling_time + 's';
+        document.getElementById('kpi-os-sub').textContent = 'Predicted';
+        document.getElementById('kpi-rule-sub').textContent = nowStr();
+        logDash(`Tuned → Kc=${d.kc} Ti=${d.ti} | ${d.operator_decision}`, 'ok');
+        if (d.reduction_note && d.reduction_note.includes('reduced')) {
+            logDash(d.reduction_note, 'warn');
+        }
+    });
+}
+
+function setWsStatus(state, label) {
+    const dot = document.getElementById('ws-dot');
+    const lbl = document.getElementById('ws-label');
+    dot.className = 'ws-dot' + (state === 'connected' ? ' connected' : state === 'error' ? ' error' : '');
+    lbl.textContent = label;
+}
+
+function nowStr() {
+    return new Date().toLocaleTimeString();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  LIVE CHART DATA
+// ═══════════════════════════════════════════════════════════════════════════
+function appendLiveData(t, pv, sp, mv) {
+    const arr = Array.isArray(t) ? t : [t];
+    const pvA = Array.isArray(pv) ? pv : [pv];
+    const spA = Array.isArray(sp) ? sp : [sp];
+    const mvA = Array.isArray(mv) ? mv : [mv];
+    arr.forEach((ti, i) => {
+        liveT.push(ti); livePV.push(pvA[i]||0); liveSP.push(spA[i]||0); liveMV.push(mvA[i]||0);
+    });
+    // trim to window
+    while (liveT.length > MAX_LIVE_POINTS) {
+        liveT.shift(); livePV.shift(); liveSP.shift(); liveMV.shift();
+    }
+}
+
+function initDashCharts() {
+    const isL = document.body.classList.contains('light');
+    const base = {
+        paper_bgcolor:'transparent', plot_bgcolor:'rgba(10,14,20,0.5)',
+        font:{color:isL?'#334155':'#a0aec0',family:'DM Sans,sans-serif',size:11},
+        margin:{l:44,r:10,t:10,b:36},
+        xaxis:{gridcolor:isL?'#e2e8f0':'#1e2a3a',zerolinecolor:'#333',title:{text:'Time (s)',font:{size:10}}},
+        yaxis:{gridcolor:isL?'#e2e8f0':'#1e2a3a',zerolinecolor:'#333'},
+        legend:{bgcolor:'rgba(0,0,0,0)',font:{size:10}},
+        hovermode:'x unified'
     };
 
-    function showWelcome() {
-        const box = document.getElementById('chat-box');
-        box.innerHTML = `
-        <div class="welcome-screen">
-            <div class="welcome-orb">PID</div>
-            <div class="welcome-title">Tuning Bot</div>
-            <p class="welcome-sub">
-                An AI-powered PID controller optimization engine.<br>
-                Provide your <strong>process parameters</strong> and answer a few guided questions.
-                I will prescribe the optimal tuning settings and simulate the response.
-            </p>
-            <div class="welcome-tags">
-                <span class="welcome-tag">50+ O'DWYER RULES</span>
-                <span class="welcome-tag">RANDOM FOREST AI</span>
-                <span class="welcome-tag">LIVE SIMULATION</span>
+    Plotly.newPlot('live-pv-chart',
+        [{x:[], y:[], name:'PV',  type:'scatter', line:{color:'#00d4ff',width:2}},
+         {x:[], y:[], name:'SP',  type:'scatter', line:{color:'#ff4d6d',dash:'dash',width:1.5}}],
+        {...base}, {responsive:true, displayModeBar:false}
+    );
+
+    Plotly.newPlot('live-mv-chart',
+        [{x:[], y:[], name:'MV',  type:'scatter', line:{color:'#f59e0b',width:2}, fill:'tozeroy', fillcolor:'rgba(245,158,11,0.07)'}],
+        {...base}, {responsive:true, displayModeBar:false}
+    );
+
+    pvTraceInit = true;
+    mvTraceInit = true;
+}
+
+function updateLiveCharts() {
+    if (!pvTraceInit) return;
+    const pvEl = document.getElementById('live-pv-chart');
+    const mvEl = document.getElementById('live-mv-chart');
+    Plotly.extendTraces(pvEl, {x:[liveT, liveT], y:[livePV, liveSP]}, [0,1], MAX_LIVE_POINTS);
+    Plotly.extendTraces(mvEl, {x:[liveT],        y:[liveMV]},          [0],   MAX_LIVE_POINTS);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  DASHBOARD LOG
+// ═══════════════════════════════════════════════════════════════════════════
+function logDash(msg, type='') {
+    const log  = document.getElementById('dash-log');
+    const item = document.createElement('div');
+    item.className = 'log-item';
+    item.innerHTML = `<span class="ts">${nowStr()}</span><span class="${type}">${msg}</span>`;
+    log.prepend(item);
+    while (log.children.length > 40) log.removeChild(log.lastChild);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  MATLAB GUIDE POPUP (shown in chat pane)
+// ═══════════════════════════════════════════════════════════════════════════
+function showMatlabGuide() {
+    toggleDashboard(); // back to chat for a moment
+    const box = document.getElementById('chat-pane');
+    const ws  = box.querySelector('.welcome-screen');
+    if (ws) ws.remove();
+    const row = document.createElement('div');
+    row.className = 'msg bot-row';
+    row.innerHTML = `
+        <div class="bot-av">TB</div>
+        <div class="bot-inner">
+            <div class="bot-label">Tuning Bot — MATLAB Integration Guide</div>
+            <div class="bot-text">
+                <strong>Step 1 — Install Socket.IO client in MATLAB:</strong><br>
+                Download <code>matlab-socket.io-client</code> from File Exchange, or use the Python engine bridge below.<br><br>
+                <strong>Step 2 — Python bridge (recommended):</strong><br>
+                Run this Python snippet inside MATLAB via <code>py.subprocess</code> or a companion script:
+            </div>
+            <div class="matlab-block"><span class="c">% MATLAB companion script: matlab_bridge.py</span>
+<span class="kw">import</span> socketio, time
+
+sio = socketio.Client()
+sio.connect(<span class="str">'${WS_URL}'</span>)
+
+<span class="c"># 1. Send autonomous tune request (FOPDT)</span>
+sio.emit(<span class="str">'tune_request'</span>, {
+    <span class="str">'order'</span>: 1, <span class="str">'km'</span>: 2.0,
+    <span class="str">'tm'</span>: 10.0, <span class="str">'taum'</span>: 2.0
+})
+
+<span class="c"># 2. Stream live telemetry (call in your Simulink step callback)</span>
+sio.emit(<span class="str">'telemetry'</span>, {
+    <span class="str">'t'</span>:  [t_now],
+    <span class="str">'pv'</span>: [pv_now],
+    <span class="str">'sp'</span>: [sp_now],
+    <span class="str">'mv'</span>: [mv_now]
+})
+
+<span class="c"># 3. Receive gains (listen for tune_response)</span>
+@sio.on(<span class="str">'tune_response'</span>)
+<span class="kw">def</span> on_gains(data):
+    Kc = data[<span class="str">'kc'</span>]
+    Ti = data[<span class="str">'ti'</span>]
+    <span class="c"># write Kc/Ti back to MATLAB workspace or Simulink param</span></div>
+            <div class="bot-text" style="margin-top:10px">
+                <strong>Higher-order transfer function:</strong><br>
+                For a 2nd-order process, send <code>order:2, tm1:10, tm2:3, taum:2</code>.<br>
+                The server applies Skogestad's Half-Rule and returns FOPDT-equivalent gains.<br><br>
+                The autonomous operator evaluates dead-time ratio, gain drift, and ratio spikes automatically.
+                No interview questions in MATLAB mode.
             </div>
         </div>`;
-    }
+    box.appendChild(row);
+    box.scrollTo({top: box.scrollHeight, behavior:'smooth'});
+    setTimeout(() => toggleDashboard(), 100); // back to dashboard
+}
 
-    function toggleTheme() {
-        document.body.classList.toggle('light');
-        localStorage.setItem('tb_theme', document.body.classList.contains('light') ? 'light' : 'dark');
-        document.querySelectorAll('.plotly-chart').forEach(el => {
-            const isL = document.body.classList.contains('light');
-            Plotly.relayout(el, {
-                'font.color':       isL ? '#334155' : '#a0aec0',
-                'xaxis.gridcolor':  isL ? '#e2e8f0' : '#1e2a3a',
-                'yaxis.gridcolor':  isL ? '#e2e8f0' : '#1e2a3a',
-            });
-        });
-    }
+// ═══════════════════════════════════════════════════════════════════════════
+//  CHAT FUNCTIONS  (identical to original)
+// ═══════════════════════════════════════════════════════════════════════════
+function showWelcome() {
+    const box = document.getElementById('chat-pane');
+    box.innerHTML = `
+    <div class="welcome-screen">
+        <div class="welcome-orb">PID</div>
+        <div class="welcome-title">Tuning Bot</div>
+        <p class="welcome-sub">
+            AI-powered PID optimization engine.<br>
+            Provide your <strong>process parameters</strong> or switch to
+            <strong>Simulink Telemetry Mode</strong> for live autonomous tuning.
+        </p>
+        <div class="welcome-tags">
+            <span class="welcome-tag">50+ O'DWYER RULES</span>
+            <span class="welcome-tag">RANDOM FOREST AI</span>
+            <span class="welcome-tag">LIVE SIMULATION</span>
+            <span class="welcome-tag">SOCKET.IO MATLAB</span>
+        </div>
+    </div>`;
+}
 
-    function startNewChat() {
-        showWelcome();
-        fetch(API_URL, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({message:'reset'}) }).catch(()=>{});
-    }
+function startNewChat() {
+    if (dashMode) toggleDashboard();
+    showWelcome();
+    fetch(API_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:'reset'})}).catch(()=>{});
+}
 
-    function sendChip(text) {
-        document.getElementById('chat-input').value = text;
-        sendMessage();
-    }
+function sendChip(text) {
+    if (dashMode) toggleDashboard();
+    document.getElementById('chat-input').value = text;
+    sendMessage();
+}
 
-    function sendOption(val) {
-        document.getElementById('chat-input').value = val;
-        sendMessage();
-    }
+function sendOption(val) {
+    document.getElementById('chat-input').value = val;
+    sendMessage();
+}
 
-    function renderBotMsg(text, opts = [], chart = null) {
-        const ws = document.getElementById('chat-box').querySelector('.welcome-screen');
-        if (ws) ws.remove();
+function renderBotMsg(text, opts=[], chart=null) {
+    const box = document.getElementById('chat-pane');
+    const ws  = box.querySelector('.welcome-screen');
+    if (ws) ws.remove();
 
-        const optsHtml = opts.length > 0
-            ? `<div class="opts-stack">${opts.map(o => {
-                const parts = o.label.split('\n');
-                const main  = parts[0];
-                return `<button class="opt-card" onclick="sendOption('${o.val}')">${main}</button>`;
-              }).join('')}</div>`
-            : '';
+    const optsHtml = opts.length
+        ? `<div class="opts-stack">${opts.map(o=>`<button class="opt-card" onclick="sendOption('${o.val}')">${o.label}</button>`).join('')}</div>`
+        : '';
 
-        const formattedText = text.replace(/\n/g, '<br>');
+    const row = document.createElement('div');
+    row.className = 'msg bot-row';
+    row.innerHTML = `
+        <div class="bot-av">TB</div>
+        <div class="bot-inner">
+            <div class="bot-label">Tuning Bot</div>
+            <div class="bot-text">${text.replace(/\n/g,'<br>')}${optsHtml}</div>
+        </div>`;
+    box.appendChild(row);
 
-        const row = document.createElement('div');
-        row.className = 'msg bot-row';
-        row.innerHTML = `
-            <div class="bot-av">TB</div>
-            <div class="bot-inner">
-                <div class="bot-label">Tuning Bot</div>
-                <div class="bot-text">${formattedText}${optsHtml}</div>
+    if (chart) {
+        const ghostRow = document.createElement('div');
+        ghostRow.className = 'msg bot-row';
+        const chartId = 'chart-' + Date.now();
+        ghostRow.innerHTML = `
+            <div class="bot-av" style="visibility:hidden"></div>
+            <div class="bot-inner chart-frame">
+                <div id="${chartId}" class="plotly-chart" style="width:100%;height:340px"></div>
             </div>`;
-        document.getElementById('chat-box').appendChild(row);
+        box.appendChild(ghostRow);
+        setTimeout(() => {
+            try {
+                let p = typeof chart === 'string' ? JSON.parse(chart) : chart;
+                const isL = document.body.classList.contains('light');
+                p.layout.font = {color:isL?'#334155':'#a0aec0',family:'DM Sans,sans-serif',size:12};
+                p.layout.xaxis.gridcolor = isL?'#e2e8f0':'#1e2a3a';
+                p.layout.yaxis.gridcolor = isL?'#e2e8f0':'#1e2a3a';
+                p.layout.plot_bgcolor    = isL?'rgba(248,250,252,0.8)':'rgba(10,14,20,0.6)';
+                Plotly.newPlot(chartId, p.data, p.layout, {responsive:true,displayModeBar:false});
+                scrollBottom();
+            } catch(e){ console.error('Chart error:', e); }
+        }, 60);
+    } else { scrollBottom(); }
+}
 
-        if (chart) {
-            const ghostRow = document.createElement('div');
-            ghostRow.className = 'msg bot-row';
-            const chartId = 'chart-' + Date.now();
-            ghostRow.innerHTML = `
-                <div class="bot-av" style="visibility:hidden;"></div>
-                <div class="bot-inner chart-frame">
-                    <div id="${chartId}" class="plotly-chart" style="width:100%; height:340px;"></div>
-                </div>`;
-            document.getElementById('chat-box').appendChild(ghostRow);
+async function sendMessage() {
+    const input = document.getElementById('chat-input');
+    const text  = input.value.trim();
+    if (!text) return;
+    input.value = '';
 
-            setTimeout(() => {
-                try {
-                    let p = typeof chart === 'string' ? JSON.parse(chart) : chart;
-                    const isL = document.body.classList.contains('light');
-                    p.layout.font        = { color: isL ? '#334155' : '#a0aec0', family: "'DM Sans', sans-serif", size: 12 };
-                    p.layout.xaxis.gridcolor = isL ? '#e2e8f0' : '#1e2a3a';
-                    p.layout.yaxis.gridcolor = isL ? '#e2e8f0' : '#1e2a3a';
-                    p.layout.plot_bgcolor    = isL ? 'rgba(248,250,252,0.8)' : 'rgba(10,14,20,0.6)';
-                    Plotly.newPlot(chartId, p.data, p.layout, { responsive: true, displayModeBar: false });
-                    scrollBottom();
-                } catch(e) { console.error('Chart render error:', e); }
-            }, 60);
-        } else {
-            scrollBottom();
-        }
+    if (dashMode) toggleDashboard();
+
+    const box = document.getElementById('chat-pane');
+    const ws  = box.querySelector('.welcome-screen');
+    if (ws) ws.remove();
+
+    const userEl = document.createElement('div');
+    userEl.className = 'msg user-msg';
+    userEl.textContent = text;
+    box.appendChild(userEl);
+
+    const typId = 'typ-' + Date.now();
+    const typEl = document.createElement('div');
+    typEl.id = typId;
+    typEl.className = 'msg bot-row';
+    typEl.innerHTML = `
+        <div class="bot-av">TB</div>
+        <div class="bot-inner">
+            <div class="bot-label">Tuning Bot</div>
+            <div class="thinking-wrap">
+                <div class="wave-bars">${Array(9).fill('<div class="wave-bar"></div>').join('')}</div>
+                <span class="thinking-label">Processing</span>
+            </div>
+        </div>`;
+    box.appendChild(typEl);
+    scrollBottom();
+
+    try {
+        const res  = await fetch(API_URL, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:text})});
+        const data = await res.json();
+        document.getElementById(typId)?.remove();
+        renderBotMsg(data.reply, data.options||[], data.chart||null);
+    } catch(e) {
+        document.getElementById(typId)?.remove();
+        renderBotMsg('<strong>Connection failed.</strong> Server may be spinning up. Wait 30s and retry.', [], null);
     }
+}
 
-    async function sendMessage() {
-        const input = document.getElementById('chat-input');
-        const text  = input.value.trim();
-        if (!text) return;
-        input.value = '';
-
-        const ws = document.getElementById('chat-box').querySelector('.welcome-screen');
-        if (ws) ws.remove();
-
-        const userEl = document.createElement('div');
-        userEl.className = 'msg user-msg';
-        userEl.textContent = text;
-        document.getElementById('chat-box').appendChild(userEl);
-
-        const typId = 'typ-' + Date.now();
-        const typEl = document.createElement('div');
-        typEl.id = typId;
-        typEl.className = 'msg bot-row';
-        typEl.innerHTML = `
-            <div class="bot-av">TB</div>
-            <div class="bot-inner">
-                <div class="bot-label">Tuning Bot</div>
-                <div class="thinking-wrap">
-                    <div class="wave-bars">
-                        <div class="wave-bar"></div>
-                        <div class="wave-bar"></div>
-                        <div class="wave-bar"></div>
-                        <div class="wave-bar"></div>
-                        <div class="wave-bar"></div>
-                        <div class="wave-bar"></div>
-                        <div class="wave-bar"></div>
-                        <div class="wave-bar"></div>
-                        <div class="wave-bar"></div>
-                    </div>
-                    <span class="thinking-label">Processing</span>
-                </div>
-            </div>`;
-        document.getElementById('chat-box').appendChild(typEl);
-        scrollBottom();
-
-        try {
-            const res  = await fetch(API_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ message: text })
-            });
-            const data = await res.json();
-            document.getElementById(typId)?.remove();
-            renderBotMsg(data.reply, data.options || [], data.chart || null);
-        } catch(e) {
-            document.getElementById(typId)?.remove();
-            renderBotMsg(
-                '<strong>Connection failed.</strong> The server may be spinning up. Please wait 30 seconds and try again.',
-                [], null
-            );
-        }
-    }
-
-    function scrollBottom() {
-        const box = document.getElementById('chat-box');
-        box.scrollTo({ top: box.scrollHeight, behavior: 'smooth' });
-    }
+function scrollBottom() {
+    const box = document.getElementById('chat-pane');
+    box.scrollTo({top: box.scrollHeight, behavior:'smooth'});
+}
 </script>
 </body>
 </html>
