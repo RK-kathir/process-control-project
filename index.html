@@ -22,139 +22,192 @@
             --bg:#f2f5fb; --bg2:#e8edf6; --bg3:#dde3ef; --panel:#ffffff;
             --border:rgba(0,0,0,0.07); --border2:rgba(14,165,233,0.28);
             --txt:#1a2035; --txt2:#94a3b8; --txt3:#4b5a6e;
-            --cyan:#0284c7; --cyan2:#0369a1; --purple:#5b6ee1;
-            --green:#059669; --user-bg:#e2e8f5; --glow:0 2px 24px rgba(0,0,0,0.06);
+            --cyan:#0284c7; --cyan2:#0369a1; --purple:#5b6ee1; --green:#059669;
+            --user-bg:#e2e8f5; --glow:0 2px 24px rgba(0,0,0,0.06);
         }
         *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
         html,body{height:100%;overflow:hidden}
         body{font-family:var(--font-body);background:var(--bg);color:var(--txt);display:flex;transition:background .35s,color .35s}
-
-        /* ── Sidebar ── */
+ 
+        /* ── Sidebar ─────────────────────────────────────────────── */
         #sidebar{width:238px;flex-shrink:0;background:var(--panel);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
         .logo{padding:22px 18px 18px;display:flex;align-items:center;gap:11px;border-bottom:1px solid var(--border)}
         .logo-mark{width:34px;height:34px;background:linear-gradient(140deg,var(--cyan) 0%,var(--purple) 100%);border-radius:9px;display:flex;align-items:center;justify-content:center;font-family:var(--font-mono);font-size:11px;font-weight:500;color:#000;flex-shrink:0;box-shadow:0 0 20px rgba(0,200,255,0.18)}
         .logo-title{font-family:var(--font-mono);font-size:11px;font-weight:500;letter-spacing:2px;color:var(--txt);text-transform:uppercase}
-        .logo-sub{font-family:var(--font-body);font-size:10px;font-weight:300;color:var(--txt2);margin-top:2px}
+        .logo-sub{font-size:10px;font-weight:300;color:var(--txt2);margin-top:2px}
         .side-btn{margin:10px 12px 0;padding:10px 13px;background:transparent;border:1px solid var(--border);border-radius:8px;color:var(--txt3);font-family:var(--font-body);font-size:12.5px;cursor:pointer;display:flex;align-items:center;gap:9px;transition:all .2s;text-align:left}
         .side-btn:hover{border-color:var(--border2);color:var(--cyan);background:rgba(0,200,255,0.04)}
         .status-card{margin:12px 12px 0;padding:10px 13px;background:rgba(45,212,160,0.05);border:1px solid rgba(45,212,160,0.18);border-radius:8px}
-        .pulse-dot{width:6px;height:6px;background:var(--green);border-radius:50%;box-shadow:0 0 8px var(--green);animation:pulse-dot 2.2s ease-in-out infinite}
-        @keyframes pulse-dot{0%,100%{opacity:1}50%{opacity:.3}}
+        .pulse-dot{width:6px;height:6px;background:var(--green);border-radius:50%;box-shadow:0 0 8px var(--green);animation:pdot 2.2s ease-in-out infinite}
+        @keyframes pdot{0%,100%{opacity:1}50%{opacity:.3}}
         .status-txt{font-family:var(--font-mono);font-size:10px;font-weight:500;color:var(--green);letter-spacing:.8px}
-        .status-sub{font-family:var(--font-body);font-size:10px;color:var(--txt2);margin-top:3px;font-weight:300}
+        .status-sub{font-size:10px;color:var(--txt2);margin-top:3px;font-weight:300}
         .side-label{padding:16px 18px 5px;font-family:var(--font-mono);font-size:9px;font-weight:500;letter-spacing:2.5px;color:var(--txt2);text-transform:uppercase}
         .quick-item{margin:3px 12px;padding:8px 12px;background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--txt3);font-family:var(--font-body);font-size:11.5px;cursor:pointer;transition:all .2s;text-align:left;width:calc(100% - 24px);line-height:1.4}
         .quick-item:hover{border-color:var(--border2);color:var(--txt);background:rgba(0,200,255,0.03)}
         .side-spacer{flex:1}
         .theme-btn{margin:6px 12px 8px;padding:9px 13px;background:var(--bg3);border:1px solid var(--border);border-radius:7px;color:var(--txt3);font-family:var(--font-body);font-size:11.5px;cursor:pointer;text-align:center;transition:all .2s}
         .theme-btn:hover{border-color:var(--border2);color:var(--txt)}
-
-        /* ── Mode toggle button ── */
         .mode-toggle-btn{margin:6px 12px 0;padding:10px 13px;border:1px solid rgba(245,158,11,0.3);border-radius:8px;background:rgba(245,158,11,0.06);color:var(--amber);font-family:var(--font-mono);font-size:10px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:8px;letter-spacing:1px;text-transform:uppercase;transition:all .2s}
         .mode-toggle-btn:hover{border-color:rgba(245,158,11,0.5);background:rgba(245,158,11,0.1)}
-        .mode-dot{width:6px;height:6px;background:var(--amber);border-radius:50%;animation:pulse-dot 1.8s ease-in-out infinite}
-
-        /* ── Main area ── */
+        .mode-dot{width:6px;height:6px;background:var(--amber);border-radius:50%;animation:pdot 1.8s ease-in-out infinite}
+ 
+        /* ── Main ─────────────────────────────────────────────────── */
         #main{flex:1;display:flex;flex-direction:column;position:relative;min-width:0}
-
-        /* ── CHAT MODE ── */
+ 
+        /* ── Chat pane ────────────────────────────────────────────── */
         #chat-pane{flex:1;overflow-y:auto;padding:40px max(40px,calc(50% - 400px));padding-bottom:210px;display:flex;flex-direction:column;gap:22px;scroll-behavior:smooth}
         #chat-pane::-webkit-scrollbar{width:3px}
         #chat-pane::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
-
-        .welcome-screen{display:flex;flex-direction:column;align-items:center;padding:70px 20px 30px;text-align:center;gap:16px;animation:fade-rise .7s ease-out both}
-        @keyframes fade-rise{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
-        .welcome-orb{width:68px;height:68px;background:linear-gradient(140deg,var(--cyan) 0%,var(--purple) 100%);border-radius:18px;display:flex;align-items:center;justify-content:center;font-family:var(--font-mono);font-size:16px;font-weight:500;color:#000;box-shadow:0 0 60px rgba(0,200,255,0.25);animation:orb-breathe 3.5s ease-in-out infinite;margin-bottom:6px}
-        @keyframes orb-breathe{0%,100%{box-shadow:0 0 60px rgba(0,200,255,0.25)}50%{box-shadow:0 0 80px rgba(0,200,255,0.4)}}
+        .welcome-screen{display:flex;flex-direction:column;align-items:center;padding:70px 20px 30px;text-align:center;gap:16px;animation:frise .7s ease-out both}
+        @keyframes frise{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+        .welcome-orb{width:68px;height:68px;background:linear-gradient(140deg,var(--cyan) 0%,var(--purple) 100%);border-radius:18px;display:flex;align-items:center;justify-content:center;font-family:var(--font-mono);font-size:16px;font-weight:500;color:#000;box-shadow:0 0 60px rgba(0,200,255,0.25);animation:obr 3.5s ease-in-out infinite;margin-bottom:6px}
+        @keyframes obr{0%,100%{box-shadow:0 0 60px rgba(0,200,255,0.25)}50%{box-shadow:0 0 80px rgba(0,200,255,0.4)}}
         .welcome-title{font-family:var(--font-serif);font-size:28px;font-style:italic;color:var(--txt)}
-        .welcome-sub{font-family:var(--font-body);font-size:13.5px;font-weight:300;color:var(--txt3);max-width:380px;line-height:1.7}
+        .welcome-sub{font-size:13.5px;font-weight:300;color:var(--txt3);max-width:400px;line-height:1.7}
         .welcome-sub strong{color:var(--txt);font-weight:500}
         .welcome-tags{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:4px}
         .welcome-tag{padding:5px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:20px;font-family:var(--font-mono);font-size:10px;color:var(--txt2);letter-spacing:.5px}
-
-        .msg{animation:msg-in .22s ease-out both}
-        @keyframes msg-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
-        .user-msg{align-self:flex-end;max-width:72%;background:var(--user-bg);border:1px solid var(--border);border-radius:16px 16px 4px 16px;padding:11px 17px;font-family:var(--font-body);font-size:13.5px;line-height:1.65;color:var(--txt)}
+        .msg{animation:msgin .22s ease-out both}
+        @keyframes msgin{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+        .user-msg{align-self:flex-end;max-width:72%;background:var(--user-bg);border:1px solid var(--border);border-radius:16px 16px 4px 16px;padding:11px 17px;font-size:13.5px;line-height:1.65}
         .bot-row{display:flex;gap:11px;align-items:flex-start;max-width:100%}
         .bot-av{width:28px;height:28px;background:linear-gradient(140deg,var(--cyan),var(--purple));border-radius:8px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-family:var(--font-mono);font-size:9px;font-weight:500;color:#000;margin-top:2px}
         .bot-inner{flex:1;min-width:0}
         .bot-label{font-family:var(--font-mono);font-size:10px;font-weight:500;letter-spacing:1.5px;color:var(--cyan);text-transform:uppercase;margin-bottom:7px}
-        .bot-text{font-family:var(--font-body);font-size:13.5px;font-weight:400;line-height:1.78;color:var(--txt)}
+        .bot-text{font-size:13.5px;font-weight:400;line-height:1.78;color:var(--txt)}
         .bot-text code{font-family:var(--font-mono);font-size:12px;background:rgba(0,200,255,0.07);border:1px solid rgba(0,200,255,0.18);padding:1px 7px;border-radius:4px;color:var(--cyan)}
         .bot-text strong{color:var(--txt);font-weight:600}
         .bot-text em{font-family:var(--font-serif);font-style:italic;color:var(--txt3)}
         .opts-stack{display:flex;flex-direction:column;gap:7px;margin-top:14px}
-        .opt-card{padding:12px 16px;background:rgba(0,200,255,0.025);border:1px solid rgba(0,200,255,0.12);border-radius:9px;color:var(--txt3);font-family:var(--font-body);font-size:13px;cursor:pointer;text-align:left;transition:all .2s;line-height:1.5}
+        .opt-card{padding:12px 16px;background:rgba(0,200,255,0.025);border:1px solid rgba(0,200,255,0.12);border-radius:9px;color:var(--txt3);font-size:13px;cursor:pointer;text-align:left;transition:all .2s;line-height:1.5}
         .opt-card:hover{border-color:var(--cyan);color:var(--txt);background:rgba(0,200,255,0.06);transform:translateX(4px)}
         .thinking-wrap{display:flex;align-items:center;gap:14px;padding:6px 0}
-        .thinking-label{font-family:var(--font-mono);font-size:10px;color:var(--txt2);letter-spacing:1px;text-transform:uppercase;animation:think-blink 1.4s ease-in-out infinite}
-        @keyframes think-blink{0%,100%{opacity:.4}50%{opacity:1}}
+        .thinking-label{font-family:var(--font-mono);font-size:10px;color:var(--txt2);letter-spacing:1px;text-transform:uppercase;animation:tblink 1.4s ease-in-out infinite}
+        @keyframes tblink{0%,100%{opacity:.4}50%{opacity:1}}
         .wave-bars{display:flex;align-items:flex-end;gap:3px;height:22px}
-        .wave-bar{width:3px;background:var(--cyan);border-radius:2px;opacity:.7;animation:wave-anim 1s ease-in-out infinite;transform-origin:bottom}
-        .wave-bar:nth-child(1){animation-delay:0s;height:6px} .wave-bar:nth-child(2){animation-delay:.1s;height:10px}
-        .wave-bar:nth-child(3){animation-delay:.2s;height:16px} .wave-bar:nth-child(4){animation-delay:.3s;height:10px}
-        .wave-bar:nth-child(5){animation-delay:.4s;height:6px} .wave-bar:nth-child(6){animation-delay:.5s;height:12px}
-        .wave-bar:nth-child(7){animation-delay:.6s;height:18px} .wave-bar:nth-child(8){animation-delay:.7s;height:10px}
+        .wave-bar{width:3px;background:var(--cyan);border-radius:2px;opacity:.7;animation:wv 1s ease-in-out infinite;transform-origin:bottom}
+        .wave-bar:nth-child(1){animation-delay:0s;height:6px}.wave-bar:nth-child(2){animation-delay:.1s;height:10px}
+        .wave-bar:nth-child(3){animation-delay:.2s;height:16px}.wave-bar:nth-child(4){animation-delay:.3s;height:10px}
+        .wave-bar:nth-child(5){animation-delay:.4s;height:6px}.wave-bar:nth-child(6){animation-delay:.5s;height:12px}
+        .wave-bar:nth-child(7){animation-delay:.6s;height:18px}.wave-bar:nth-child(8){animation-delay:.7s;height:10px}
         .wave-bar:nth-child(9){animation-delay:.8s;height:6px}
-        @keyframes wave-anim{0%,100%{transform:scaleY(.4);opacity:.4}50%{transform:scaleY(1);opacity:1}}
-        .chart-frame{margin-top:14px;border:1px solid var(--border2);border-radius:12px;overflow:hidden;background:rgba(0,200,255,0.018);box-shadow:var(--glow)}
-
-        /* ── INPUT BAR ── */
+        @keyframes wv{0%,100%{transform:scaleY(.4);opacity:.4}50%{transform:scaleY(1);opacity:1}}
+        .chart-frame{margin-top:14px;border:1px solid var(--border2);border-radius:12px;overflow:hidden;background:rgba(0,200,255,0.018)}
+        .chart-comment{padding:8px 14px 10px;font-size:11.5px;color:var(--txt3);line-height:1.6;border-top:1px solid var(--border);background:rgba(0,0,0,0.15)}
+        .chart-comment strong{color:var(--txt2)}
+ 
+        /* ── Input zone ───────────────────────────────────────────── */
         .input-zone{position:absolute;bottom:0;left:0;right:0;z-index:10;background:linear-gradient(transparent,var(--bg) 26%);padding:36px max(40px,calc(50% - 400px)) 22px}
         .chips-bar{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:10px}
-        .chip{padding:6px 13px;background:var(--bg3);border:1px solid var(--border);border-radius:20px;font-family:var(--font-body);font-size:11.5px;color:var(--txt2);cursor:pointer;transition:all .2s;white-space:nowrap}
+        .chip{padding:6px 13px;background:var(--bg3);border:1px solid var(--border);border-radius:20px;font-size:11.5px;color:var(--txt2);cursor:pointer;transition:all .2s;white-space:nowrap}
         .chip:hover{border-color:rgba(0,200,255,0.3);color:var(--cyan);background:rgba(0,200,255,0.04)}
-        .input-bar{display:flex;background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:6px 6px 6px 17px;box-shadow:0 4px 28px rgba(0,0,0,0.28),var(--glow);transition:border-color .2s}
+        .input-bar{display:flex;background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:6px 6px 6px 17px;box-shadow:0 4px 28px rgba(0,0,0,0.28);transition:border-color .2s}
         .input-bar:focus-within{border-color:rgba(0,200,255,0.28)}
         #chat-input{flex:1;background:transparent;border:none;color:var(--txt);font-family:var(--font-body);font-size:13.5px;outline:none;padding:7px 0}
         #chat-input::placeholder{color:var(--txt2);font-weight:300}
         .send-btn{width:38px;height:38px;background:linear-gradient(135deg,var(--cyan),var(--cyan2));border:none;border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .2s;flex-shrink:0}
         .send-btn:hover{transform:scale(1.06);box-shadow:0 0 18px rgba(0,200,255,0.4)}
-
-        /* ══ DASHBOARD MODE ══════════════════════════════════════════════════ */
-        #dashboard-pane{flex:1;display:none;flex-direction:column;overflow:hidden;padding:16px}
+ 
+        /* ══ DASHBOARD PANE ══════════════════════════════════════════ */
+        #dashboard-pane{flex:1;display:none;flex-direction:column;overflow-y:auto;padding:14px 16px 16px;gap:10px}
         #dashboard-pane.active{display:flex}
-
-        .dash-header{display:flex;align-items:center;gap:12px;margin-bottom:12px;flex-shrink:0}
+        #dashboard-pane::-webkit-scrollbar{width:3px}
+        #dashboard-pane::-webkit-scrollbar-thumb{background:var(--border)}
+ 
+        .dash-header{display:flex;align-items:center;gap:10px;flex-shrink:0;flex-wrap:wrap}
         .dash-title{font-family:var(--font-mono);font-size:12px;font-weight:500;color:var(--amber);letter-spacing:1.5px;text-transform:uppercase}
         .ws-status{display:flex;align-items:center;gap:6px;padding:4px 10px;border:1px solid rgba(245,158,11,0.2);border-radius:20px;background:rgba(245,158,11,0.06)}
         .ws-dot{width:6px;height:6px;border-radius:50%;background:var(--txt2);transition:background .3s}
-        .ws-dot.connected{background:var(--green);box-shadow:0 0 6px var(--green);animation:pulse-dot 2s infinite}
+        .ws-dot.connected{background:var(--green);box-shadow:0 0 6px var(--green);animation:pdot 2s infinite}
         .ws-dot.error{background:var(--red)}
         .ws-label{font-family:var(--font-mono);font-size:10px;color:var(--txt3);letter-spacing:.8px}
-
-        .dash-kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px;flex-shrink:0}
+ 
+        .dash-kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;flex-shrink:0}
         .kpi-card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:10px 14px}
         .kpi-label{font-family:var(--font-mono);font-size:9px;color:var(--txt2);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:4px}
         .kpi-value{font-family:var(--font-mono);font-size:20px;font-weight:500;color:var(--cyan);line-height:1}
-        .kpi-unit{font-size:11px;color:var(--txt3);margin-left:3px}
-        .kpi-sub{font-family:var(--font-body);font-size:10px;color:var(--txt2);margin-top:3px}
-
-        .dash-charts{display:grid;grid-template-columns:1fr 1fr;gap:10px;flex:1;min-height:0}
-        .dash-chart-card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:10px;display:flex;flex-direction:column}
-        .dash-chart-label{font-family:var(--font-mono);font-size:9px;color:var(--txt2);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px;flex-shrink:0}
-        .dash-chart-card .plotly-chart{flex:1;min-height:0}
-
-        .dash-log{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:10px;margin-top:10px;flex-shrink:0;max-height:100px;overflow-y:auto}
+        .kpi-unit{font-size:11px;color:var(--txt3);margin-left:2px}
+        .kpi-sub{font-size:10px;color:var(--txt2);margin-top:3px;font-weight:300}
+ 
+        /* Live PV full-width card */
+        .dash-pv-card{background:var(--panel);border:1px solid var(--border2);border-radius:10px;padding:10px;flex-shrink:0}
+        .dash-pv-label{font-family:var(--font-mono);font-size:9px;color:var(--cyan);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:4px}
+        .pv-comment{font-size:11px;color:var(--txt3);margin-top:6px;padding-top:6px;border-top:1px solid var(--border);line-height:1.6}
+        .pv-comment strong{color:var(--txt2)}
+ 
+        .dash-charts-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;flex-shrink:0}
+        .dash-chart-card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:10px}
+        .dash-chart-label{font-family:var(--font-mono);font-size:9px;color:var(--txt2);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px}
+ 
+        .dash-log{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:8px 12px;flex-shrink:0;max-height:90px;overflow-y:auto}
         .log-item{font-family:var(--font-mono);font-size:10px;color:var(--txt3);padding:2px 0;border-bottom:1px solid var(--border)}
         .log-item:last-child{border:none}
         .log-item .ts{color:var(--txt2);margin-right:8px}
-        .log-item .rule{color:var(--cyan)}
-        .log-item .warn{color:var(--amber)}
-        .log-item .ok{color:var(--green)}
-
-        /* MATLAB code block */
-        .matlab-block{background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:12px 16px;font-family:var(--font-mono);font-size:11px;color:var(--txt3);line-height:1.7;margin-top:8px;white-space:pre;overflow-x:auto}
-        .matlab-block .c{color:var(--txt2)}
-        .matlab-block .kw{color:var(--purple)}
-        .matlab-block .str{color:var(--green)}
-
-        @media(max-width:680px){#sidebar{display:none}#chat-pane{padding:20px 16px 210px}.input-zone{padding:24px 16px 18px}.dash-kpi-row{grid-template-columns:repeat(2,1fr)}.dash-charts{grid-template-columns:1fr}}
+        .log-item.ok .ts,.log-item.ok span{color:var(--green)}
+        .log-item.warn .ts,.log-item.warn span{color:var(--amber)}
+        .log-item.err .ts,.log-item.err span{color:var(--red)}
+ 
+        /* ══ MATLAB GUIDE OVERLAY ════════════════════════════════════ */
+        #guide-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.82);z-index:100;display:none;align-items:flex-start;justify-content:center;overflow-y:auto;padding:40px 20px}
+        #guide-overlay.open{display:flex}
+        .guide-modal{background:var(--panel);border:1px solid var(--border2);border-radius:16px;width:100%;max-width:780px;padding:28px 32px;position:relative}
+        .guide-close{position:absolute;top:16px;right:18px;background:rgba(255,255,255,0.06);border:1px solid var(--border);border-radius:6px;color:var(--txt3);cursor:pointer;padding:4px 10px;font-size:12px;transition:all .2s}
+        .guide-close:hover{color:var(--red);border-color:var(--red)}
+        .guide-title{font-family:var(--font-mono);font-size:13px;font-weight:500;color:var(--amber);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:20px}
+        .guide-section{margin-bottom:24px}
+        .guide-section h3{font-family:var(--font-mono);font-size:11px;font-weight:500;color:var(--cyan);letter-spacing:1px;text-transform:uppercase;margin-bottom:10px;border-bottom:1px solid var(--border);padding-bottom:6px}
+        .guide-section p{font-size:12.5px;color:var(--txt3);line-height:1.7;margin-bottom:8px}
+        .guide-section p strong{color:var(--txt)}
+ 
+        /* Flow diagram steps */
+        .flow-steps{display:flex;align-items:flex-start;gap:0;margin:14px 0;overflow-x:auto;padding-bottom:4px}
+        .flow-step{flex-shrink:0;width:130px;text-align:center}
+        .flow-node{background:var(--bg3);border:1px solid var(--border2);border-radius:10px;padding:10px 8px;margin:0 6px;position:relative}
+        .flow-node-num{font-family:var(--font-mono);font-size:9px;color:var(--cyan);letter-spacing:1px;text-transform:uppercase}
+        .flow-node-title{font-size:11px;font-weight:500;color:var(--txt);margin:3px 0}
+        .flow-node-sub{font-size:10px;color:var(--txt3);line-height:1.4}
+        .flow-arrow{flex-shrink:0;color:var(--txt2);font-size:18px;margin-top:28px;padding:0 2px}
+ 
+        /* Architecture diagram */
+        .arch-diagram{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:16px;margin:10px 0;display:flex;flex-direction:column;gap:8px}
+        .arch-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+        .arch-box{padding:8px 12px;border-radius:8px;font-family:var(--font-mono);font-size:10px;font-weight:500;letter-spacing:.5px;text-align:center;min-width:90px}
+        .arch-box.matlab{background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.3);color:var(--amber)}
+        .arch-box.python{background:rgba(0,200,255,0.08);border:1px solid rgba(0,200,255,0.2);color:var(--cyan)}
+        .arch-box.flask{background:rgba(124,140,255,0.1);border:1px solid rgba(124,140,255,0.25);color:var(--purple)}
+        .arch-box.brain{background:rgba(45,212,160,0.08);border:1px solid rgba(45,212,160,0.2);color:var(--green)}
+        .arch-box.ui{background:rgba(248,113,113,0.08);border:1px solid rgba(248,113,113,0.2);color:var(--red)}
+        .arch-arrow{color:var(--txt2);font-size:14px;flex-shrink:0}
+        .arch-label{font-size:10px;color:var(--txt2);font-style:italic}
+ 
+        /* Code blocks */
+        .code-block{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:14px 16px;font-family:var(--font-mono);font-size:11px;color:var(--txt3);line-height:1.8;overflow-x:auto;margin:8px 0;white-space:pre}
+        .code-block .c{color:var(--txt2)}.code-block .kw{color:var(--purple)}
+        .code-block .str{color:var(--green)}.code-block .num{color:var(--amber)}
+        .code-block .fn{color:var(--cyan)}
+ 
+        /* Event table */
+        .ev-table{width:100%;border-collapse:collapse;font-size:11.5px;margin:8px 0}
+        .ev-table th{background:rgba(0,200,255,0.06);color:var(--txt);font-weight:500;text-align:left;padding:7px 12px;border-bottom:1px solid var(--border2);font-family:var(--font-mono);font-size:10px;letter-spacing:.5px}
+        .ev-table td{padding:7px 12px;border-bottom:1px solid var(--border);color:var(--txt3);vertical-align:top}
+        .ev-table td:first-child{font-family:var(--font-mono);font-size:10px;color:var(--cyan)}
+        .ev-table tr:last-child td{border:none}
+ 
+        /* Data flow diagram boxes */
+        .df-diagram{display:flex;align-items:center;gap:6px;margin:12px 0;flex-wrap:wrap}
+        .df-box{background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:8px 14px;text-align:center}
+        .df-box .df-top{font-family:var(--font-mono);font-size:9px;color:var(--txt2);letter-spacing:1px;text-transform:uppercase}
+        .df-box .df-mid{font-size:12px;font-weight:500;color:var(--txt);margin:3px 0}
+        .df-box .df-bot{font-size:10px;color:var(--txt3)}
+        .df-arrow{color:var(--txt2);font-size:16px}
+ 
+        @media(max-width:680px){#sidebar{display:none}#chat-pane{padding:20px 16px 210px}.input-zone{padding:24px 16px 18px}.dash-kpi-row{grid-template-columns:repeat(2,1fr)}.dash-charts-row{grid-template-columns:1fr}}
     </style>
 </head>
 <body>
-
-<!-- ═══════════════════════ SIDEBAR ═══════════════════════ -->
+ 
+<!-- ═════════════════════ SIDEBAR ═════════════════════ -->
 <div id="sidebar">
     <div class="logo">
         <div class="logo-mark">PID</div>
@@ -163,48 +216,43 @@
             <div class="logo-sub">AI Optimizer</div>
         </div>
     </div>
-
     <button class="side-btn" onclick="startNewChat()">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         New Session
     </button>
-
-    <!-- Mode toggle -->
     <button class="mode-toggle-btn" id="mode-toggle-btn" onclick="toggleDashboard()">
         <div class="mode-dot"></div>
         <span id="mode-toggle-label">Simulink Telemetry</span>
     </button>
-
     <div class="status-card">
-        <div class="status-row" style="display:flex;align-items:center;gap:7px">
+        <div style="display:flex;align-items:center;gap:7px">
             <div class="pulse-dot"></div>
             <span class="status-txt">ENGINE ONLINE</span>
         </div>
-        <div class="status-sub">RF Model — O'Dwyer rules</div>
+        <div class="status-sub">55+ O'Dwyer rules · RF Model</div>
     </div>
-
     <div class="side-label">Quick Start</div>
-    <button class="quick-item" onclick="sendChip('Km=2, Tm=10, Tau=2')">Try example: Km=2, Tm=10, Tau=2</button>
+    <button class="quick-item" onclick="sendChip('Km=2, Tm=10, Tau=2')">Try FOPDT: Km=2 Tm=10 Tau=2</button>
+    <button class="quick-item" onclick="sendChip('order=2, Km=2, T1=10, T2=3, Tau=2')">Try SOPDT: order=2</button>
     <button class="quick-item" onclick="sendChip('What tuning rules do you have?')">List all tuning rules</button>
-    <button class="quick-item" onclick="sendChip('What is PID control?')">Explain PID control</button>
-    <button class="quick-item" onclick="sendChip('Explain FOPDT parameters')">Explain FOPDT</button>
+    <button class="quick-item" onclick="sendChip('explain SOPDT')">Explain SOPDT</button>
+    <button class="quick-item" onclick="sendChip('matlab help')">MATLAB integration guide</button>
     <button class="quick-item" onclick="sendChip('What is IAE and ISE?')">Performance metrics</button>
-
     <div class="side-spacer"></div>
     <button class="theme-btn" onclick="toggleTheme()">Toggle Light / Dark</button>
 </div>
-
-<!-- ═══════════════════════ MAIN ═══════════════════════ -->
+ 
+<!-- ═════════════════════ MAIN ═════════════════════ -->
 <div id="main">
-
-    <!-- ── CHAT PANE ── -->
+ 
+    <!-- ── Chat pane ── -->
     <div id="chat-pane"></div>
     <div class="input-zone" id="input-zone">
         <div class="chips-bar">
-            <div class="chip" onclick="sendChip('What tuning rules do you have?')">All tuning rules</div>
-            <div class="chip" onclick="sendChip('Km=2, Tm=10, Tau=2')">Run example</div>
-            <div class="chip" onclick="sendChip('Explain FOPDT parameters')">What is FOPDT?</div>
-            <div class="chip" onclick="sendChip('help')">Help me start</div>
+            <div class="chip" onclick="sendChip('Km=2, Tm=10, Tau=2')">FOPDT example</div>
+            <div class="chip" onclick="sendChip('order=2, Km=2, T1=10, T2=3, Tau=2')">SOPDT example</div>
+            <div class="chip" onclick="sendChip('explain FOPDT parameters')">What is FOPDT?</div>
+            <div class="chip" onclick="sendChip('help')">Help</div>
         </div>
         <div class="input-bar">
             <input type="text" id="chat-input" placeholder="Enter Km, Tm, Tau — or ask any question..." autocomplete="off" onkeydown="if(event.key==='Enter') sendMessage()"/>
@@ -213,8 +261,8 @@
             </button>
         </div>
     </div>
-
-    <!-- ── DASHBOARD PANE ── -->
+ 
+    <!-- ── Dashboard pane ── -->
     <div id="dashboard-pane">
         <div class="dash-header">
             <span class="dash-title">Simulink Telemetry</span>
@@ -223,13 +271,14 @@
                 <span class="ws-label" id="ws-label">DISCONNECTED</span>
             </div>
             <button class="side-btn" style="margin:0;padding:6px 12px;font-size:11px" onclick="connectWebSocket()">Connect</button>
-            <button class="side-btn" style="margin:0;padding:6px 12px;font-size:11px" onclick="showMatlabGuide()">MATLAB Guide</button>
+            <button class="side-btn" style="margin:0;padding:6px 12px;font-size:11px;color:var(--amber);border-color:rgba(245,158,11,0.3)" onclick="openGuide()">📋 MATLAB Guide</button>
         </div>
-
+ 
+        <!-- KPI cards -->
         <div class="dash-kpi-row">
             <div class="kpi-card">
                 <div class="kpi-label">Kc (Gain)</div>
-                <div class="kpi-value" id="kpi-kc">—<span class="kpi-unit"></span></div>
+                <div class="kpi-value" id="kpi-kc">—</div>
                 <div class="kpi-sub" id="kpi-kc-sub">Awaiting tune</div>
             </div>
             <div class="kpi-card">
@@ -244,265 +293,473 @@
             </div>
             <div class="kpi-card">
                 <div class="kpi-label">Active rule</div>
-                <div class="kpi-value" style="font-size:12px;line-height:1.3" id="kpi-rule">—</div>
-                <div class="kpi-sub" id="kpi-rule-sub">—</div>
+                <div class="kpi-value" style="font-size:11px;line-height:1.3;margin-top:2px" id="kpi-rule">—</div>
+                <div class="kpi-sub" id="kpi-rule-sub">O'Dwyer selection</div>
             </div>
         </div>
-
-        <div class="dash-charts">
-            <div class="dash-chart-card">
-                <div class="dash-chart-label">PV / SP live trace</div>
-                <div id="live-pv-chart" class="plotly-chart" style="height:100%"></div>
-            </div>
-            <div class="dash-chart-card">
-                <div class="dash-chart-label">Manipulated variable (MV)</div>
-                <div id="live-mv-chart" class="plotly-chart" style="height:100%"></div>
+ 
+        <!-- ★ EXTRA: Full-width live PV graph with comment below ★ -->
+        <div class="dash-pv-card">
+            <div class="dash-pv-label">▶ Real-Time Process Variable (PV) — Live Trace</div>
+            <div id="live-pv-main" style="height:200px;width:100%"></div>
+            <div class="pv-comment" id="pv-comment">
+                <strong>PV / SP Trace:</strong> Waiting for MATLAB telemetry. Connect your Simulink model and stream
+                <code style="font-size:10px;background:rgba(0,200,255,0.07);padding:1px 5px;border-radius:3px">telemetry</code> events.
+                The blue line is the <strong>Process Variable</strong>, the red dashed line is the <strong>Setpoint</strong>.
+                The trace auto-scrolls keeping the last 400 data points. Overshoot and settling quality update in the KPI cards above after each autonomous re-tune.
             </div>
         </div>
-
+ 
+        <!-- MV + Error charts -->
+        <div class="dash-charts-row">
+            <div class="dash-chart-card">
+                <div class="dash-chart-label">Manipulated Variable (MV / Controller Output)</div>
+                <div id="live-mv-chart" style="height:160px;width:100%"></div>
+            </div>
+            <div class="dash-chart-card">
+                <div class="dash-chart-label">Tracking Error  e(t) = SP − PV</div>
+                <div id="live-err-chart" style="height:160px;width:100%"></div>
+            </div>
+        </div>
+ 
+        <!-- Operator log -->
         <div class="dash-log" id="dash-log">
             <div class="log-item"><span class="ts">--:--:--</span><span>Waiting for MATLAB connection…</span></div>
         </div>
     </div>
 </div>
-
+ 
+<!-- ═════════════════════ MATLAB GUIDE OVERLAY ═════════════════════ -->
+<div id="guide-overlay">
+    <div class="guide-modal">
+        <button class="guide-close" onclick="closeGuide()">✕ Close</button>
+        <div class="guide-title">MATLAB / Simulink Integration Guide</div>
+ 
+        <!-- Section 1: Overview flow -->
+        <div class="guide-section">
+            <h3>1 — How it works: system overview</h3>
+            <p>Tuning Bot acts as a <strong>Supervisory AI Controller</strong>. MATLAB sends your transfer function parameters; the server applies Skogestad's Half-Rule (if needed) and the Random Forest model selects the best O'Dwyer rule. Kc and Ti are sent back to anchor your ANFIS/PID controller.</p>
+ 
+            <div class="arch-diagram">
+                <div class="arch-row">
+                    <div class="arch-box matlab">MATLAB<br><small style="font-size:9px">Simulink / ANFIS</small></div>
+                    <div class="arch-arrow">⇄</div>
+                    <div class="arch-box python">Python Bridge<br><small style="font-size:9px">matlab_bridge.py</small></div>
+                    <div class="arch-arrow">⇄</div>
+                    <div class="arch-box flask">Flask Server<br><small style="font-size:9px">Socket.IO WS</small></div>
+                    <div class="arch-arrow">→</div>
+                    <div class="arch-box brain">RF Model<br><small style="font-size:9px">55+ O'Dwyer rules</small></div>
+                    <div class="arch-arrow">→</div>
+                    <div class="arch-box ui">This Dashboard<br><small style="font-size:9px">Live charts</small></div>
+                </div>
+                <div class="arch-label" style="margin-top:6px">
+                    Two channels run in parallel: ① <strong>tune_request</strong> sends TF params → receives Kc/Ti back
+                    ② <strong>telemetry</strong> streams [t, PV, SP, MV] to the dashboard continuously
+                </div>
+            </div>
+        </div>
+ 
+        <!-- Section 2: 4-step flow -->
+        <div class="guide-section">
+            <h3>2 — 4-step integration flow</h3>
+            <div class="flow-steps">
+                <div class="flow-step">
+                    <div class="flow-node">
+                        <div class="flow-node-num">Step 1</div>
+                        <div class="flow-node-title">Install bridge</div>
+                        <div class="flow-node-sub">pip install python-socketio[client] eventlet</div>
+                    </div>
+                </div>
+                <div class="flow-arrow">→</div>
+                <div class="flow-step">
+                    <div class="flow-node">
+                        <div class="flow-node-num">Step 2</div>
+                        <div class="flow-node-title">Connect WS</div>
+                        <div class="flow-node-sub">sio.connect(SERVER_URL)</div>
+                    </div>
+                </div>
+                <div class="flow-arrow">→</div>
+                <div class="flow-step">
+                    <div class="flow-node">
+                        <div class="flow-node-num">Step 3</div>
+                        <div class="flow-node-title">Send TF params</div>
+                        <div class="flow-node-sub">emit tune_request with km, tm, taum, order</div>
+                    </div>
+                </div>
+                <div class="flow-arrow">→</div>
+                <div class="flow-step">
+                    <div class="flow-node">
+                        <div class="flow-node-num">Step 4</div>
+                        <div class="flow-node-title">Receive gains</div>
+                        <div class="flow-node-sub">tune_response → Kc, Ti → write to MATLAB workspace</div>
+                    </div>
+                </div>
+                <div class="flow-arrow">→</div>
+                <div class="flow-step">
+                    <div class="flow-node" style="border-color:rgba(0,200,255,0.3)">
+                        <div class="flow-node-num" style="color:var(--green)">Continuous</div>
+                        <div class="flow-node-title">Stream telemetry</div>
+                        <div class="flow-node-sub">emit telemetry every simulation step → live dashboard</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+ 
+        <!-- Section 3: Data flow -->
+        <div class="guide-section">
+            <h3>3 — Data flow for each event type</h3>
+            <table class="ev-table">
+                <tr><th>Event</th><th>Direction</th><th>Payload fields</th><th>When to use</th></tr>
+                <tr>
+                    <td>tune_request</td>
+                    <td style="color:var(--amber)">MATLAB → Server</td>
+                    <td>order, km, tm (or tm1/tm2/tm3), taum, zeta</td>
+                    <td>At simulation start or when plant TF changes</td>
+                </tr>
+                <tr>
+                    <td>tune_response</td>
+                    <td style="color:var(--green)">Server → MATLAB</td>
+                    <td>kc, ti, rule, os_predicted, settling_time, fopdt</td>
+                    <td>Received after each tune_request</td>
+                </tr>
+                <tr>
+                    <td>telemetry</td>
+                    <td style="color:var(--amber)">MATLAB → Server</td>
+                    <td>t (array), pv (array), sp (array), mv (array)</td>
+                    <td>Every simulation step or batch (10–50 Hz)</td>
+                </tr>
+                <tr>
+                    <td>telemetry_update</td>
+                    <td style="color:var(--green)">Server → Browser</td>
+                    <td>Same as telemetry — forwarded to dashboard</td>
+                    <td>Auto-broadcast to all connected browsers</td>
+                </tr>
+            </table>
+        </div>
+ 
+        <!-- Section 4: Python bridge code -->
+        <div class="guide-section">
+            <h3>4 — Python bridge script (matlab_bridge.py)</h3>
+            <p>Run this script alongside MATLAB. It handles the Socket.IO connection, receives gains, and writes them back to the MATLAB workspace via the MATLAB Engine API (optional).</p>
+            <div class="code-block"><span class="c"># matlab_bridge.py  — run: python matlab_bridge.py</span>
+<span class="kw">import</span> socketio, time, json
+ 
+SERVER_URL = <span class="str">"https://your-server.onrender.com"</span>   <span class="c"># ← change this</span>
+ 
+sio = socketio.Client()
+latest_gains = {<span class="str">"kc"</span>: <span class="num">1.0</span>, <span class="str">"ti"</span>: <span class="num">10.0</span>}
+ 
+@sio.<span class="fn">on</span>(<span class="str">"connect"</span>)
+<span class="kw">def</span> <span class="fn">on_connect</span>():
+    <span class="fn">print</span>(<span class="str">"Connected to Tuning Bot server"</span>)
+ 
+@sio.<span class="fn">on</span>(<span class="str">"tune_response"</span>)
+<span class="kw">def</span> <span class="fn">on_tune_response</span>(data):
+    <span class="kw">if</span> data[<span class="str">"status"</span>] == <span class="str">"ok"</span>:
+        latest_gains[<span class="str">"kc"</span>] = data[<span class="str">"kc"</span>]
+        latest_gains[<span class="str">"ti"</span>] = data[<span class="str">"ti"</span>]
+        <span class="fn">print</span>(f<span class="str">"New gains: Kc={data['kc']}  Ti={data['ti']}  Rule={data['rule']}"</span>)
+        <span class="fn">print</span>(f<span class="str">"  Operator: {data['operator_decision']}"</span>)
+ 
+<span class="kw">def</span> <span class="fn">tune_fopdt</span>(km, tm, taum):
+    <span class="c">"""Call this when your process changes (FOPDT)."""</span>
+    sio.<span class="fn">emit</span>(<span class="str">"tune_request"</span>, {
+        <span class="str">"order"</span>: <span class="num">1</span>, <span class="str">"km"</span>: km,
+        <span class="str">"tm"</span>: tm,  <span class="str">"taum"</span>: taum
+    })
+ 
+<span class="kw">def</span> <span class="fn">tune_sopdt</span>(km, tm1, tm2, taum, zeta=<span class="num">1.0</span>):
+    <span class="c">"""Call this for second-order processes."""</span>
+    sio.<span class="fn">emit</span>(<span class="str">"tune_request"</span>, {
+        <span class="str">"order"</span>: <span class="num">2</span>, <span class="str">"km"</span>: km,
+        <span class="str">"tm1"</span>: tm1, <span class="str">"tm2"</span>: tm2,
+        <span class="str">"taum"</span>: taum, <span class="str">"zeta"</span>: zeta
+    })
+ 
+<span class="kw">def</span> <span class="fn">stream_telemetry</span>(t, pv, sp, mv):
+    <span class="c">"""Call every simulation step to update the live dashboard."""</span>
+    sio.<span class="fn">emit</span>(<span class="str">"telemetry"</span>, {
+        <span class="str">"t"</span>: [t], <span class="str">"pv"</span>: [pv], <span class="str">"sp"</span>: [sp], <span class="str">"mv"</span>: [mv]
+    })
+ 
+sio.<span class="fn">connect</span>(SERVER_URL)
+<span class="c"># ── Example usage ──────────────────────────────────────────────</span>
+<span class="fn">tune_fopdt</span>(km=<span class="num">2.0</span>, tm=<span class="num">10.0</span>, taum=<span class="num">2.0</span>)    <span class="c"># initial tune</span>
+time.<span class="fn">sleep</span>(<span class="num">1</span>)
+<span class="fn">print</span>(<span class="str">"Initial gains:"</span>, latest_gains)
+sio.<span class="fn">wait</span>()   <span class="c"># keeps script running for continuous telemetry</span></div>
+        </div>
+ 
+        <!-- Section 5: MATLAB side -->
+        <div class="guide-section">
+            <h3>5 — MATLAB/Simulink side (call bridge from MATLAB)</h3>
+            <p>Use MATLAB's <code>system()</code> or <code>py.*</code> engine to run the bridge, or call the Python functions directly from a MATLAB script via the <strong>MATLAB Engine API for Python</strong>.</p>
+            <div class="code-block"><span class="c">% Option A — run bridge as a background process</span>
+!python matlab_bridge.py &
+ 
+<span class="c">% Option B — call Python directly from MATLAB (requires py engine)</span>
+<span class="c">% At each Simulink step callback:</span>
+ 
+t_now  = get_param(bdroot,<span class="str">'SimulationTime'</span>);
+pv_now = simout.PV.Data(end);
+sp_now = simout.SP.Data(end);
+mv_now = simout.MV.Data(end);
+ 
+<span class="c">% Stream to dashboard</span>
+py.importlib.import_module(<span class="str">'matlab_bridge'</span>);
+py.matlab_bridge.stream_telemetry(t_now, pv_now, sp_now, mv_now);
+ 
+<span class="c">% Read latest gains (written by bridge callback)</span>
+gains_json = fileread(<span class="str">'latest_gains.json'</span>);
+gains = jsondecode(gains_json);
+Kc = gains.kc;
+Ti = gains.ti;
+ 
+<span class="c">% Write gains to PID block in Simulink</span>
+set_param(<span class="str">'MyModel/PID_Controller'</span>,<span class="str">'P'</span>,num2str(Kc),<span class="str">'I'</span>,num2str(<span class="num">1</span>/Ti));</div>
+        </div>
+ 
+        <!-- Section 6: SOPDT -->
+        <div class="guide-section">
+            <h3>6 — Sending 2nd or 3rd-order transfer functions</h3>
+            <p>Tuning Bot automatically applies <strong>Skogestad's Half-Rule</strong> (O'Dwyer 3rd Ed, Appendix A) to reduce higher-order models to FOPDT before selecting the best rule. The reduction result is returned in the <code>fopdt</code> field of the response.</p>
+            <div class="df-diagram">
+                <div class="df-box">
+                    <div class="df-top">Input</div>
+                    <div class="df-mid">SOPDT</div>
+                    <div class="df-bot">Km, T1, T2, θ, ζ</div>
+                </div>
+                <div class="df-arrow">→</div>
+                <div class="df-box" style="border-color:rgba(0,200,255,0.3)">
+                    <div class="df-top" style="color:var(--cyan)">Half-Rule</div>
+                    <div class="df-mid">Reduce</div>
+                    <div class="df-bot">T_eff = T1 | θ_eff = θ + T2/2</div>
+                </div>
+                <div class="df-arrow">→</div>
+                <div class="df-box" style="border-color:rgba(124,140,255,0.3)">
+                    <div class="df-top" style="color:var(--purple)">RF Model</div>
+                    <div class="df-mid">Select rule</div>
+                    <div class="df-bot">SOPDT or FOPDT rules</div>
+                </div>
+                <div class="df-arrow">→</div>
+                <div class="df-box" style="border-color:rgba(45,212,160,0.3)">
+                    <div class="df-top" style="color:var(--green)">Output</div>
+                    <div class="df-mid">Kc, Ti</div>
+                    <div class="df-bot">+ rule name + OS est.</div>
+                </div>
+            </div>
+            <div class="code-block"><span class="c"># 2nd-order example</span>
+sio.<span class="fn">emit</span>(<span class="str">"tune_request"</span>, {<span class="str">"order"</span>:<span class="num">2</span>,<span class="str">"km"</span>:<span class="num">2.0</span>,<span class="str">"tm1"</span>:<span class="num">10.0</span>,<span class="str">"tm2"</span>:<span class="num">3.0</span>,<span class="str">"taum"</span>:<span class="num">1.0</span>,<span class="str">"zeta"</span>:<span class="num">1.0</span>})
+<span class="c"># → reduces to Tm=10, Tau=1+3/2=2.5, then selects SOPDT rule</span>
+ 
+<span class="c"># 3rd-order example</span>
+sio.<span class="fn">emit</span>(<span class="str">"tune_request"</span>, {<span class="str">"order"</span>:<span class="num">3</span>,<span class="str">"km"</span>:<span class="num">1.5</span>,<span class="str">"tm1"</span>:<span class="num">10.0</span>,<span class="str">"tm2"</span>:<span class="num">4.0</span>,<span class="str">"tm3"</span>:<span class="num">1.0</span>,<span class="str">"taum"</span>:<span class="num">0.5</span>})
+<span class="c"># → reduces to Tm=10, Tau=0.5+4/2+1=3.5</span></div>
+        </div>
+ 
+        <!-- Section 7: Checklist -->
+        <div class="guide-section">
+            <h3>7 — Deployment checklist</h3>
+            <div class="code-block"><span class="c"># 1. Install server dependencies</span>
+pip install flask flask-cors flask-socketio simple-websocket eventlet
+pip install numpy scikit-learn google-generativeai
+ 
+<span class="c"># 2. Install bridge dependencies (MATLAB machine)</span>
+pip install "python-socketio[client]"
+ 
+<span class="c"># 3. Start server locally</span>
+python app.py           <span class="c"># starts on :5000 with eventlet</span>
+ 
+<span class="c"># 4. Production (Render / Heroku) — Procfile:</span>
+<span class="c"># web: gunicorn --worker-class eventlet -w 1 app:socketio_app</span>
+<span class="c"># ⚠  Only 1 worker — eventlet is single-threaded async</span>
+ 
+<span class="c"># 5. Set environment variable on server:</span>
+<span class="c"># GEMINI_API_KEY=your_key_here</span></div>
+        </div>
+    </div>
+</div>
+ 
 <script>
-// ═══════════════════════════════════════════════════════════════════════════
-//  CONFIG
-// ═══════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
+//  CONFIG — update SERVER URL here
+// ═══════════════════════════════════════════════════════════════
 const API_URL = 'https://process-control-project.onrender.com/api/chat';
 const WS_URL  = 'https://process-control-project.onrender.com';
-
-let socket          = null;
-let dashMode        = false;
-let pvTraceInit     = false;
-let mvTraceInit     = false;
-
-const liveT  = [], livePV = [], liveSP = [], liveMV = [];
-const MAX_LIVE_POINTS = 400;
-
-// ═══════════════════════════════════════════════════════════════════════════
-//  INIT
-// ═══════════════════════════════════════════════════════════════════════════
+ 
+let socket       = null;
+let dashMode     = false;
+let chartsReady  = false;
+ 
+const MAX_PTS = 400;
+const liveT = [], livePV = [], liveSP = [], liveMV = [], liveErr = [];
+ 
+// ── Init ─────────────────────────────────────────────────────
 window.onload = () => {
     if (localStorage.getItem('tb_theme') === 'light') document.body.classList.add('light');
     showWelcome();
-    fetch(API_URL, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:'reset'})}).catch(()=>{});
+    fetch(API_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:'reset'})}).catch(()=>{});
 };
-
-// ═══════════════════════════════════════════════════════════════════════════
-//  THEME
-// ═══════════════════════════════════════════════════════════════════════════
+ 
+// ── Theme ────────────────────────────────────────────────────
 function toggleTheme() {
     document.body.classList.toggle('light');
     localStorage.setItem('tb_theme', document.body.classList.contains('light') ? 'light' : 'dark');
+    const isL = document.body.classList.contains('light');
+    ['live-pv-main','live-mv-chart','live-err-chart'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el && el.data) Plotly.relayout(el, {
+            'font.color': isL?'#334155':'#a0aec0',
+            'xaxis.gridcolor': isL?'#e2e8f0':'#1e2a3a',
+            'yaxis.gridcolor': isL?'#e2e8f0':'#1e2a3a'
+        });
+    });
     document.querySelectorAll('.plotly-chart').forEach(el => {
         if (!el.data) return;
-        const isL = document.body.classList.contains('light');
         Plotly.relayout(el, {'font.color':isL?'#334155':'#a0aec0','xaxis.gridcolor':isL?'#e2e8f0':'#1e2a3a','yaxis.gridcolor':isL?'#e2e8f0':'#1e2a3a'});
     });
 }
-
-// ═══════════════════════════════════════════════════════════════════════════
-//  DASHBOARD MODE TOGGLE
-// ═══════════════════════════════════════════════════════════════════════════
+ 
+// ── Dashboard toggle ─────────────────────────────────────────
 function toggleDashboard() {
     dashMode = !dashMode;
-    document.getElementById('chat-pane').style.display   = dashMode ? 'none' : '';
-    document.getElementById('input-zone').style.display  = dashMode ? 'none' : '';
+    document.getElementById('chat-pane').style.display  = dashMode ? 'none' : '';
+    document.getElementById('input-zone').style.display = dashMode ? 'none' : '';
     document.getElementById('dashboard-pane').classList.toggle('active', dashMode);
     document.getElementById('mode-toggle-label').textContent = dashMode ? 'Chat Mode' : 'Simulink Telemetry';
-
-    if (dashMode) {
-        initDashCharts();
-        // auto-connect
-        connectWebSocket();
-    }
+    if (dashMode && !chartsReady) { initDashCharts(); connectWebSocket(); }
 }
-
-// ═══════════════════════════════════════════════════════════════════════════
-//  WEBSOCKET
-// ═══════════════════════════════════════════════════════════════════════════
+ 
+// ── WebSocket ────────────────────────────────────────────────
 function connectWebSocket() {
-    if (socket && socket.connected) { logDash('Already connected.', 'ok'); return; }
-    if (socket) { socket.disconnect(); }
-
-    setWsStatus('connecting', 'CONNECTING…');
-    socket = io(WS_URL, {transports: ['websocket'], reconnectionAttempts: 5});
-
-    socket.on('connect', () => {
-        setWsStatus('connected', 'CONNECTED');
-        logDash('Socket.IO connection established.', 'ok');
-    });
-    socket.on('disconnect', () => {
-        setWsStatus('disconnected', 'DISCONNECTED');
-        logDash('Disconnected from server.', 'warn');
-    });
-    socket.on('connect_error', (e) => {
-        setWsStatus('error', 'ERROR');
-        logDash('Connection error: ' + e.message, 'warn');
-    });
-    socket.on('status', (d) => logDash(d.message, 'ok'));
-
-    socket.on('telemetry_update', (d) => {
-        appendLiveData(d.t, d.pv, d.sp, d.mv);
-        updateLiveCharts();
-    });
-
-    socket.on('tune_response', (d) => {
-        if (d.status === 'error') { logDash('Tune error: ' + d.message, 'warn'); return; }
-        document.getElementById('kpi-kc').childNodes[0].textContent = d.kc;
-        document.getElementById('kpi-ti').childNodes[0].textContent = d.ti;
-        document.getElementById('kpi-os').childNodes[0].textContent = d.os_predicted;
-        document.getElementById('kpi-rule').textContent = d.rule;
-        document.getElementById('kpi-kc-sub').textContent = 'Updated ' + nowStr();
-        document.getElementById('kpi-ti-sub').textContent = 'Settling ' + d.settling_time + 's';
-        document.getElementById('kpi-os-sub').textContent = 'Predicted';
-        document.getElementById('kpi-rule-sub').textContent = nowStr();
-        logDash(`Tuned → Kc=${d.kc} Ti=${d.ti} | ${d.operator_decision}`, 'ok');
-        if (d.reduction_note && d.reduction_note.includes('reduced')) {
-            logDash(d.reduction_note, 'warn');
-        }
-    });
+    if (socket && socket.connected) { logDash('Already connected.','ok'); return; }
+    if (socket) socket.disconnect();
+    setWsStatus('','CONNECTING…');
+    socket = io(WS_URL, {transports:['websocket'], reconnectionAttempts:5});
+    socket.on('connect',       () => { setWsStatus('connected','CONNECTED'); logDash('Socket.IO established.','ok'); });
+    socket.on('disconnect',    () => { setWsStatus('','DISCONNECTED');       logDash('Disconnected.','warn'); });
+    socket.on('connect_error', (e)=> { setWsStatus('error','ERROR');         logDash('Error: '+e.message,'err'); });
+    socket.on('status',        (d)=> logDash(d.message,'ok'));
+    socket.on('telemetry_update', handleTelemetry);
+    socket.on('tune_response',    handleTuneResponse);
 }
-
-function setWsStatus(state, label) {
-    const dot = document.getElementById('ws-dot');
-    const lbl = document.getElementById('ws-label');
-    dot.className = 'ws-dot' + (state === 'connected' ? ' connected' : state === 'error' ? ' error' : '');
-    lbl.textContent = label;
+ 
+function setWsStatus(cls, label) {
+    const d = document.getElementById('ws-dot');
+    const l = document.getElementById('ws-label');
+    d.className = 'ws-dot' + (cls ? ' '+cls : '');
+    l.textContent = label;
 }
-
-function nowStr() {
-    return new Date().toLocaleTimeString();
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-//  LIVE CHART DATA
-// ═══════════════════════════════════════════════════════════════════════════
-function appendLiveData(t, pv, sp, mv) {
-    const arr = Array.isArray(t) ? t : [t];
-    const pvA = Array.isArray(pv) ? pv : [pv];
-    const spA = Array.isArray(sp) ? sp : [sp];
-    const mvA = Array.isArray(mv) ? mv : [mv];
-    arr.forEach((ti, i) => {
-        liveT.push(ti); livePV.push(pvA[i]||0); liveSP.push(spA[i]||0); liveMV.push(mvA[i]||0);
+ 
+function handleTelemetry(d) {
+    const ts  = Array.isArray(d.t)  ? d.t  : [d.t];
+    const pvs = Array.isArray(d.pv) ? d.pv : [d.pv];
+    const sps = Array.isArray(d.sp) ? d.sp : [d.sp];
+    const mvs = Array.isArray(d.mv) ? d.mv : [d.mv];
+    ts.forEach((t,i) => {
+        liveT.push(t); livePV.push(pvs[i]||0); liveSP.push(sps[i]||0);
+        liveMV.push(mvs[i]||0); liveErr.push((sps[i]||0)-(pvs[i]||0));
     });
-    // trim to window
-    while (liveT.length > MAX_LIVE_POINTS) {
-        liveT.shift(); livePV.shift(); liveSP.shift(); liveMV.shift();
+    while (liveT.length > MAX_PTS) {
+        liveT.shift(); livePV.shift(); liveSP.shift();
+        liveMV.shift(); liveErr.shift();
     }
+    if (chartsReady) updateLiveCharts();
+    updatePVComment();
 }
-
-function initDashCharts() {
+ 
+function handleTuneResponse(d) {
+    if (d.status === 'error') { logDash('Tune error: '+d.message,'err'); return; }
+    document.getElementById('kpi-kc').textContent      = d.kc;
+    document.getElementById('kpi-ti').innerHTML        = d.ti+'<span class="kpi-unit">s</span>';
+    document.getElementById('kpi-os').innerHTML        = d.os_predicted+'<span class="kpi-unit">%</span>';
+    document.getElementById('kpi-rule').textContent    = d.rule;
+    document.getElementById('kpi-kc-sub').textContent  = 'Updated '+nowStr();
+    document.getElementById('kpi-ti-sub').textContent  = 'Settling '+d.settling_time+'s';
+    document.getElementById('kpi-os-sub').textContent  = 'Predicted';
+    document.getElementById('kpi-rule-sub').textContent= nowStr();
+    logDash(`Tuned → Kc=${d.kc} Ti=${d.ti} | ${d.rule}`,'ok');
+    if (d.operator_decision) logDash(d.operator_decision,'warn');
+    if (d.reduction_note && d.reduction_note.includes('reduced')) logDash(d.reduction_note,'warn');
+}
+ 
+function updatePVComment() {
+    if (!livePV.length) return;
+    const cur = livePV[livePV.length-1];
+    const sp  = liveSP[liveSP.length-1] || 1;
+    const err = Math.abs(sp - cur);
+    const os  = Math.max(0, (Math.max(...livePV) - sp) * 100 / sp);
+    document.getElementById('pv-comment').innerHTML = (
+        `<strong>PV / SP Trace:</strong> Current PV = <strong>${cur.toFixed(3)}</strong> | ` +
+        `SP = <strong>${sp.toFixed(3)}</strong> | Error = <strong>${err.toFixed(4)}</strong> | ` +
+        `Peak overshoot so far: <strong>${os.toFixed(1)}%</strong><br>` +
+        `<span style="color:var(--cyan)">Blue = Process Variable</span> &nbsp;·&nbsp; ` +
+        `<span style="color:var(--red)">Red dashed = Setpoint</span> &nbsp;·&nbsp; ` +
+        `Auto-scrolling — last <strong>${liveT.length}</strong> of max ${MAX_PTS} data points shown. ` +
+        `Kc and Ti above update automatically when the Autonomous Operator re-tunes.`
+    );
+}
+ 
+// ── Dashboard charts ─────────────────────────────────────────
+function dashLayout(ytitle, lineColor) {
     const isL = document.body.classList.contains('light');
-    const base = {
+    return {
         paper_bgcolor:'transparent', plot_bgcolor:'rgba(10,14,20,0.5)',
-        font:{color:isL?'#334155':'#a0aec0',family:'DM Sans,sans-serif',size:11},
-        margin:{l:44,r:10,t:10,b:36},
-        xaxis:{gridcolor:isL?'#e2e8f0':'#1e2a3a',zerolinecolor:'#333',title:{text:'Time (s)',font:{size:10}}},
-        yaxis:{gridcolor:isL?'#e2e8f0':'#1e2a3a',zerolinecolor:'#333'},
-        legend:{bgcolor:'rgba(0,0,0,0)',font:{size:10}},
+        font:{color:isL?'#334155':'#a0aec0',family:'DM Sans,sans-serif',size:10},
+        margin:{l:42,r:8,t:6,b:32},
+        xaxis:{gridcolor:isL?'#e2e8f0':'#1e2a3a',zerolinecolor:'#333',title:{text:'Time (s)',font:{size:9}}},
+        yaxis:{gridcolor:isL?'#e2e8f0':'#1e2a3a',zerolinecolor:'#333',title:{text:ytitle,font:{size:9}}},
+        legend:{bgcolor:'rgba(0,0,0,0)',font:{size:9}},
         hovermode:'x unified'
     };
-
-    Plotly.newPlot('live-pv-chart',
-        [{x:[], y:[], name:'PV',  type:'scatter', line:{color:'#00d4ff',width:2}},
-         {x:[], y:[], name:'SP',  type:'scatter', line:{color:'#ff4d6d',dash:'dash',width:1.5}}],
-        {...base}, {responsive:true, displayModeBar:false}
-    );
-
-    Plotly.newPlot('live-mv-chart',
-        [{x:[], y:[], name:'MV',  type:'scatter', line:{color:'#f59e0b',width:2}, fill:'tozeroy', fillcolor:'rgba(245,158,11,0.07)'}],
-        {...base}, {responsive:true, displayModeBar:false}
-    );
-
-    pvTraceInit = true;
-    mvTraceInit = true;
 }
-
+ 
+function initDashCharts() {
+    // Full-width PV chart
+    Plotly.newPlot('live-pv-main', [
+        {x:[],y:[],name:'PV', type:'scatter',line:{color:'#00d4ff',width:2.5},fill:'tozeroy',fillcolor:'rgba(0,212,255,0.05)'},
+        {x:[],y:[],name:'SP', type:'scatter',line:{color:'#ff4d6d',dash:'dash',width:1.5}}
+    ], dashLayout('PV / SP'), {responsive:true,displayModeBar:false});
+ 
+    // MV chart
+    Plotly.newPlot('live-mv-chart', [
+        {x:[],y:[],name:'MV',type:'scatter',line:{color:'#f59e0b',width:2},fill:'tozeroy',fillcolor:'rgba(245,158,11,0.06)'}
+    ], dashLayout('MV'), {responsive:true,displayModeBar:false});
+ 
+    // Error chart
+    Plotly.newPlot('live-err-chart', [
+        {x:[],y:[],name:'Error',type:'scatter',line:{color:'#a78bfa',width:1.5},fill:'tozeroy',fillcolor:'rgba(167,139,250,0.05)'}
+    ], dashLayout('Error'), {responsive:true,displayModeBar:false});
+ 
+    chartsReady = true;
+}
+ 
 function updateLiveCharts() {
-    if (!pvTraceInit) return;
-    const pvEl = document.getElementById('live-pv-chart');
-    const mvEl = document.getElementById('live-mv-chart');
-    Plotly.extendTraces(pvEl, {x:[liveT, liveT], y:[livePV, liveSP]}, [0,1], MAX_LIVE_POINTS);
-    Plotly.extendTraces(mvEl, {x:[liveT],        y:[liveMV]},          [0],   MAX_LIVE_POINTS);
+    const pvEl  = document.getElementById('live-pv-main');
+    const mvEl  = document.getElementById('live-mv-chart');
+    const errEl = document.getElementById('live-err-chart');
+    if (pvEl.data)  Plotly.extendTraces(pvEl,  {x:[liveT,liveT],  y:[livePV,liveSP]},  [0,1], MAX_PTS);
+    if (mvEl.data)  Plotly.extendTraces(mvEl,  {x:[liveT],        y:[liveMV]},          [0],   MAX_PTS);
+    if (errEl.data) Plotly.extendTraces(errEl, {x:[liveT],        y:[liveErr]},         [0],   MAX_PTS);
 }
-
-// ═══════════════════════════════════════════════════════════════════════════
-//  DASHBOARD LOG
-// ═══════════════════════════════════════════════════════════════════════════
+ 
+// ── Log ──────────────────────────────────────────────────────
 function logDash(msg, type='') {
     const log  = document.getElementById('dash-log');
     const item = document.createElement('div');
-    item.className = 'log-item';
-    item.innerHTML = `<span class="ts">${nowStr()}</span><span class="${type}">${msg}</span>`;
+    item.className = 'log-item' + (type ? ' '+type : '');
+    item.innerHTML = `<span class="ts">${nowStr()}</span><span>${msg}</span>`;
     log.prepend(item);
-    while (log.children.length > 40) log.removeChild(log.lastChild);
+    while (log.children.length > 50) log.removeChild(log.lastChild);
 }
-
-// ═══════════════════════════════════════════════════════════════════════════
-//  MATLAB GUIDE POPUP (shown in chat pane)
-// ═══════════════════════════════════════════════════════════════════════════
-function showMatlabGuide() {
-    toggleDashboard(); // back to chat for a moment
-    const box = document.getElementById('chat-pane');
-    const ws  = box.querySelector('.welcome-screen');
-    if (ws) ws.remove();
-    const row = document.createElement('div');
-    row.className = 'msg bot-row';
-    row.innerHTML = `
-        <div class="bot-av">TB</div>
-        <div class="bot-inner">
-            <div class="bot-label">Tuning Bot — MATLAB Integration Guide</div>
-            <div class="bot-text">
-                <strong>Step 1 — Install Socket.IO client in MATLAB:</strong><br>
-                Download <code>matlab-socket.io-client</code> from File Exchange, or use the Python engine bridge below.<br><br>
-                <strong>Step 2 — Python bridge (recommended):</strong><br>
-                Run this Python snippet inside MATLAB via <code>py.subprocess</code> or a companion script:
-            </div>
-            <div class="matlab-block"><span class="c">% MATLAB companion script: matlab_bridge.py</span>
-<span class="kw">import</span> socketio, time
-
-sio = socketio.Client()
-sio.connect(<span class="str">'${WS_URL}'</span>)
-
-<span class="c"># 1. Send autonomous tune request (FOPDT)</span>
-sio.emit(<span class="str">'tune_request'</span>, {
-    <span class="str">'order'</span>: 1, <span class="str">'km'</span>: 2.0,
-    <span class="str">'tm'</span>: 10.0, <span class="str">'taum'</span>: 2.0
-})
-
-<span class="c"># 2. Stream live telemetry (call in your Simulink step callback)</span>
-sio.emit(<span class="str">'telemetry'</span>, {
-    <span class="str">'t'</span>:  [t_now],
-    <span class="str">'pv'</span>: [pv_now],
-    <span class="str">'sp'</span>: [sp_now],
-    <span class="str">'mv'</span>: [mv_now]
-})
-
-<span class="c"># 3. Receive gains (listen for tune_response)</span>
-@sio.on(<span class="str">'tune_response'</span>)
-<span class="kw">def</span> on_gains(data):
-    Kc = data[<span class="str">'kc'</span>]
-    Ti = data[<span class="str">'ti'</span>]
-    <span class="c"># write Kc/Ti back to MATLAB workspace or Simulink param</span></div>
-            <div class="bot-text" style="margin-top:10px">
-                <strong>Higher-order transfer function:</strong><br>
-                For a 2nd-order process, send <code>order:2, tm1:10, tm2:3, taum:2</code>.<br>
-                The server applies Skogestad's Half-Rule and returns FOPDT-equivalent gains.<br><br>
-                The autonomous operator evaluates dead-time ratio, gain drift, and ratio spikes automatically.
-                No interview questions in MATLAB mode.
-            </div>
-        </div>`;
-    box.appendChild(row);
-    box.scrollTo({top: box.scrollHeight, behavior:'smooth'});
-    setTimeout(() => toggleDashboard(), 100); // back to dashboard
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-//  CHAT FUNCTIONS  (identical to original)
-// ═══════════════════════════════════════════════════════════════════════════
+ 
+function nowStr() { return new Date().toLocaleTimeString(); }
+ 
+// ── MATLAB guide overlay ─────────────────────────────────────
+function openGuide()  { document.getElementById('guide-overlay').classList.add('open'); }
+function closeGuide() { document.getElementById('guide-overlay').classList.remove('open'); }
+ 
+// ── Chat functions ───────────────────────────────────────────
 function showWelcome() {
     const box = document.getElementById('chat-pane');
     box.innerHTML = `
@@ -510,45 +767,45 @@ function showWelcome() {
         <div class="welcome-orb">PID</div>
         <div class="welcome-title">Tuning Bot</div>
         <p class="welcome-sub">
-            AI-powered PID optimization engine.<br>
-            Provide your <strong>process parameters</strong> or switch to
-            <strong>Simulink Telemetry Mode</strong> for live autonomous tuning.
+            AI-powered PID optimization from O'Dwyer's Handbook.<br>
+            Supports <strong>FOPDT</strong> and <strong>SOPDT</strong> models.<br>
+            Or switch to <strong>Simulink Telemetry Mode</strong> for live MATLAB tuning.
         </p>
         <div class="welcome-tags">
-            <span class="welcome-tag">50+ O'DWYER RULES</span>
-            <span class="welcome-tag">RANDOM FOREST AI</span>
-            <span class="welcome-tag">LIVE SIMULATION</span>
+            <span class="welcome-tag">55+ O'DWYER RULES</span>
+            <span class="welcome-tag">FOPDT + SOPDT</span>
+            <span class="welcome-tag">SKOGESTAD HALF-RULE</span>
             <span class="welcome-tag">SOCKET.IO MATLAB</span>
         </div>
     </div>`;
 }
-
+ 
 function startNewChat() {
     if (dashMode) toggleDashboard();
     showWelcome();
     fetch(API_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:'reset'})}).catch(()=>{});
 }
-
+ 
 function sendChip(text) {
     if (dashMode) toggleDashboard();
     document.getElementById('chat-input').value = text;
     sendMessage();
 }
-
+ 
 function sendOption(val) {
     document.getElementById('chat-input').value = val;
     sendMessage();
 }
-
-function renderBotMsg(text, opts=[], chart=null) {
+ 
+function renderBotMsg(text, opts=[], chart=null, chartComment='') {
     const box = document.getElementById('chat-pane');
     const ws  = box.querySelector('.welcome-screen');
     if (ws) ws.remove();
-
+ 
     const optsHtml = opts.length
         ? `<div class="opts-stack">${opts.map(o=>`<button class="opt-card" onclick="sendOption('${o.val}')">${o.label}</button>`).join('')}</div>`
         : '';
-
+ 
     const row = document.createElement('div');
     row.className = 'msg bot-row';
     row.innerHTML = `
@@ -558,15 +815,16 @@ function renderBotMsg(text, opts=[], chart=null) {
             <div class="bot-text">${text.replace(/\n/g,'<br>')}${optsHtml}</div>
         </div>`;
     box.appendChild(row);
-
+ 
     if (chart) {
         const ghostRow = document.createElement('div');
         ghostRow.className = 'msg bot-row';
-        const chartId = 'chart-' + Date.now();
+        const chartId = 'chart-'+Date.now();
         ghostRow.innerHTML = `
             <div class="bot-av" style="visibility:hidden"></div>
             <div class="bot-inner chart-frame">
-                <div id="${chartId}" class="plotly-chart" style="width:100%;height:340px"></div>
+                <div id="${chartId}" style="width:100%;height:340px"></div>
+                ${chartComment ? `<div class="chart-comment">${chartComment}</div>` : ''}
             </div>`;
         box.appendChild(ghostRow);
         setTimeout(() => {
@@ -579,32 +837,30 @@ function renderBotMsg(text, opts=[], chart=null) {
                 p.layout.plot_bgcolor    = isL?'rgba(248,250,252,0.8)':'rgba(10,14,20,0.6)';
                 Plotly.newPlot(chartId, p.data, p.layout, {responsive:true,displayModeBar:false});
                 scrollBottom();
-            } catch(e){ console.error('Chart error:', e); }
+            } catch(e){ console.error('Chart error:',e); }
         }, 60);
     } else { scrollBottom(); }
 }
-
+ 
 async function sendMessage() {
     const input = document.getElementById('chat-input');
     const text  = input.value.trim();
     if (!text) return;
     input.value = '';
-
     if (dashMode) toggleDashboard();
-
+ 
     const box = document.getElementById('chat-pane');
     const ws  = box.querySelector('.welcome-screen');
     if (ws) ws.remove();
-
+ 
     const userEl = document.createElement('div');
     userEl.className = 'msg user-msg';
     userEl.textContent = text;
     box.appendChild(userEl);
-
-    const typId = 'typ-' + Date.now();
+ 
+    const typId = 'typ-'+Date.now();
     const typEl = document.createElement('div');
-    typEl.id = typId;
-    typEl.className = 'msg bot-row';
+    typEl.id = typId; typEl.className = 'msg bot-row';
     typEl.innerHTML = `
         <div class="bot-av">TB</div>
         <div class="bot-inner">
@@ -616,22 +872,38 @@ async function sendMessage() {
         </div>`;
     box.appendChild(typEl);
     scrollBottom();
-
+ 
     try {
         const res  = await fetch(API_URL, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:text})});
         const data = await res.json();
         document.getElementById(typId)?.remove();
-        renderBotMsg(data.reply, data.options||[], data.chart||null);
+ 
+        // Build chart comment if chart is present
+        let chartComment = '';
+        if (data.chart) {
+            chartComment = (
+                `<strong>Step Response Interpretation:</strong> ` +
+                `Blue trace = normalised Process Variable response to a unit setpoint step. ` +
+                `Red dashed = Setpoint (SP = 1.0). ` +
+                `Dotted lines = ±2% settling band. ` +
+                `The controller is considered settled when the PV stays within this band. ` +
+                `Overshoot and settling time are computed automatically and shown in the results above. ` +
+                `This is the predicted response using the equivalent FOPDT model — ` +
+                `actual hardware response will vary depending on model accuracy.`
+            );
+        }
+        renderBotMsg(data.reply, data.options||[], data.chart||null, chartComment);
     } catch(e) {
         document.getElementById(typId)?.remove();
-        renderBotMsg('<strong>Connection failed.</strong> Server may be spinning up. Wait 30s and retry.', [], null);
+        renderBotMsg('<strong>Connection failed.</strong> Server may be spinning up. Wait 30s and retry.', [], null, '');
     }
 }
-
+ 
 function scrollBottom() {
     const box = document.getElementById('chat-pane');
-    box.scrollTo({top: box.scrollHeight, behavior:'smooth'});
+    box.scrollTo({top:box.scrollHeight, behavior:'smooth'});
 }
 </script>
 </body>
 </html>
+ 
