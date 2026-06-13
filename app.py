@@ -7,19 +7,24 @@ from flask_cors import CORS
 from flask_socketio import SocketIO, emit
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.svm import LinearSVC
-from flask_cors import CORS 
-CORS(app) 
 
-# 2. Allow GitHub and MATLAB to connect to your WebSockets
-# The cors_allowed_origins="*" tells the server to accept connections from anywhere
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
- 
+# 1. Initialize the Flask App FIRST
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'tuningbot-secret')
+
+# 2. Add CORS so GitHub can talk to Render
 CORS(app, resources={r"/*": {"origins": "*"}})
+
+# 3. Initialize Socket.IO so MATLAB can connect
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
 socketio_app = socketio  # alias for gunicorn
- 
+
+# ── Gemini ─────────────────────────────────────────────────────────────────
+genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
+llm_model = genai.GenerativeModel(
+    "gemini-2.5-flash",
+    generation_config={"response_mime_type": "application/json"}
+)
 # ── Gemini ─────────────────────────────────────────────────────────────────
 genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
 llm_model = genai.GenerativeModel(
