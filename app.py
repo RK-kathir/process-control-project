@@ -7,6 +7,12 @@ from flask_cors import CORS
 from flask_socketio import SocketIO, emit
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.svm import LinearSVC
+from flask_cors import CORS 
+CORS(app) 
+
+# 2. Allow GitHub and MATLAB to connect to your WebSockets
+# The cors_allowed_origins="*" tells the server to accept connections from anywhere
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
  
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'tuningbot-secret')
