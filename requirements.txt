@@ -2,10 +2,10 @@ flask
 flask-cors
 flask-socketio
 simple-websocket
+eventlet
 numpy
 pandas
 scikit-learn
 plotly
 gunicorn
 google-generativeai
-eventlet
