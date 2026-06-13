@@ -1,7 +1,8 @@
-import os, re, json, pickle, math, traceback
+import os, re, json, pickle, math, csv, traceback
+from datetime import datetime, timezone
 import numpy as np
 import google.generativeai as genai
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 from flask_socketio import SocketIO, emit
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -34,6 +35,55 @@ except Exception as e:
     print(f"STARTUP ERROR: {e}")
     rf_model = None
     rules_db = {}
+ 
+ 
+# ══════════════════════════════════════════════════════════════════════════
+#  ANFIS TRAINING-DATA LOG  (Disturbance → Kp, Ki)
+# ══════════════════════════════════════════════════════════════════════════
+#  Every time MATLAB sends a tune_request that includes a "disturbance"
+#  value, the resulting Kc/Ti pair (== Kp/Ki for a standard PI controller)
+#  is appended here. This builds the dataset used by the user's MATLAB
+#  ANFIS training script (genfis + anfis + writeFIS → Kp_Data.fis / Ki_Data.fis).
+# ══════════════════════════════════════════════════════════════════════════
+ANFIS_DATA_PATH = os.path.join(current_dir, 'anfis_training_data.csv')
+ANFIS_FIELDS = ['timestamp', 'disturbance', 'km', 'tm', 'taum',
+                'kc', 'ti', 'kp', 'ki', 'rule', 'order']
+ 
+anfis_data = []  # in-memory mirror of the CSV, list of dicts
+ 
+def _load_anfis_data():
+    global anfis_data
+    anfis_data = []
+    if os.path.exists(ANFIS_DATA_PATH):
+        try:
+            with open(ANFIS_DATA_PATH, newline='') as f:
+                for row in csv.DictReader(f):
+                    anfis_data.append(row)
+        except Exception as e:
+            print(f"ANFIS data load error: {e}")
+ 
+def _append_anfis_row(row):
+    global anfis_data
+    anfis_data.append(row)
+    write_header = not os.path.exists(ANFIS_DATA_PATH)
+    try:
+        with open(ANFIS_DATA_PATH, 'a', newline='') as f:
+            writer = csv.DictWriter(f, fieldnames=ANFIS_FIELDS)
+            if write_header:
+                writer.writeheader()
+            writer.writerow(row)
+    except Exception as e:
+        print(f"ANFIS data write error: {e}")
+ 
+def _reset_anfis_data():
+    global anfis_data
+    anfis_data = []
+    if os.path.exists(ANFIS_DATA_PATH):
+        try: os.remove(ANFIS_DATA_PATH)
+        except Exception as e: print(f"ANFIS reset error: {e}")
+ 
+_load_anfis_data()
+print(f"ANFIS dataset: {len(anfis_data)} existing rows loaded.")
  
  
 # ══════════════════════════════════════════════════════════════════════════
@@ -156,6 +206,9 @@ nlp_training_data = [
     ("what should i do","help"),("where do i start","help"),
     ("matlab","matlab_help"),("how do i connect matlab","matlab_help"),
     ("simulink","matlab_help"),("how do i use matlab","matlab_help"),
+    ("what is anfis","anfis_explain"),("explain anfis","anfis_explain"),
+    ("how does the anfis training work","anfis_explain"),
+    ("anfis data","anfis_explain"),("kp ki dataset","anfis_explain"),
 ]
 texts, labels = zip(*nlp_training_data)
 intent_vectorizer = TfidfVectorizer(ngram_range=(1,2))
@@ -236,7 +289,25 @@ KNOWLEDGE_BASE = {
         "3. Emit <code>tune_request</code> with your transfer function parameters<br>"
         "4. Listen for <code>tune_response</code> to receive Kc and Ti<br>"
         "5. Stream live data via <code>telemetry</code> events for the dashboard<br><br>"
-        "SOPDT example: <code>{order:2, km:2, tm1:10, tm2:3, taum:2, zeta:1.0}</code>"
+        "SOPDT example: <code>{order:2, km:2, tm1:10, tm2:3, taum:2, zeta:1.0}</code><br><br>"
+        "Type <em>what is anfis</em> to learn how Kp/Ki data is logged for ANFIS training."
+    ),
+    "anfis_explain": (
+        "<strong>ANFIS Training Data Pipeline</strong><br><br>"
+        "Add a <code>disturbance</code> field to your <code>tune_request</code>:<br>"
+        "<code>{order:1, km:2, tm:10, taum:2, disturbance: 0.4}</code><br><br>"
+        "For every request that includes <code>disturbance</code>, the server:<br>"
+        "1. Computes <strong>Kc (=Kp)</strong> and <strong>Ti</strong> as usual<br>"
+        "2. Derives <strong>Ki = Kc / Ti</strong><br>"
+        "3. Appends a row <code>(disturbance, Kp, Ki, ...)</code> to "
+        "<code>anfis_training_data.csv</code> on the server<br>"
+        "4. Broadcasts the new point live to the 3D dashboard chart<br><br>"
+        "Download the dataset anytime:<br>"
+        "<code>GET /api/anfis-data.csv</code> (CSV) or <code>GET /api/anfis-data</code> (JSON)<br><br>"
+        "Your MATLAB ANFIS script loads this file as <code>D_values</code>, "
+        "<code>Kp_values</code>, <code>Ki_values</code> and trains "
+        "<code>Kp_Data.fis</code> / <code>Ki_Data.fis</code> directly. "
+        "See the MATLAB Guide → section 8 for the exact code."
     ),
     "help": (
         "<strong>Getting started — two modes:</strong><br><br>"
@@ -467,6 +538,11 @@ def handle_tune_request(data):
     FOPDT:   { "order":1, "km":2.0, "tm":10.0, "taum":2.0 }
     SOPDT:   { "order":2, "km":2.0, "tm1":10.0, "tm2":3.0, "taum":1.0, "zeta":1.0 }
     3rd ord: { "order":3, "km":2.0, "tm1":10.0, "tm2":3.0, "tm3":1.0, "taum":0.5 }
+ 
+    Optional field "disturbance": <float>
+        If present, the resulting Kc/Ti (== Kp/Ki) pair is logged against
+        this disturbance value into the ANFIS training dataset
+        (anfis_training_data.csv) and broadcast via 'anfis_data_update'.
     """
     try:
         order = int(data.get("order", 1))
@@ -518,6 +594,31 @@ def handle_tune_request(data):
                 "taum": round(taum_r, 4)
             },
         }
+ 
+        # ── ANFIS dataset logging ───────────────────────────────────────
+        disturbance = data.get("disturbance", None)
+        if disturbance is not None:
+            ki_val = kc / ti if ti else 0.0
+            row = {
+                'timestamp':   datetime.now(timezone.utc).isoformat(),
+                'disturbance': round(float(disturbance), 6),
+                'km':   round(km_r,  4),
+                'tm':   round(tm_r,  4),
+                'taum': round(taum_r, 4),
+                'kc':   round(kc, 6),
+                'ti':   round(ti, 6),
+                'kp':   round(kc, 6),       # Kp = Kc
+                'ki':   round(ki_val, 6),   # Ki = Kc / Ti
+                'rule': rule_key,
+                'order': order
+            }
+            _append_anfis_row(row)
+            response["anfis_row"]   = row
+            response["anfis_total"] = len(anfis_data)
+            socketio.emit('anfis_data_update', {
+                "row": row, "total_points": len(anfis_data), "reset": False
+            })
+ 
         emit('tune_response', response)
         print(f"[WS] Tuned: rule={rule_key} Kc={kc:.4f} Ti={ti:.4f} | {decision['reason']}")
  
@@ -845,6 +946,42 @@ def chat():
     except Exception as e:
         print(traceback.format_exc())
         return jsonify({"reply": "System error. Please reset.", "options": []})
+ 
+ 
+# ══════════════════════════════════════════════════════════════════════════
+#  ANFIS DATASET ENDPOINTS
+#  Used by: live 3D dashboard chart (JSON) and MATLAB webread (CSV)
+# ══════════════════════════════════════════════════════════════════════════
+@app.route('/api/anfis-data', methods=['GET'])
+def get_anfis_data():
+    """Returns the full (disturbance, Kp, Ki, ...) dataset as JSON."""
+    return jsonify({"data": anfis_data, "count": len(anfis_data)})
+ 
+ 
+@app.route('/api/anfis-data.csv', methods=['GET'])
+def get_anfis_csv():
+    """
+    Returns the raw CSV file — load this directly in MATLAB:
+        T = readtable('https://your-server/api/anfis-data.csv');
+        D_values  = T.disturbance;
+        Kp_values = T.kp;
+        Ki_values = T.ki;
+    """
+    if not os.path.exists(ANFIS_DATA_PATH):
+        # Return an empty CSV with headers so MATLAB readtable doesn't error
+        empty = ','.join(ANFIS_FIELDS) + '\n'
+        return app.response_class(empty, mimetype='text/csv',
+                                   headers={"Content-Disposition": "attachment; filename=anfis_training_data.csv"})
+    return send_file(ANFIS_DATA_PATH, mimetype='text/csv',
+                      as_attachment=True, download_name='anfis_training_data.csv')
+ 
+ 
+@app.route('/api/anfis-reset', methods=['POST'])
+def reset_anfis_data():
+    """Clears the ANFIS dataset (e.g. before starting a new disturbance sweep)."""
+    _reset_anfis_data()
+    socketio.emit('anfis_data_update', {"row": None, "total_points": 0, "reset": True})
+    return jsonify({"status": "ok", "count": len(anfis_data)})
  
  
 # ══════════════════════════════════════════════════════════════════════════
