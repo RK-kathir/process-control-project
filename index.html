@@ -148,6 +148,47 @@
         .log-item.warn .ts,.log-item.warn span{color:var(--amber)}
         .log-item.err .ts,.log-item.err span{color:var(--red)}
  
+        /* ══ ANFIS 3D DATASET CARD ═══════════════════════════════════ */
+        .anfis-card{background:var(--panel);border:1px solid rgba(124,140,255,0.25);border-radius:10px;padding:10px;flex-shrink:0}
+        .anfis-header{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px}
+        .anfis-title{font-family:var(--font-mono);font-size:9px;color:var(--purple);letter-spacing:1.5px;text-transform:uppercase}
+        .anfis-spacer{flex:1}
+        .anfis-count{font-family:var(--font-mono);font-size:10px;color:var(--txt3);padding:3px 9px;border:1px solid var(--border);border-radius:20px}
+        .anfis-btn{padding:5px 11px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--txt3);font-family:var(--font-body);font-size:11px;cursor:pointer;transition:all .2s;text-decoration:none}
+        .anfis-btn:hover{border-color:var(--purple);color:var(--txt)}
+        .anfis-btn.danger:hover{border-color:var(--red);color:var(--red)}
+        .anfis-comment{font-size:11px;color:var(--txt3);margin-top:6px;padding-top:6px;border-top:1px solid var(--border);line-height:1.6}
+        .anfis-comment strong{color:var(--txt2)}
+        .anfis-comment code{font-family:var(--font-mono);font-size:10px;background:rgba(124,140,255,0.08);padding:1px 5px;border-radius:3px;color:var(--purple)}
+ 
+        /* ══ FLOATING "ASK A DOUBT" CHAT WIDGET ══════════════════════ */
+        #fab-chat-btn{position:fixed;bottom:22px;right:22px;z-index:90;width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,var(--cyan),var(--purple));border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 24px rgba(0,200,255,0.35);transition:transform .2s}
+        #fab-chat-btn:hover{transform:scale(1.08)}
+        #fab-chat-btn svg{color:#000}
+        #fab-chat-btn .fab-badge{position:absolute;top:-4px;right:-4px;width:14px;height:14px;background:var(--red);border-radius:50%;border:2px solid var(--bg);display:none}
+        #fab-chat-btn .fab-badge.show{display:block}
+ 
+        #fab-panel{position:fixed;bottom:86px;right:22px;z-index:91;width:320px;max-height:440px;background:var(--panel);border:1px solid var(--border2);border-radius:14px;box-shadow:0 8px 40px rgba(0,0,0,0.4);display:none;flex-direction:column;overflow:hidden}
+        #fab-panel.open{display:flex}
+        .fab-header{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid var(--border);background:rgba(0,200,255,0.04)}
+        .fab-header-title{font-family:var(--font-mono);font-size:10px;font-weight:500;color:var(--cyan);letter-spacing:1.5px;text-transform:uppercase}
+        .fab-header-sub{font-size:10px;color:var(--txt2);margin-top:2px;font-weight:300}
+        .fab-close{background:transparent;border:none;color:var(--txt2);cursor:pointer;font-size:14px;padding:2px 6px}
+        .fab-close:hover{color:var(--red)}
+        .fab-body{flex:1;overflow-y:auto;padding:12px 14px;display:flex;flex-direction:column;gap:10px;font-size:12.5px;line-height:1.6;max-height:300px}
+        .fab-body::-webkit-scrollbar{width:3px}
+        .fab-body::-webkit-scrollbar-thumb{background:var(--border)}
+        .fab-msg-user{align-self:flex-end;max-width:85%;background:var(--user-bg);border:1px solid var(--border);border-radius:10px 10px 2px 10px;padding:7px 11px}
+        .fab-msg-bot{max-width:90%;background:rgba(0,200,255,0.03);border:1px solid rgba(0,200,255,0.1);border-radius:10px;padding:8px 11px;color:var(--txt)}
+        .fab-msg-bot code{font-family:var(--font-mono);font-size:10.5px;background:rgba(0,200,255,0.07);padding:1px 5px;border-radius:3px;color:var(--cyan)}
+        .fab-input-bar{display:flex;border-top:1px solid var(--border);padding:8px}
+        .fab-input-bar input{flex:1;background:transparent;border:none;color:var(--txt);font-family:var(--font-body);font-size:12.5px;outline:none;padding:6px 8px}
+        .fab-input-bar button{background:linear-gradient(135deg,var(--cyan),var(--cyan2));border:none;border-radius:6px;width:32px;height:32px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+        .fab-input-bar button svg{color:#000}
+        .fab-suggest{display:flex;gap:5px;flex-wrap:wrap;padding:0 14px 10px}
+        .fab-suggest-chip{padding:4px 9px;background:var(--bg3);border:1px solid var(--border);border-radius:14px;font-size:10px;color:var(--txt2);cursor:pointer}
+        .fab-suggest-chip:hover{color:var(--cyan);border-color:rgba(0,200,255,0.3)}
+ 
         /* ══ MATLAB GUIDE OVERLAY ════════════════════════════════════ */
         #guide-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.82);z-index:100;display:none;align-items:flex-start;justify-content:center;overflow-y:auto;padding:40px 20px}
         #guide-overlay.open{display:flex}
@@ -202,7 +243,7 @@
         .df-box .df-bot{font-size:10px;color:var(--txt3)}
         .df-arrow{color:var(--txt2);font-size:16px}
  
-        @media(max-width:680px){#sidebar{display:none}#chat-pane{padding:20px 16px 210px}.input-zone{padding:24px 16px 18px}.dash-kpi-row{grid-template-columns:repeat(2,1fr)}.dash-charts-row{grid-template-columns:1fr}}
+        @media(max-width:680px){#sidebar{display:none}#chat-pane{padding:20px 16px 210px}.input-zone{padding:24px 16px 18px}.dash-kpi-row{grid-template-columns:repeat(2,1fr)}.dash-charts-row{grid-template-columns:1fr}#fab-panel{width:calc(100vw - 32px);right:16px}#fab-chat-btn{right:16px}}
     </style>
 </head>
 <body>
@@ -319,6 +360,26 @@
             <div class="dash-chart-card">
                 <div class="dash-chart-label">Tracking Error  e(t) = SP − PV</div>
                 <div id="live-err-chart" style="height:160px;width:100%"></div>
+            </div>
+        </div>
+ 
+        <!-- ★ ANFIS training data — live 3D map ★ -->
+        <div class="anfis-card">
+            <div class="anfis-header">
+                <span class="anfis-title">▶ ANFIS Training Data — Disturbance · Kp · Ki (3D)</span>
+                <span class="anfis-count" id="anfis-count">0 points</span>
+                <div class="anfis-spacer"></div>
+                <a class="anfis-btn" href="#" id="anfis-download" onclick="downloadAnfisCsv();return false;">⬇ Download CSV</a>
+                <button class="anfis-btn danger" onclick="resetAnfisData()">⟲ Reset dataset</button>
+            </div>
+            <div id="anfis-3d-chart" style="height:320px;width:100%"></div>
+            <div class="anfis-comment" id="anfis-comment">
+                <strong>3D Map:</strong> Each point is one autonomous tune — x = <strong>Disturbance</strong>,
+                y = <strong>Kp</strong> (= Kc), z = <strong>Ki</strong> (= Kc / Ti). Send <code>tune_request</code>
+                with a <code>disturbance</code> field from MATLAB to populate this chart and the CSV dataset
+                simultaneously. Drag to rotate, scroll to zoom. This is exactly the
+                <code>(D_values, Kp_values, Ki_values)</code> table your ANFIS training script consumes —
+                download it directly or have MATLAB <code>readtable()</code> the CSV endpoint.
             </div>
         </div>
  
@@ -577,6 +638,149 @@ python app.py           <span class="c"># starts on :5000 with eventlet</span>
 <span class="c"># 5. Set environment variable on server:</span>
 <span class="c"># GEMINI_API_KEY=your_key_here</span></div>
         </div>
+ 
+        <!-- Section 8: ANFIS pipeline -->
+        <div class="guide-section">
+            <h3>8 — Disturbance sweep → ANFIS training data (Kp / Ki)</h3>
+            <p>This closes the loop with your existing ANFIS training script. For every <code>tune_request</code>
+            that includes a <code>disturbance</code> value, the server computes <strong>Kp = Kc</strong> and
+            <strong>Ki = Kc / Ti</strong>, appends the row to <code>anfis_training_data.csv</code>, and
+            broadcasts it live to the 3D chart above.</p>
+ 
+            <div class="df-diagram">
+                <div class="df-box">
+                    <div class="df-top">Simulink</div>
+                    <div class="df-mid">Disturbance sweep</div>
+                    <div class="df-bot">D = 0 → 1 step loop</div>
+                </div>
+                <div class="df-arrow">→</div>
+                <div class="df-box" style="border-color:rgba(245,158,11,0.3)">
+                    <div class="df-top" style="color:var(--amber)">Bridge</div>
+                    <div class="df-mid">tune_request</div>
+                    <div class="df-bot">+ km, tm, taum, D</div>
+                </div>
+                <div class="df-arrow">→</div>
+                <div class="df-box" style="border-color:rgba(0,200,255,0.3)">
+                    <div class="df-top" style="color:var(--cyan)">Server</div>
+                    <div class="df-mid">Kp, Ki computed</div>
+                    <div class="df-bot">appended to CSV</div>
+                </div>
+                <div class="df-arrow">→</div>
+                <div class="df-box" style="border-color:rgba(124,140,255,0.3)">
+                    <div class="df-top" style="color:var(--purple)">MATLAB</div>
+                    <div class="df-mid">readtable(csv)</div>
+                    <div class="df-bot">D, Kp, Ki vectors</div>
+                </div>
+                <div class="df-arrow">→</div>
+                <div class="df-box" style="border-color:rgba(45,212,160,0.3)">
+                    <div class="df-top" style="color:var(--green)">ANFIS</div>
+                    <div class="df-mid">genfis + anfis</div>
+                    <div class="df-bot">Kp_Data.fis / Ki_Data.fis</div>
+                </div>
+            </div>
+ 
+            <p><strong>Step 1 — Bridge sends disturbance sweep</strong> (run once per operating point, or
+            on a timer as the plant drifts):</p>
+            <div class="code-block"><span class="c"># Sweep disturbance, get Kp/Ki logged for each point</span>
+<span class="kw">for</span> D <span class="kw">in</span> [<span class="num">0.0</span>, <span class="num">0.1</span>, <span class="num">0.2</span>, <span class="num">0.3</span>, <span class="num">0.4</span>, <span class="num">0.5</span>, <span class="num">0.6</span>, <span class="num">0.7</span>, <span class="num">0.8</span>, <span class="num">0.9</span>, <span class="num">1.0</span>]:
+    <span class="c"># km/tm/taum identified by Simulink at this disturbance level</span>
+    km, tm, taum = identify_tf_at_disturbance(D)   <span class="c"># your existing identification</span>
+    sio.<span class="fn">emit</span>(<span class="str">"tune_request"</span>, {
+        <span class="str">"order"</span>: <span class="num">1</span>, <span class="str">"km"</span>: km, <span class="str">"tm"</span>: tm, <span class="str">"taum"</span>: taum,
+        <span class="str">"disturbance"</span>: D
+    })
+    time.<span class="fn">sleep</span>(<span class="num">0.3</span>)  <span class="c"># let server respond before next emit</span></div>
+ 
+            <p><strong>Step 2 — MATLAB loads the dataset directly from the server</strong>
+            (no manual D_values/Kp_values/Ki_values arrays needed):</p>
+            <div class="code-block"><span class="c">% --- Load Tuning Bot dataset directly into MATLAB ---</span>
+url <span class="c">= 'https://process-control-project.onrender.com/api/anfis-data.csv';</span>
+T <span class="kw">=</span> readtable(url);
+ 
+D_values  <span class="kw">=</span> T.disturbance;
+Kp_values <span class="kw">=</span> T.kp;
+Ki_values <span class="kw">=</span> T.ki;
+ 
+fprintf(<span class="str">'Loaded %d training points from Tuning Bot\n'</span>, height(T));</div>
+ 
+            <p><strong>Step 3 — Your existing ANFIS training code runs unchanged</strong>, now fed by the
+            loaded vectors:</p>
+            <div class="code-block"><span class="c">% --- ANFIS Training: Converting Data to .fis Files ---</span>
+fprintf(<span class="str">'\n--- Starting ANFIS Training ---\n'</span>);
+ 
+<span class="c">% 1. Format the data into vertical columns</span>
+InputData <span class="kw">=</span> D_values;     <span class="c">% already a column from readtable</span>
+OutputKp  <span class="kw">=</span> Kp_values;
+OutputKi  <span class="kw">=</span> Ki_values;
+ 
+TrainData_Kp <span class="kw">=</span> [InputData, OutputKp];
+TrainData_Ki <span class="kw">=</span> [InputData, OutputKi];
+ 
+<span class="c">% 2. Generate initial fuzzy structures</span>
+fisOptions <span class="kw">=</span> genfisOptions(<span class="str">'GridPartition'</span>);
+initial_fis_Kp <span class="kw">=</span> genfis(InputData, OutputKp, fisOptions);
+initial_fis_Ki <span class="kw">=</span> genfis(InputData, OutputKi, fisOptions);
+ 
+<span class="c">% 3. Train</span>
+disp(<span class="str">'Training Kp ANFIS...'</span>);
+trained_fis_Kp <span class="kw">=</span> anfis(TrainData_Kp, initial_fis_Kp, [<span class="num">100</span> <span class="num">0</span> <span class="num">0.01</span> <span class="num">0.9</span> <span class="num">1.1</span>]);
+disp(<span class="str">'Training Ki ANFIS...'</span>);
+trained_fis_Ki <span class="kw">=</span> anfis(TrainData_Ki, initial_fis_Ki, [<span class="num">100</span> <span class="num">0</span> <span class="num">0.01</span> <span class="num">0.9</span> <span class="num">1.1</span>]);
+ 
+<span class="c">% 4. Save trained models</span>
+writeFIS(trained_fis_Kp, <span class="str">'Kp_Data'</span>);
+writeFIS(trained_fis_Ki, <span class="str">'Ki_Data'</span>);
+fprintf(<span class="str">'\nSuccess: Kp_Data.fis and Ki_Data.fis generated!\n'</span>);
+ 
+<span class="c">% 5. Point your Simulink ANFIS blocks at the new .fis files</span>
+<span class="c">% (Fuzzy Logic Controller block → FIS source → File → Kp_Data.fis / Ki_Data.fis)</span></div>
+ 
+            <p><strong>Step 4 — Close the loop.</strong> Re-load <code>Kp_Data.fis</code> /
+            <code>Ki_Data.fis</code> into the Simulink ANFIS blocks, run the simulation again, stream new
+            <code>telemetry</code> + <code>tune_request</code> (with updated disturbance values) — every
+            cycle adds more points to the 3D map above and refines the ANFIS surface.</p>
+ 
+            <p><strong>Reset between training runs:</strong> click <strong>Reset dataset</strong> above, or
+            <code>POST /api/anfis-reset</code>, to clear <code>anfis_training_data.csv</code> before a fresh sweep.</p>
+        </div>
+    </div>
+</div>
+ 
+<!-- ═════════════════════ FLOATING "ASK A DOUBT" CHAT ═════════════════════ -->
+<button id="fab-chat-btn" onclick="toggleFabChat()" title="Ask a doubt">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+    </svg>
+    <div class="fab-badge" id="fab-badge"></div>
+</button>
+ 
+<div id="fab-panel">
+    <div class="fab-header">
+        <div>
+            <div class="fab-header-title">Ask a doubt</div>
+            <div class="fab-header-sub">FAQ assistant — always available</div>
+        </div>
+        <button class="fab-close" onclick="toggleFabChat()">✕</button>
+    </div>
+    <div class="fab-body" id="fab-body">
+        <div class="fab-msg-bot">
+            Hi! Ask me anything about <strong>FOPDT/SOPDT</strong>, <strong>tuning rules</strong>,
+            <strong>MATLAB/Simulink setup</strong>, or the <strong>ANFIS data pipeline</strong>.<br><br>
+            For entering process parameters (Km, Tm, Tau) and running a tune, please use the main chat —
+            this panel is for quick questions only.
+        </div>
+    </div>
+    <div class="fab-suggest">
+        <div class="fab-suggest-chip" onclick="sendFabChip('what is anfis')">What is ANFIS?</div>
+        <div class="fab-suggest-chip" onclick="sendFabChip('matlab help')">MATLAB setup</div>
+        <div class="fab-suggest-chip" onclick="sendFabChip('explain SOPDT')">SOPDT?</div>
+        <div class="fab-suggest-chip" onclick="sendFabChip('what is IAE and ISE')">IAE vs ISE?</div>
+    </div>
+    <div class="fab-input-bar">
+        <input type="text" id="fab-input" placeholder="Type your question..." autocomplete="off" onkeydown="if(event.key==='Enter') sendFabMessage()"/>
+        <button onclick="sendFabMessage()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+        </button>
     </div>
 </div>
  
@@ -593,6 +797,11 @@ let chartsReady  = false;
  
 const MAX_PTS = 400;
 const liveT = [], livePV = [], liveSP = [], liveMV = [], liveErr = [];
+ 
+// ANFIS dataset (Disturbance, Kp, Ki) — for live 3D chart
+const anfisD = [], anfisKp = [], anfisKi = [], anfisRule = [];
+let anfis3DReady = false;
+let fabOpen = false;
  
 // ── Init ─────────────────────────────────────────────────────
 window.onload = () => {
@@ -614,6 +823,7 @@ function toggleTheme() {
             'yaxis.gridcolor': isL?'#e2e8f0':'#1e2a3a'
         });
     });
+    if (anfis3DReady) init3DAnfisChart();
     document.querySelectorAll('.plotly-chart').forEach(el => {
         if (!el.data) return;
         Plotly.relayout(el, {'font.color':isL?'#334155':'#a0aec0','xaxis.gridcolor':isL?'#e2e8f0':'#1e2a3a','yaxis.gridcolor':isL?'#e2e8f0':'#1e2a3a'});
@@ -636,12 +846,13 @@ function connectWebSocket() {
     if (socket) socket.disconnect();
     setWsStatus('','CONNECTING…');
     socket = io(WS_URL, {transports:['websocket'], reconnectionAttempts:5});
-    socket.on('connect',       () => { setWsStatus('connected','CONNECTED'); logDash('Socket.IO established.','ok'); });
+    socket.on('connect',       () => { setWsStatus('connected','CONNECTED'); logDash('Socket.IO established.','ok'); fetchAnfisData(); });
     socket.on('disconnect',    () => { setWsStatus('','DISCONNECTED');       logDash('Disconnected.','warn'); });
     socket.on('connect_error', (e)=> { setWsStatus('error','ERROR');         logDash('Error: '+e.message,'err'); });
     socket.on('status',        (d)=> logDash(d.message,'ok'));
     socket.on('telemetry_update', handleTelemetry);
     socket.on('tune_response',    handleTuneResponse);
+    socket.on('anfis_data_update', handleAnfisUpdate);
 }
  
 function setWsStatus(cls, label) {
@@ -700,6 +911,97 @@ function updatePVComment() {
     );
 }
  
+// ── ANFIS 3D dataset (Disturbance · Kp · Ki) ──────────────────
+function init3DAnfisChart() {
+    const isL = document.body.classList.contains('light');
+    Plotly.newPlot('anfis-3d-chart', [{
+        x: anfisD, y: anfisKp, z: anfisKi,
+        mode: 'markers', type: 'scatter3d',
+        marker: {
+            size: 4, color: anfisKi.length ? anfisKi : '#7c8cff',
+            colorscale: [[0,'#0ea5e9'],[0.5,'#7c8cff'],[1,'#ff4d6d']],
+            opacity: 0.85,
+            colorbar: {title:{text:'Ki',font:{size:9}}, thickness:10, len:0.6}
+        },
+        hovertemplate: 'D=%{x:.3f}<br>Kp=%{y:.4f}<br>Ki=%{z:.4f}<extra></extra>'
+    }], {
+        paper_bgcolor:'transparent',
+        font:{color:isL?'#334155':'#a0aec0',family:'DM Sans,sans-serif',size:10},
+        margin:{l:0,r:0,t:6,b:0},
+        scene: {
+            xaxis:{title:{text:'Disturbance (D)',font:{size:10}}, gridcolor:isL?'#e2e8f0':'#1e2a3a', backgroundcolor:'rgba(0,0,0,0)'},
+            yaxis:{title:{text:'Kp',font:{size:10}},          gridcolor:isL?'#e2e8f0':'#1e2a3a', backgroundcolor:'rgba(0,0,0,0)'},
+            zaxis:{title:{text:'Ki',font:{size:10}},          gridcolor:isL?'#e2e8f0':'#1e2a3a', backgroundcolor:'rgba(0,0,0,0)'},
+            camera:{eye:{x:1.5,y:1.5,z:0.9}}
+        }
+    }, {responsive:true, displayModeBar:false});
+    anfis3DReady = true;
+}
+ 
+function redraw3DAnfisChart() {
+    const el = document.getElementById('anfis-3d-chart');
+    if (!el) return;
+    if (!anfis3DReady) { init3DAnfisChart(); return; }
+    Plotly.restyle('anfis-3d-chart', {
+        x: [anfisD], y: [anfisKp], z: [anfisKi],
+        'marker.color': [anfisKi.length ? anfisKi : '#7c8cff']
+    });
+    document.getElementById('anfis-count').textContent = anfisD.length + ' points';
+    document.getElementById('anfis-comment').innerHTML = (
+        `<strong>3D Map:</strong> <strong>${anfisD.length}</strong> training points logged. ` +
+        `x = <strong>Disturbance</strong>, y = <strong>Kp</strong> (=Kc), z = <strong>Ki</strong> (=Kc/Ti), ` +
+        `colour = Ki magnitude. Drag to rotate, scroll to zoom. ` +
+        `Download via <code>/api/anfis-data.csv</code> or the button above — this is the exact ` +
+        `<code>(D_values, Kp_values, Ki_values)</code> table for your ANFIS <code>genfis</code>/<code>anfis</code> training.`
+    );
+}
+ 
+function handleAnfisUpdate(d) {
+    if (d.reset) {
+        anfisD.length = 0; anfisKp.length = 0; anfisKi.length = 0; anfisRule.length = 0;
+        redraw3DAnfisChart();
+        logDash('ANFIS dataset reset.','warn');
+        return;
+    }
+    if (d.row) {
+        anfisD.push(parseFloat(d.row.disturbance));
+        anfisKp.push(parseFloat(d.row.kp));
+        anfisKi.push(parseFloat(d.row.ki));
+        anfisRule.push(d.row.rule);
+        redraw3DAnfisChart();
+        logDash(`ANFIS point logged: D=${d.row.disturbance} → Kp=${d.row.kp}, Ki=${d.row.ki} (${d.total_points} total)`,'ok');
+    }
+}
+ 
+function fetchAnfisData() {
+    fetch(WS_URL + '/api/anfis-data')
+        .then(r => r.json())
+        .then(d => {
+            anfisD.length = 0; anfisKp.length = 0; anfisKi.length = 0; anfisRule.length = 0;
+            (d.data || []).forEach(row => {
+                anfisD.push(parseFloat(row.disturbance));
+                anfisKp.push(parseFloat(row.kp));
+                anfisKi.push(parseFloat(row.ki));
+                anfisRule.push(row.rule);
+            });
+            redraw3DAnfisChart();
+            logDash(`Loaded ${d.count} existing ANFIS points.`, 'ok');
+        })
+        .catch(e => logDash('Could not load ANFIS dataset: '+e.message, 'err'));
+}
+ 
+function downloadAnfisCsv() {
+    window.open(WS_URL + '/api/anfis-data.csv', '_blank');
+}
+ 
+function resetAnfisData() {
+    if (!confirm('Clear the ANFIS training dataset on the server? This cannot be undone.')) return;
+    fetch(WS_URL + '/api/anfis-reset', {method:'POST'})
+        .then(r => r.json())
+        .then(() => logDash('Dataset reset requested.','warn'))
+        .catch(e => logDash('Reset failed: '+e.message,'err'));
+}
+ 
 // ── Dashboard charts ─────────────────────────────────────────
 function dashLayout(ytitle, lineColor) {
     const isL = document.body.classList.contains('light');
@@ -730,6 +1032,9 @@ function initDashCharts() {
     Plotly.newPlot('live-err-chart', [
         {x:[],y:[],name:'Error',type:'scatter',line:{color:'#a78bfa',width:1.5},fill:'tozeroy',fillcolor:'rgba(167,139,250,0.05)'}
     ], dashLayout('Error'), {responsive:true,displayModeBar:false});
+ 
+    // ANFIS 3D dataset chart
+    init3DAnfisChart();
  
     chartsReady = true;
 }
@@ -902,6 +1207,55 @@ async function sendMessage() {
 function scrollBottom() {
     const box = document.getElementById('chat-pane');
     box.scrollTo({top:box.scrollHeight, behavior:'smooth'});
+}
+ 
+// ══════════════════════════════════════════════════════════════
+//  FLOATING "ASK A DOUBT" CHAT
+//  Uses the same /api/chat endpoint. Only short, no-digit questions
+//  are answered (greetings, FOPDT/SOPDT/ANFIS/MATLAB/rules explainers),
+//  which the server resolves via NLP intent BEFORE touching the main
+//  tuning session — so this never interferes with an in-progress tune.
+// ══════════════════════════════════════════════════════════════
+function toggleFabChat() {
+    fabOpen = !fabOpen;
+    document.getElementById('fab-panel').classList.toggle('open', fabOpen);
+    document.getElementById('fab-badge').classList.remove('show');
+    if (fabOpen) document.getElementById('fab-input').focus();
+}
+ 
+function sendFabChip(text) {
+    document.getElementById('fab-input').value = text;
+    sendFabMessage();
+}
+ 
+function appendFabMsg(html, isUser) {
+    const body = document.getElementById('fab-body');
+    const el = document.createElement('div');
+    el.className = isUser ? 'fab-msg-user' : 'fab-msg-bot';
+    el.innerHTML = html;
+    body.appendChild(el);
+    body.scrollTop = body.scrollHeight;
+    return el;
+}
+ 
+async function sendFabMessage() {
+    const input = document.getElementById('fab-input');
+    const text  = input.value.trim();
+    if (!text) return;
+    input.value = '';
+ 
+    appendFabMsg(text.replace(/</g,'&lt;'), true);
+    const thinking = appendFabMsg('<em style="color:var(--txt2)">thinking…</em>', false);
+ 
+    try {
+        const res  = await fetch(API_URL, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:text})});
+        const data = await res.json();
+        thinking.innerHTML = data.reply.replace(/\n/g,'<br>');
+    } catch(e) {
+        thinking.innerHTML = '<strong>Connection failed.</strong> Server may be spinning up — wait 30s and retry.';
+    }
+    const body = document.getElementById('fab-body');
+    body.scrollTop = body.scrollHeight;
 }
 </script>
 </body>
