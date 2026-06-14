@@ -10,3 +10,4 @@ plotly
 gunicorn==21.2.0
 google-generativeai
 gunicorn[eventlet]
+sympy
