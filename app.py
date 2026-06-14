@@ -1,3 +1,5 @@
+import eventlet
+eventlet.monkey_patch()
 import os, re, json, pickle, math, csv, traceback
 from datetime import datetime, timezone
 import numpy as np
