@@ -14,7 +14,8 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'tuningbot-secret')
  
 # 2. Add CORS so GitHub can talk to Render
-CORS(app, resources={r"/*": {"origins": "*"}})
+# 2. Add CORS so GitHub can talk to Render
+CORS(app)
  
 # 3. Initialize Socket.IO so MATLAB can connect
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
