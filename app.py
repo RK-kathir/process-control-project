@@ -7,18 +7,19 @@ from flask_cors import CORS
 from flask_socketio import SocketIO, emit
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.svm import LinearSVC
-
+from tf_parser import parse_transfer_function, TFParseError
+ 
 # 1. Initialize the Flask App FIRST
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'tuningbot-secret')
-
+ 
 # 2. Add CORS so GitHub can talk to Render
 CORS(app, resources={r"/*": {"origins": "*"}})
-
+ 
 # 3. Initialize Socket.IO so MATLAB can connect
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
 socketio_app = socketio  # alias for gunicorn
-
+ 
 # ── Gemini ─────────────────────────────────────────────────────────────────
 genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
 llm_model = genai.GenerativeModel(
@@ -98,6 +99,32 @@ print(f"ANFIS dataset: {len(anfis_data)} existing rows loaded.")
  
  
 # ══════════════════════════════════════════════════════════════════════════
+#  TRANSFER-FUNCTION PARSE HISTORY  (advanced feature)
+# ══════════════════════════════════════════════════════════════════════════
+#  Every time a transfer function is successfully parsed (via chat,
+#  Socket.IO tune_request, or /api/parse-tf), a record is kept here so
+#  the user can review how the process model has changed over time.
+# ══════════════════════════════════════════════════════════════════════════
+TF_HISTORY_MAX = 100
+tf_history = []
+ 
+def _log_tf_history(source, tf_text, result, fopdt):
+    tf_history.append({
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "source": source,
+        "tf_text": tf_text,
+        "order": result["order"],
+        "km": round(result["km"], 6),
+        "taum_raw": round(result["taum"], 6),
+        "time_constants": [round(t, 6) for t in result["time_constants"]],
+        "warnings": result["warnings"],
+        "fopdt": {"km": round(fopdt[0], 6), "tm": round(fopdt[1], 6), "taum": round(fopdt[2], 6)},
+    })
+    while len(tf_history) > TF_HISTORY_MAX:
+        tf_history.pop(0)
+ 
+ 
+# ══════════════════════════════════════════════════════════════════════════
 #  HALF-RULE REDUCER  (Skogestad's method — O'Dwyer 3rd Ed, Appendix)
 # ══════════════════════════════════════════════════════════════════════════
 class HalfRuleReducer:
@@ -106,6 +133,11 @@ class HalfRuleReducer:
       - Largest neglected time constant: half added to dead time
       - All smaller neglected constants: added in full to dead time
     Reference: Skogestad 2003; cited in O'Dwyer 3rd Ed Appendix A.
+ 
+    `reduce()` supports ANY order (1, 2, 3, 4, 5, ...). The dominant
+    (largest) time constant is retained as Tm; the next-largest
+    contributes half of itself to the dead time, and all smaller ones
+    contribute fully to the dead time.
     """
  
     @staticmethod
@@ -131,16 +163,23 @@ class HalfRuleReducer:
     @staticmethod
     def reduce(order, km, time_constants, taum, zeta=1.0):
         """
-        time_constants: list, largest first.
+        time_constants: list, any order, any length >= 1.
         Returns (km, tm_approx, taum_approx, zeta).
+ 
+        For len(tcs) == 1 -> already FOPDT, returned as-is.
+        For len(tcs) >= 2 -> Tm = tau1 (largest); Taum = taum + tau2/2 + sum(tau3..tauN).
+        This single formula reproduces from_sopdt for 2 constants and
+        from_third_order for 3 constants, and extends naturally to 4th,
+        5th, ... order models.
         """
         tcs = sorted(time_constants, reverse=True)
-        if order == 1 or len(tcs) == 1:
+        if not tcs:
+            return km, max(taum, 1e-6), taum, zeta
+        if len(tcs) == 1:
             return km, tcs[0], taum, zeta
-        elif order == 2:
-            return HalfRuleReducer.from_sopdt(km, tcs[0], tcs[1], taum, zeta)
-        else:
-            return HalfRuleReducer.from_third_order(km, tcs[0], tcs[1], tcs[2], taum, zeta)
+        tm_r  = tcs[0]
+        tau_r = taum + tcs[1] / 2.0 + sum(tcs[2:])
+        return km, tm_r, tau_r, zeta
  
  
 # ══════════════════════════════════════════════════════════════════════════
@@ -220,6 +259,10 @@ nlp_training_data = [
     ("what is anfis","anfis_explain"),("explain anfis","anfis_explain"),
     ("how does the anfis training work","anfis_explain"),
     ("anfis data","anfis_explain"),("kp ki dataset","anfis_explain"),
+    ("what is a transfer function","tf_explain"),("explain transfer function","tf_explain"),
+    ("how do i enter a transfer function","tf_explain"),
+    ("can you read a transfer function","tf_explain"),
+    ("4th order transfer function","tf_explain"),("higher order transfer function","tf_explain"),
 ]
 texts, labels = zip(*nlp_training_data)
 intent_vectorizer = TfidfVectorizer(ngram_range=(1,2))
@@ -236,7 +279,9 @@ KNOWLEDGE_BASE = {
         "PID settings and simulate the closed-loop response.<br><br>"
         "I also support <strong>Simulink Telemetry Mode</strong> — connect MATLAB directly via "
         "WebSocket/Socket.IO for autonomous real-time tuning of your ANFIS controller. "
-        "Type <em>matlab help</em> for the MATLAB integration guide."
+        "Type <em>matlab help</em> for the MATLAB integration guide.<br><br>"
+        "Don't have Km/Tm/Tau handy? Just paste your <strong>transfer function</strong> (any order, "
+        "including 4th-order+) — type <em>what is a transfer function</em> to learn how."
     ),
     "pid_explain": (
         "<strong>PID = Proportional + Integral + Derivative</strong><br><br>"
@@ -253,8 +298,8 @@ KNOWLEDGE_BASE = {
         "Open valve 10% → temperature rises 5°C → Km = 0.5<br>"
         "- <strong>Tm (Time Constant):</strong> Time to reach ~63% of final value after a step<br>"
         "- <strong>Tau / taum (Dead Time):</strong> Pure delay before any response begins<br><br>"
-        "Obtain from a step test. I also accept 2nd and 3rd-order models and auto-reduce "
-        "them via Skogestad's Half-Rule."
+        "Obtain from a step test. I also accept 2nd, 3rd, 4th (and higher) order models and "
+        "auto-reduce them via Skogestad's Half-Rule — or just paste the transfer function directly."
     ),
     "sopdt_explain": (
         "<strong>SOPDT = Second Order Plus Dead Time</strong><br><br>"
@@ -268,6 +313,21 @@ KNOWLEDGE_BASE = {
         "- Ho et al. min-IAE<br>"
         "- Rivera IMC, Astrom IMC-based<br><br>"
         "Format: <code>order=2, Km=2, T1=10, T2=3, Tau=2</code>"
+    ),
+    "tf_explain": (
+        "<strong>Transfer Function Input (any order)</strong><br><br>"
+        "Instead of typing Km/Tm/Tau by hand, you can paste the process transfer function "
+        "directly and I'll extract Km, the time constants, and the dead time myself — "
+        "for 1st, 2nd, 3rd, 4th order or higher.<br><br>"
+        "Use <code>s</code> as the Laplace variable, <code>*</code> for multiplication, "
+        "<code>^</code> or <code>**</code> for powers, and <code>exp(-theta*s)</code> for the delay.<br><br>"
+        "Examples:<br>"
+        "<code>tf: 5/(10*s+1)</code> — 1st order<br>"
+        "<code>tf: 5*exp(-2*s)/(10*s+1)</code> — 1st order + delay<br>"
+        "<code>tf: 5/((10*s+1)*(5*s+1)*(2*s+1)*(1*s+1))*exp(-1*s)</code> — 4th order + delay<br><br>"
+        "Higher-order models are automatically reduced to an equivalent FOPDT form using "
+        "<strong>Skogestad's Half-Rule</strong> before tuning, and I'll show you the time "
+        "constants I found plus any stability warnings (e.g. integrators, unstable poles)."
     ),
     "rule_explain": (
         "I have <strong>55+ tuning rules</strong> from O'Dwyer's Handbook (3rd Ed):<br><br>"
@@ -297,10 +357,12 @@ KNOWLEDGE_BASE = {
         "Quick summary:<br>"
         "1. Install: <code>pip install python-socketio[client] eventlet</code><br>"
         "2. Connect to: <code>ws://your-server/socket.io</code><br>"
-        "3. Emit <code>tune_request</code> with your transfer function parameters<br>"
+        "3. Emit <code>tune_request</code> with your transfer function parameters "
+        "(or a raw <code>tf</code> string for any order)<br>"
         "4. Listen for <code>tune_response</code> to receive Kc and Ti<br>"
         "5. Stream live data via <code>telemetry</code> events for the dashboard<br><br>"
-        "SOPDT example: <code>{order:2, km:2, tm1:10, tm2:3, taum:2, zeta:1.0}</code><br><br>"
+        "SOPDT example: <code>{order:2, km:2, tm1:10, tm2:3, taum:2, zeta:1.0}</code><br>"
+        "Raw TF example: <code>{tf: \"5/((10*s+1)*(5*s+1)*(2*s+1)*(1*s+1))*exp(-1*s)\"}</code><br><br>"
         "Type <em>what is anfis</em> to learn how Kp/Ki data is logged for ANFIS training."
     ),
     "anfis_explain": (
@@ -325,6 +387,8 @@ KNOWLEDGE_BASE = {
         "<strong>Human Chat Mode:</strong><br>"
         "1. Provide: <code>Km=2, Tm=10, Tau=2</code> (FOPDT)<br>"
         "   Or: <code>order=2, Km=2, T1=10, T2=3, Tau=2</code> (SOPDT)<br>"
+        "   Or paste a <strong>transfer function</strong> directly (any order): "
+        "<code>tf: 5/((10*s+1)*(5*s+1)*(2*s+1)*(1*s+1))*exp(-1*s)</code><br>"
         "2. Answer 4 plain-language questions<br>"
         "3. Receive optimal Kc/Ti and a step-response simulation<br><br>"
         "<strong>Simulink Telemetry Mode:</strong><br>"
@@ -341,8 +405,9 @@ bot_memory = {
     "km": None, "tm": None, "taum": None, "tau_c": None,
     "mode": None, "metric": None, "robust": None, "overshoot": None,
     "interview_stage": 0, "allows_overshoot": False, "overshoot_answer": None,
-    # SOPDT fields
-    "order": 1, "tm2": None, "tm3": None, "zeta": 1.0
+    # SOPDT / higher-order fields (support up to 6th order)
+    "order": 1, "tm2": None, "tm3": None, "tm4": None, "tm5": None, "tm6": None,
+    "zeta": 1.0
 }
  
 auto_operator = AutonomousOperator()
@@ -353,8 +418,20 @@ def _reset_memory():
         "km": None, "tm": None, "taum": None, "tau_c": None,
         "mode": None, "metric": None, "robust": None, "overshoot": None,
         "interview_stage": 0, "allows_overshoot": False, "overshoot_answer": None,
-        "order": 1, "tm2": None, "tm3": None, "zeta": 1.0
+        "order": 1, "tm2": None, "tm3": None, "tm4": None, "tm5": None, "tm6": None,
+        "zeta": 1.0
     }
+ 
+ 
+# ══════════════════════════════════════════════════════════════════════════
+#  TRANSFER-FUNCTION TEXT DETECTION  (chat: "tf:", "G(s)=", "transfer function")
+# ══════════════════════════════════════════════════════════════════════════
+TF_TRIGGER_RE  = re.compile(r'(transfer function|tf\s*[:=]|g\(s\)|gp\(s\))', re.IGNORECASE)
+TF_STRIP_RE    = re.compile(r'(?i)^.*?(transfer function|tf|g\(s\)|gp\(s\))\s*[:=]?\s*')
+ORDER_SUFFIX   = {1: "st", 2: "nd", 3: "rd"}
+ 
+def _order_suffix(n):
+    return ORDER_SUFFIX.get(n, "th")
  
  
 # ══════════════════════════════════════════════════════════════════════════
@@ -426,7 +503,7 @@ def run_tuning(km, tm, taum, mode, overshoot, robust, metric,
                overshoot_answer=None, zeta=1.0, order=1):
     """
     Selects and evaluates a tuning rule.
-    For SOPDT: pass reduced FOPDT values (after Half-Rule) and zeta.
+    For SOPDT/higher-order: pass reduced FOPDT values (after Half-Rule) and zeta.
     Returns (kc, ti, rule_key, rule_name, description, chart, os_est, settling).
     """
     OVERSHOOT_OVERRIDE = {
@@ -465,7 +542,7 @@ def run_tuning(km, tm, taum, mode, overshoot, robust, metric,
         if ok in rules_db:
             best_rule = ok
  
-    # Override for SOPDT: prefer SOPDT-specific rules when order >= 2
+    # Override for SOPDT/higher-order: prefer SOPDT-specific rules when order >= 2
     if order >= 2 and sopdt_keys:
         # Map tuning objectives to best SOPDT rule
         if robust:
@@ -510,13 +587,34 @@ def run_tuning(km, tm, taum, mode, overshoot, robust, metric,
  
  
 # ══════════════════════════════════════════════════════════════════════════
+#  ADVANCED FEATURE: QUICK PI ESTIMATE  (IMC-style "first look" suggestion)
+# ══════════════════════════════════════════════════════════════════════════
+def quick_pi_estimate(km, tm, taum, lam=None):
+    """
+    Returns a fast IMC-based (lambda tuning) PI estimate, useful as an
+    immediate "first look" the moment a transfer function is parsed —
+    before running the full AI rule-selection + simulation pipeline.
+ 
+    lambda (closed-loop time constant) defaults to max(taum, 0.5*tm),
+    a common robust choice (Skogestad SIMC guideline).
+    """
+    km = km if abs(km) > 1e-9 else 1e-9
+    if lam is None:
+        lam = max(taum, 0.5 * tm)
+    lam = max(lam, 1e-6)
+    kc = tm / (km * (lam + taum))
+    ti = min(tm, 4 * (lam + taum))
+    return round(kc, 4), round(ti, 4), round(lam, 4)
+ 
+ 
+# ══════════════════════════════════════════════════════════════════════════
 #  WEBSOCKET EVENTS  (MATLAB/Simulink interface)
 # ══════════════════════════════════════════════════════════════════════════
  
 @socketio.on('connect')
 def handle_connect():
     print(f"[WS] Connected: {request.sid}")
-    emit('status', {'message': 'TUNING BOT connected. Ready for FOPDT/SOPDT telemetry.'})
+    emit('status', {'message': 'TUNING BOT connected. Ready for FOPDT/SOPDT/higher-order telemetry.'})
  
  
 @socketio.on('disconnect')
@@ -549,6 +647,10 @@ def handle_tune_request(data):
     FOPDT:   { "order":1, "km":2.0, "tm":10.0, "taum":2.0 }
     SOPDT:   { "order":2, "km":2.0, "tm1":10.0, "tm2":3.0, "taum":1.0, "zeta":1.0 }
     3rd ord: { "order":3, "km":2.0, "tm1":10.0, "tm2":3.0, "tm3":1.0, "taum":0.5 }
+    4th+ ord:{ "order":4, "km":2.0, "tm1":10.0, "tm2":3.0, "tm3":1.0, "tm4":0.4, "taum":0.5 }
+ 
+    OR — raw transfer function (any order, parsed server-side):
+             { "tf": "5/((10*s+1)*(5*s+1)*(2*s+1)*(1*s+1))*exp(-1*s)" }
  
     Optional field "disturbance": <float>
         If present, the resulting Kc/Ti (== Kp/Ki) pair is logged against
@@ -556,28 +658,51 @@ def handle_tune_request(data):
         (anfis_training_data.csv) and broadcast via 'anfis_data_update'.
     """
     try:
-        order = int(data.get("order", 1))
-        km    = float(data.get("km",   1.0))
-        taum  = float(data.get("taum", 1.0))
-        zeta  = float(data.get("zeta", 1.0))
+        warnings_list = []
+        tf_text = data.get("tf")
  
-        if order == 1:
-            tcs = [float(data.get("tm", 10.0))]
-        elif order == 2:
-            tcs = [float(data.get("tm1", 10.0)), float(data.get("tm2", 3.0))]
+        if tf_text:
+            try:
+                tf_result = parse_transfer_function(tf_text)
+            except TFParseError as e:
+                emit('tune_response', {'status': 'error', 'message': f'TF parse error: {e}'})
+                return
+            order = max(1, tf_result["order"])
+            km    = tf_result["km"]
+            taum  = tf_result["taum"]
+            tcs   = tf_result["time_constants"] or [1.0]
+            warnings_list = tf_result["warnings"]
         else:
-            tcs = [float(data.get("tm1", 10.0)),
-                   float(data.get("tm2",  3.0)),
-                   float(data.get("tm3",  1.0))]
+            order = int(data.get("order", 1))
+            km    = float(data.get("km",   1.0))
+            taum  = float(data.get("taum", 1.0))
  
-        # Apply Half-Rule reduction for order > 1
+            if order == 1:
+                tcs = [float(data.get("tm", 10.0))]
+            elif order == 2:
+                tcs = [float(data.get("tm1", 10.0)), float(data.get("tm2", 3.0))]
+            elif order == 3:
+                tcs = [float(data.get("tm1", 10.0)),
+                       float(data.get("tm2",  3.0)),
+                       float(data.get("tm3",  1.0))]
+            else:
+                # 4th order and beyond: read tm1..tmN, defaulting sensibly
+                tcs = [float(data.get(f"tm{i}", 10.0 / i)) for i in range(1, order + 1)]
+ 
+        zeta = float(data.get("zeta", 1.0))
+ 
+        # Apply Half-Rule reduction for order > 1 (any order)
         km_r, tm_r, taum_r, zeta_r = HalfRuleReducer.reduce(order, km, tcs, taum, zeta)
  
         if order > 1:
-            note = (f"Order-{order} TF reduced via Skogestad Half-Rule → "
+            tc_str = ", ".join(f"τ{i+1}={round(t,4)}" for i, t in enumerate(sorted(tcs, reverse=True)))
+            note = (f"Order-{order} TF ({tc_str}) reduced via Skogestad Half-Rule → "
                     f"FOPDT: Km={round(km_r,4)}, Tm={round(tm_r,4)}, Tau={round(taum_r,4)}")
         else:
             note = f"FOPDT: Km={km_r}, Tm={tm_r}, Tau={taum_r}"
+ 
+        if tf_text:
+            _log_tf_history("websocket", tf_text, tf_result, (km_r, tm_r, taum_r))
  
         # Autonomous decision
         decision = auto_operator.decide(km_r, tm_r, taum_r)
@@ -588,6 +713,9 @@ def handle_tune_request(data):
             decision["robust"], decision["metric"],
             zeta=zeta_r, order=order
         )
+ 
+        # Quick "first look" PI estimate (advanced feature)
+        qkc, qti, qlam = quick_pi_estimate(km_r, tm_r, taum_r)
  
         response = {
             "status":            "ok",
@@ -604,6 +732,8 @@ def handle_tune_request(data):
                 "tm":   round(tm_r,  4),
                 "taum": round(taum_r, 4)
             },
+            "quick_estimate": {"kc": qkc, "ti": qti, "lambda": qlam},
+            "warnings": warnings_list,
         }
  
         # ── ANFIS dataset logging ───────────────────────────────────────
@@ -714,23 +844,30 @@ def _parse_answer(stage, msg_lower):
     return None
  
 def _extract_params_regex(msg):
-    ext = {"km": None, "tm": None, "taum": None, "tm2": None, "tm3": None,
-           "order": None, "zeta": None}
+    """
+    Extracts Km, Tm (=T1), Tau, order, zeta, and any number of additional
+    lag time constants Tm2..Tm6 (T2..T6) for higher-order (incl. 4th order+)
+    models entered manually, e.g.:
+        order=4, Km=2, T1=10, T2=4, T3=1.5, T4=0.5, Tau=0.5
+    """
+    ext = {"km": None, "tm": None, "taum": None, "order": None, "zeta": None}
     ml  = msg.lower()
     km_m  = re.search(r'(km|gain)\s*(=|:)?\s*([+-]?\d+\.?\d*)', ml)
     tm_m  = re.search(r'\b(tm|t1|lag|time\s*constant)\s*(=|:)?\s*([+-]?\d+\.?\d*)', ml)
-    tm2_m = re.search(r'\b(tm2|t2)\s*(=|:)?\s*([+-]?\d+\.?\d*)', ml)
-    tm3_m = re.search(r'\b(tm3|t3)\s*(=|:)?\s*([+-]?\d+\.?\d*)', ml)
     tau_m = re.search(r'(tau|dead\s*time|delay|theta)\s*(=|:)?\s*([+-]?\d+\.?\d*)', ml)
-    ord_m = re.search(r'order\s*(=|:)?\s*([123])', ml)
+    ord_m = re.search(r'order\s*(=|:)?\s*([1-6])', ml)
     zeta_m= re.search(r'zeta\s*(=|:)?\s*([+-]?\d+\.?\d*)', ml)
     if km_m:   ext["km"]    = float(km_m.group(3))
     if tm_m:   ext["tm"]    = float(tm_m.group(3))
-    if tm2_m:  ext["tm2"]   = float(tm2_m.group(3))
-    if tm3_m:  ext["tm3"]   = float(tm3_m.group(3))
     if tau_m:  ext["taum"]  = float(tau_m.group(3))
     if ord_m:  ext["order"] = int(ord_m.group(2))
     if zeta_m: ext["zeta"]  = float(zeta_m.group(2))
+ 
+    # Extra lag time constants: tm2/t2 .. tm6/t6 (supports 4th, 5th, 6th order)
+    for n in range(2, 7):
+        m = re.search(rf'\b(tm{n}|t{n})\s*(=|:)?\s*([+-]?\d+\.?\d*)', ml)
+        if m:
+            ext[f"tm{n}"] = float(m.group(3))
     return ext
  
 def _build_rules_response():
@@ -755,6 +892,17 @@ def _build_rules_response():
     reply += "<em>AI selects the optimal rule for your process type, objectives and model confidence.</em>"
     return jsonify({"reply": reply, "options": [], "chart": None})
  
+def _build_tcs_from_memory():
+    """Collect [tm, tm2, tm3, tm4, tm5, tm6] (those that are set) up to bot_memory['order']."""
+    order = bot_memory.get('order', 1)
+    tm    = bot_memory.get('tm')
+    tcs   = [tm]
+    for n in range(2, order + 1):
+        val = bot_memory.get(f'tm{n}')
+        if val is not None:
+            tcs.append(val)
+    return tcs
+ 
 def _run_rest_tuning():
     global bot_memory
     km   = bot_memory['km'];   tm    = bot_memory['tm']
@@ -762,19 +910,20 @@ def _run_rest_tuning():
     os_v = bot_memory.get('overshoot', 0); rob  = bot_memory.get('robust', 0)
     met  = bot_memory.get('metric', 1);    oa   = bot_memory.get('overshoot_answer')
     zeta = bot_memory.get('zeta', 1.0);    order= bot_memory.get('order', 1)
-    tm2  = bot_memory.get('tm2');          tm3  = bot_memory.get('tm3')
  
-    # Apply Half-Rule if higher order
+    # Apply Half-Rule if higher order (any order, including 4th+)
     km_r, tm_r, taum_r = km, tm, taum
     reduction_note = ""
-    if order >= 2 and tm2:
-        tcs = [tm, tm2]
-        if order >= 3 and tm3: tcs.append(tm3)
-        km_r, tm_r, taum_r, _ = HalfRuleReducer.reduce(order, km, tcs, taum, zeta)
-        reduction_note = (
-            f"<br>Your order-{order} model was reduced via <strong>Skogestad's Half-Rule</strong> "
-            f"→ FOPDT: Km={round(km_r,4)}, Tm={round(tm_r,4)}, Tau={round(taum_r,4)}<br>"
-        )
+    if order >= 2:
+        tcs = _build_tcs_from_memory()
+        if len(tcs) >= 2:
+            km_r, tm_r, taum_r, _ = HalfRuleReducer.reduce(order, km, tcs, taum, zeta)
+            tc_str = ", ".join(f"τ{i+1}={round(t,4)}" for i, t in enumerate(sorted(tcs, reverse=True)))
+            reduction_note = (
+                f"<br>Your order-{order} model ({tc_str}) was reduced via "
+                f"<strong>Skogestad's Half-Rule</strong> "
+                f"→ FOPDT: Km={round(km_r,4)}, Tm={round(tm_r,4)}, Tau={round(taum_r,4)}<br>"
+            )
  
     kc, ti, rule_key, rule_name, rule_desc, chart, os_est, settling = run_tuning(
         km_r, tm_r, taum_r, mode, os_v, rob, met, oa, zeta=zeta, order=order
@@ -823,16 +972,65 @@ def chat():
                 "reply": (
                     "Session reset. Ready for a new process.<br><br>"
                     "FOPDT: <code>Km=2, Tm=10, Tau=2</code><br>"
-                    "SOPDT: <code>order=2, Km=2, T1=10, T2=3, Tau=2</code>"
+                    "SOPDT: <code>order=2, Km=2, T1=10, T2=3, Tau=2</code><br>"
+                    "Or paste a transfer function: <code>tf: 5/((10*s+1)*(5*s+1)*(2*s+1)*(1*s+1))*exp(-1*s)</code>"
                 ),
                 "options": [], "chart": None
             })
+ 
+        # ── Transfer-function text detection (any order, incl. 4th+) ────
+        tf_note = ""
+        tf_parsed = False
+        if TF_TRIGGER_RE.search(user_msg):
+            expr = TF_STRIP_RE.sub('', user_msg).strip()
+            try:
+                tf_result = parse_transfer_function(expr)
+            except TFParseError as e:
+                return jsonify({
+                    "reply": (
+                        f"⚠️ I couldn't parse that transfer function: {e}<br><br>"
+                        "Examples:<br>"
+                        "<code>tf: 5/(10*s+1)</code> — 1st order<br>"
+                        "<code>tf: 5*exp(-2*s)/(10*s+1)</code> — 1st order + delay<br>"
+                        "<code>tf: 5/((10*s+1)*(5*s+1)*(2*s+1)*(1*s+1))*exp(-1*s)</code> — 4th order + delay"
+                    ),
+                    "options": [], "chart": None
+                })
+ 
+            tcs   = tf_result["time_constants"]
+            order = max(1, tf_result["order"])
+            bot_memory["km"]    = tf_result["km"]
+            bot_memory["taum"]  = tf_result["taum"]
+            bot_memory["order"] = order
+            bot_memory["tm"]    = tcs[0] if tcs else max(tf_result["taum"], 1.0)
+            for i, tau in enumerate(tcs[1:], start=2):
+                bot_memory[f"tm{i}"] = tau
+ 
+            km_r, tm_r, taum_r, _ = HalfRuleReducer.reduce(
+                order, tf_result["km"], tcs or [bot_memory["tm"]], tf_result["taum"])
+            _log_tf_history("chat", expr, tf_result, (km_r, tm_r, taum_r))
+ 
+            tc_str    = ", ".join(f"τ{i+1}={round(t,4)}" for i, t in enumerate(tcs)) or "—"
+            warn_html = "".join(f"⚠️ {w}<br>" for w in tf_result["warnings"])
+            tf_note = (
+                f"<strong>Transfer function parsed</strong> "
+                f"({order}{_order_suffix(order)} order):<br>"
+                f"Km={round(tf_result['km'],4)}, dead time θ={round(tf_result['taum'],4)}, "
+                f"time constants: {tc_str}<br>{warn_html}"
+            )
+            if order > 1:
+                tf_note += (
+                    f"Reduced (Half-Rule) → FOPDT: Km={round(km_r,4)}, "
+                    f"Tm={round(tm_r,4)}, Tau={round(taum_r,4)}<br>"
+                )
+            tf_note += "<br>"
+            tf_parsed = True
  
         has_digits = any(ch.isdigit() for ch in ul)
         word_count = len(ul.split())
  
         # ── NLP fast-path ───────────────────────────────────────────────
-        if word_count < 14 and not has_digits:
+        if not tf_parsed and word_count < 14 and not has_digits:
             try:
                 vec   = intent_vectorizer.transform([ul])
                 li    = intent_model.predict(vec)[0]
@@ -845,7 +1043,8 @@ def chat():
                         "Hello. I am <strong>TUNING BOT</strong>.<br><br>"
                         "Provide process parameters to begin:<br>"
                         "FOPDT: <code>Km=2, Tm=10, Tau=2</code><br>"
-                        "SOPDT: <code>order=2, Km=2, T1=10, T2=3, Tau=2</code>"
+                        "SOPDT: <code>order=2, Km=2, T1=10, T2=3, Tau=2</code><br>"
+                        "Or paste a transfer function: <code>tf: 5/((10*s+1)*(5*s+1)*(2*s+1)*(1*s+1))*exp(-1*s)</code>"
                     ),
                     "options": [], "chart": None
                 })
@@ -854,38 +1053,41 @@ def chat():
             if li == "rules" and conf > 0.2:
                 return _build_rules_response()
  
-        if any(kw in ul for kw in ["what rules","show rules","list rules","how many rules"]):
+        if not tf_parsed and any(kw in ul for kw in ["what rules","show rules","list rules","how many rules"]):
             return _build_rules_response()
  
         # ── Parameter extraction ────────────────────────────────────────
-        regex_ext = _extract_params_regex(user_msg)
-        for k in ["km", "tm", "taum", "tm2", "tm3", "zeta"]:
-            if regex_ext[k] is not None:
-                bot_memory[k] = regex_ext[k]
-        if regex_ext["order"] is not None:
-            bot_memory["order"] = regex_ext["order"]
+        if not tf_parsed:
+            regex_ext = _extract_params_regex(user_msg)
+            for k in ["km", "tm", "taum", "zeta", "tm2", "tm3", "tm4", "tm5", "tm6"]:
+                if regex_ext.get(k) is not None:
+                    bot_memory[k] = regex_ext[k]
+            if regex_ext["order"] is not None:
+                bot_memory["order"] = regex_ext["order"]
  
-        # Gemini fallback for harder phrasing
-        if not all([bot_memory['km'], bot_memory['tm'], bot_memory['taum']]) and has_digits:
-            try:
-                prompt = (
-                    f'Extract FOPDT/SOPDT params from: "{user_msg}". '
-                    f'Current: km={bot_memory["km"]}, tm={bot_memory["tm"]}, '
-                    f'taum={bot_memory["taum"]}, tm2={bot_memory["tm2"]}, order={bot_memory["order"]}. '
-                    'OUTPUT JSON ONLY: {"km":float_or_null,"tm":float_or_null,"taum":float_or_null,'
-                    '"tm2":float_or_null,"tm3":float_or_null,"order":int_or_null,"zeta":float_or_null}'
-                )
-                res = llm_model.generate_content(prompt)
-                ext = json.loads(res.text.replace('```json','').replace('```','').strip())
-                for k in ["km","tm","taum","tm2","tm3","zeta"]:
-                    if ext.get(k) is not None: bot_memory[k] = ext[k]
-                if ext.get("order") is not None: bot_memory["order"] = ext["order"]
-            except: pass
+            # Gemini fallback for harder phrasing
+            if not all([bot_memory['km'], bot_memory['tm'], bot_memory['taum']]) and has_digits:
+                try:
+                    prompt = (
+                        f'Extract FOPDT/higher-order process params from: "{user_msg}". '
+                        f'Current: km={bot_memory["km"]}, tm={bot_memory["tm"]}, '
+                        f'taum={bot_memory["taum"]}, tm2={bot_memory["tm2"]}, '
+                        f'tm3={bot_memory["tm3"]}, tm4={bot_memory["tm4"]}, order={bot_memory["order"]}. '
+                        'OUTPUT JSON ONLY: {"km":float_or_null,"tm":float_or_null,"taum":float_or_null,'
+                        '"tm2":float_or_null,"tm3":float_or_null,"tm4":float_or_null,"tm5":float_or_null,'
+                        '"tm6":float_or_null,"order":int_or_null,"zeta":float_or_null}'
+                    )
+                    res = llm_model.generate_content(prompt)
+                    ext = json.loads(res.text.replace('```json','').replace('```','').strip())
+                    for k in ["km","tm","taum","zeta","tm2","tm3","tm4","tm5","tm6"]:
+                        if ext.get(k) is not None: bot_memory[k] = ext[k]
+                    if ext.get("order") is not None: bot_memory["order"] = ext["order"]
+                except: pass
  
         km, tm, taum = bot_memory['km'], bot_memory['tm'], bot_memory['taum']
         missing = []
         if not km:   missing.append("<strong>Km</strong> (process gain)")
-        if not tm:   missing.append("<strong>Tm</strong> (time constant / T1 for SOPDT)")
+        if not tm:   missing.append("<strong>Tm</strong> (time constant / T1 for higher-order)")
         if not taum: missing.append("<strong>Tau</strong> (dead time)")
  
         if missing:
@@ -894,7 +1096,10 @@ def chat():
                     "I need: " + ", ".join(missing) + "<br><br>"
                     "FOPDT: <code>Km=2, Tm=10, Tau=2</code><br>"
                     "SOPDT: <code>order=2, Km=2, T1=10, T2=3, Tau=2</code><br>"
-                    "Type <em>explain FOPDT</em> or <em>explain SOPDT</em> for help."
+                    "4th order: <code>order=4, Km=2, T1=10, T2=4, T3=1.5, T4=0.5, Tau=0.5</code><br>"
+                    "Or paste a transfer function: <code>tf: 5/((10*s+1)*(5*s+1)*(2*s+1)*(1*s+1))*exp(-1*s)</code><br>"
+                    "Type <em>explain FOPDT</em>, <em>explain SOPDT</em>, or "
+                    "<em>what is a transfer function</em> for help."
                 ),
                 "options": [], "chart": None
             })
@@ -938,13 +1143,14 @@ def chat():
             bot_memory['interview_stage'] = 1
             ratio = taum / max(tm, 1e-6)
             ord_  = bot_memory.get('order', 1)
-            order_note = f"<br>Model order: <strong>{ord_}{'nd' if ord_==2 else 'rd' if ord_==3 else 'st'}</strong>." if ord_ > 1 else ""
+            order_note = f"<br>Model order: <strong>{ord_}{_order_suffix(ord_)}</strong>." if ord_ > 1 else ""
             if   ratio < 0.2: rnote = f" Dead-time ratio {round(ratio,2)} — low, highly controllable."
             elif ratio < 0.5: rnote = f" Dead-time ratio {round(ratio,2)} — moderate."
             else:              rnote = f" Dead-time ratio {round(ratio,2)} — high, dead-time compensation rules apply."
             q = INTERVIEW[1]
             return jsonify({
                 "reply": (
+                    f"{tf_note}"
                     f"Parameters confirmed: <strong>Km={km}, Tm={tm}s, Tau={taum}s</strong>.{order_note}{rnote}<br><br>"
                     f"{q['text']}"
                 ),
@@ -996,7 +1202,53 @@ def reset_anfis_data():
  
  
 # ══════════════════════════════════════════════════════════════════════════
+#  TRANSFER-FUNCTION ENDPOINTS  (advanced features)
+# ══════════════════════════════════════════════════════════════════════════
+@app.route('/api/parse-tf', methods=['POST'])
+def parse_tf_endpoint():
+    """
+    Parse a raw transfer function string (any order, incl. 4th+) and
+    return Km, time constants, dead time, stability warnings, and the
+    Skogestad Half-Rule equivalent FOPDT model plus a quick PI estimate.
+ 
+    Body: {"tf": "5/((10*s+1)*(5*s+1)*(2*s+1)*(1*s+1))*exp(-1*s)"}
+    """
+    tf_text = (request.json or {}).get('tf', '')
+    if not tf_text:
+        return jsonify({"status": "error", "message": "Missing 'tf' field."}), 400
+    try:
+        result = parse_transfer_function(tf_text)
+    except TFParseError as e:
+        return jsonify({"status": "error", "message": str(e)}), 400
+ 
+    tcs = result["time_constants"] or [1.0]
+    km_r, tm_r, taum_r, _ = HalfRuleReducer.reduce(
+        max(1, result["order"]), result["km"], tcs, result["taum"])
+    qkc, qti, qlam = quick_pi_estimate(km_r, tm_r, taum_r)
+ 
+    _log_tf_history("api/parse-tf", tf_text, result, (km_r, tm_r, taum_r))
+ 
+    return jsonify({
+        "status": "ok",
+        "order": result["order"],
+        "km": round(result["km"], 6),
+        "time_constants": [round(t, 6) for t in result["time_constants"]],
+        "taum": round(result["taum"], 6),
+        "warnings": result["warnings"],
+        "fopdt_equivalent": {"km": round(km_r, 6), "tm": round(tm_r, 6), "taum": round(taum_r, 6)},
+        "quick_pi_estimate": {"kc": qkc, "ti": qti, "lambda": qlam},
+    })
+ 
+ 
+@app.route('/api/tf-history', methods=['GET'])
+def get_tf_history():
+    """Returns the last N transfer functions parsed (chat, WS, or /api/parse-tf)."""
+    return jsonify({"data": tf_history, "count": len(tf_history)})
+ 
+ 
+# ══════════════════════════════════════════════════════════════════════════
 #  ENTRY POINT
 # ══════════════════════════════════════════════════════════════════════════
 if __name__ == '__main__':
     socketio.run(app, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
+ 
