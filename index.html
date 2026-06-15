@@ -1683,34 +1683,22 @@ function toggleDashboard() {
  
 
 // ── WebSocket ────────────────────────────────────────────────
-
 function connectWebSocket() {
-
     if (socket && socket.connected) { logDash('Already connected.','ok'); return; }
-
     if (socket) socket.disconnect();
-
     setWsStatus('','CONNECTING…');
-
-    socket = io(WS_URL, {transports:['websocket'], reconnectionAttempts:5});
-
+    
+    // THE FIX: We removed transports:['websocket'] so your browser can actually connect
+    socket = io(WS_URL, {reconnectionAttempts:5});
+    
     socket.on('connect',       () => { setWsStatus('connected','CONNECTED'); logDash('Socket.IO established.','ok'); fetchAnfisData(); });
-
     socket.on('disconnect',    () => { setWsStatus('','DISCONNECTED');       logDash('Disconnected.','warn'); });
-
     socket.on('connect_error', (e)=> { setWsStatus('error','ERROR');         logDash('Error: '+e.message,'err'); });
-
     socket.on('status',        (d)=> logDash(d.message,'ok'));
-
     socket.on('telemetry_update', handleTelemetry);
-
     socket.on('tune_response',    handleTuneResponse);
-
     socket.on('anfis_data_update', handleAnfisUpdate);
-
 }
-
- 
 
 // ── Manual disconnect ─────────────────────────────────────────
 
