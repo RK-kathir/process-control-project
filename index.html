@@ -855,6 +855,17 @@ function connectWebSocket() {
     socket.on('anfis_data_update', handleAnfisUpdate);
 }
  
+// ── Manual disconnect ─────────────────────────────────────────
+function disconnectWebSocket() {
+    if (socket && socket.connected) {
+        socket.disconnect();
+        setWsStatus('', 'DISCONNECTED');
+        logDash('Manually disconnected by user.', 'warn');
+    } else {
+        logDash('Already disconnected.', 'warn');
+    }
+}
+ 
 function setWsStatus(cls, label) {
     const d = document.getElementById('ws-dot');
     const l = document.getElementById('ws-label');
@@ -863,10 +874,21 @@ function setWsStatus(cls, label) {
 }
  
 function handleTelemetry(d) {
-    const ts  = Array.isArray(d.t)  ? d.t  : [d.t];
-    const pvs = Array.isArray(d.pv) ? d.pv : [d.pv];
-    const sps = Array.isArray(d.sp) ? d.sp : [d.sp];
-    const mvs = Array.isArray(d.mv) ? d.mv : [d.mv];
+    // Supports two payload shapes:
+    //  - batched arrays:  { t:[...], pv:[...], sp:[...], mv:[...] }
+    //  - single-sample (new matlab_bridge.py): { time, setpoint, pv, mv }
+    let ts, pvs, sps, mvs;
+    if (d.time !== undefined || d.setpoint !== undefined) {
+        ts  = [d.time];
+        pvs = [d.pv];
+        sps = [d.setpoint];
+        mvs = [d.mv];
+    } else {
+        ts  = Array.isArray(d.t)  ? d.t  : [d.t];
+        pvs = Array.isArray(d.pv) ? d.pv : [d.pv];
+        sps = Array.isArray(d.sp) ? d.sp : [d.sp];
+        mvs = Array.isArray(d.mv) ? d.mv : [d.mv];
+    }
     ts.forEach((t,i) => {
         liveT.push(t); livePV.push(pvs[i]||0); liveSP.push(sps[i]||0);
         liveMV.push(mvs[i]||0); liveErr.push((sps[i]||0)-(pvs[i]||0));
@@ -1260,4 +1282,3 @@ async function sendFabMessage() {
 </script>
 </body>
 </html>
- 
