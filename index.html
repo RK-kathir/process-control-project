@@ -845,7 +845,7 @@ function connectWebSocket() {
     if (socket && socket.connected) { logDash('Already connected.','ok'); return; }
     if (socket) socket.disconnect();
     setWsStatus('','CONNECTING…');
-    socket = io(WS_URL, {transports:['websocket'], reconnectionAttempts:5});
+    socket = io(WS_URL, {reconnectionAttempts:5});
     socket.on('connect',       () => { setWsStatus('connected','CONNECTED'); logDash('Socket.IO established.','ok'); fetchAnfisData(); });
     socket.on('disconnect',    () => { setWsStatus('','DISCONNECTED');       logDash('Disconnected.','warn'); });
     socket.on('connect_error', (e)=> { setWsStatus('error','ERROR');         logDash('Error: '+e.message,'err'); });
