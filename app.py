@@ -716,6 +716,28 @@ def handle_tune_request(data):
             decision["robust"], decision["metric"],
             zeta=zeta_r, order=order
         )
+     # 🔥 THE UPGRADE: DISTURBANCE SCALING 🔥
+        # Extract the disturbance from the incoming MATLAB data
+        disturbance_raw = data.get("disturbance")
+        
+        if disturbance_raw is not None:
+            disturbance_val = float(disturbance_raw)
+            # Only scale if there is an actual disturbance
+            if abs(disturbance_val) > 0:
+                aggressiveness_factor = 0.5  # Tweak this! Higher = more aggressive response
+                
+                # Scale Kc UP based on disturbance
+                kc = kc * (1 + (abs(disturbance_val) * aggressiveness_factor))
+                
+                # Scale Ti DOWN based on disturbance (smaller Ti = faster integral action)
+                ti = ti / (1 + (abs(disturbance_val) * aggressiveness_factor))
+                
+                # Safety limits so the system doesn't explode
+                kc = min(kc, 100.0)  # Max Kc limit
+                ti = max(ti, 0.01)   # Min Ti limit
+                
+                # Tag the rule name so you can verify it worked on your Dashboard
+                rule_name = f"{rule_name} (Scaled by {disturbance_val})"
  
         # Quick "first look" PI estimate (advanced feature)
         qkc, qti, qlam = quick_pi_estimate(km_r, tm_r, taum_r)
