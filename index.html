@@ -1792,34 +1792,39 @@ function handleTelemetry(d) {
  
 
 function handleTuneResponse(d) {
-
     if (d.status === 'error') { logDash('Tune error: '+d.message,'err'); return; }
-
     document.getElementById('kpi-kc').textContent      = d.kc;
-
     document.getElementById('kpi-ti').innerHTML        = d.ti+'<span class="kpi-unit">s</span>';
-
     document.getElementById('kpi-os').innerHTML        = d.os_predicted+'<span class="kpi-unit">%</span>';
-
     document.getElementById('kpi-rule').textContent    = d.rule;
-
     document.getElementById('kpi-kc-sub').textContent  = 'Updated '+nowStr();
-
     document.getElementById('kpi-ti-sub').textContent  = 'Settling '+d.settling_time+'s';
-
     document.getElementById('kpi-os-sub').textContent  = 'Predicted';
-
     document.getElementById('kpi-rule-sub').textContent= nowStr();
-
     logDash(`Tuned → Kc=${d.kc} Ti=${d.ti} | ${d.rule}`,'ok');
-
     if (d.operator_decision) logDash(d.operator_decision,'warn');
-
     if (d.reduction_note && d.reduction_note.includes('reduced')) logDash(d.reduction_note,'warn');
 
+    // THE GRAPH FIX: Render the prediction chart if the server sends it
+    if (d.chart) {
+        try {
+            const chartData = JSON.parse(d.chart);
+            const isL = document.body.classList.contains('light');
+            
+            // Match the styling to the rest of your dashboard
+            chartData.layout.font = {color:isL?'#334155':'#a0aec0',family:'DM Sans,sans-serif',size:10};
+            chartData.layout.xaxis.gridcolor = isL?'#e2e8f0':'#1e2a3a';
+            chartData.layout.yaxis.gridcolor = isL?'#e2e8f0':'#1e2a3a';
+            chartData.layout.plot_bgcolor    = 'transparent';
+            chartData.layout.paper_bgcolor   = 'transparent';
+            chartData.layout.margin          = {l:42,r:8,t:6,b:32};
+            
+            Plotly.newPlot('ai-prediction-graph', chartData.data, chartData.layout, {responsive:true,displayModeBar:false});
+        } catch (error) {
+            console.error("Error drawing prediction graph:", error);
+        }
+    }
 }
-
- 
 
 function updatePVComment() {
 
