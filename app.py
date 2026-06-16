@@ -752,7 +752,6 @@ def handle_tune_request(data):
             "ti":                round(ti, 6),
             "os_predicted":      os_est,
             "settling_time":     settling,
-             "chart": char
             "fopdt": {
                 "km":   round(km_r,  4),
                 "tm":   round(tm_r,  4),
@@ -760,6 +759,7 @@ def handle_tune_request(data):
             },
             "quick_estimate": {"kc": qkc, "ti": qti, "lambda": qlam},
             "warnings": warnings_list,
+             "chart": char
         }
  
         # ── ANFIS dataset logging ───────────────────────────────────────
