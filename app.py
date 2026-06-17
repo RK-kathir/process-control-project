@@ -634,8 +634,7 @@ def quick_pi_estimate(km, tm, taum, lam=None):
 # ══════════════════════════════════════════════════════════════════════════
 #  WEBSOCKET EVENTS  (MATLAB/Simulink interface)
 # ══════════════════════════════════════════════════════════════════════════
- 
-@socketio.on('connect')
+
 # Add this global variable right above the function
 last_valid_tune = None
 
