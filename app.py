@@ -745,27 +745,32 @@ def handle_tune_request(data):
             zeta=zeta_r, order=order
         )
      
-     # 🔥 THE UPGRADE: DISTURBANCE SCALING 🔥
+     # 🔥 THE UPGRADE: EXACT POLYNOMIAL SCALING 🔥
         disturbance_raw = data.get("disturbance")
         
         if disturbance_raw is not None:
             disturbance_val = float(disturbance_raw)
             if abs(disturbance_val) > 0:
-                # 1. Lower the aggressiveness so it doesn't overreact
-                aggressiveness_factor = 0.15  
+                D = abs(disturbance_val)
                 
-                # 2. Gently scale Kc UP (stiffer proportional suspension)
-                kc = kc * (1 + (abs(disturbance_val) * aggressiveness_factor))
+                # 1. Calculate the exact s^0 coefficient of YOUR plant
+                plant_s0 = (0.0190986 * (D**2)) + (0.0381972 * D)
+                plant_s0 = max(plant_s0, 0.001) # Prevent division by zero
                 
-                # 3. Leave Ti mostly ALONE! (Strong Ti causes overshoot)
-                # We only reduce it by a tiny maximum of 10%
-                ti_reduction = min((abs(disturbance_val) * 0.02), 0.10)
-                ti = ti * (1 - ti_reduction) 
+                # 2. Your plant gets weaker as D goes up, so Kc MUST scale inversely
+                polynomial_boost = 1.0 / plant_s0
                 
-                kc = min(kc, 100.0)  
-                ti = max(ti, 0.01)   
+                # 3. Apply the exact mathematical boost to Kc
+                kc = kc * polynomial_boost
                 
-                rule_name = f"{rule_name} (Scaled by {disturbance_val})"
+                # 4. Integral action needs to be slightly faster to recover the drop
+                ti = ti / max(1.0, (D * 1.5))
+                
+                # 5. Tear off the safety ceilings so it can output 50+ Kp!
+                kc = min(kc, 2500.0)  
+                ti = max(ti, 0.001)   
+                
+                rule_name = f"{rule_name} (Plant S0 Boost: {round(polynomial_boost, 1)}x)"
  
         # Quick "first look" PI estimate (advanced feature)
         qkc, qti, qlam = quick_pi_estimate(km_r, tm_r, taum_r)
