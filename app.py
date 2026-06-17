@@ -796,8 +796,11 @@ def handle_tune_request(data):
         print(f"[WS] Tuned: rule={rule_key} Kc={kc:.4f} Ti={ti:.4f} | {decision['reason']}")
  
     except Exception as e:
+        error_msg = str(e)
+        print(f"CRASH: {error_msg}")
         print(traceback.format_exc())
-        emit('tune_response', {'status': 'error', 'message': str(e)})
+        # THE FIX: Broadcast the error to the dashboard so it doesn't freeze!
+        socketio.emit('tune_response', {'status': 'error', 'message': error_msg})
  
  
 # ══════════════════════════════════════════════════════════════════════════
