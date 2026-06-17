@@ -19,8 +19,14 @@ app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'tuningbot-secret')
 # 2. Add CORS so GitHub can talk to Render
 CORS(app)
  
-# 3. Initialize Socket.IO so MATLAB can connect
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
+# 3. Initialize Socket.IO with extended timeouts to survive MATLAB restarts
+socketio = SocketIO(
+    app, 
+    cors_allowed_origins="*", 
+    async_mode='eventlet', 
+    ping_timeout=120,    # Wait 2 minutes before dropping a silent client
+    ping_interval=25     # Check connection every 25 seconds
+)
 socketio_app = socketio  # alias for gunicorn
  
 # ── Gemini ─────────────────────────────────────────────────────────────────
