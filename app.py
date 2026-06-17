@@ -765,7 +765,7 @@ def handle_tune_request(data):
             },
             "quick_estimate": {"kc": qkc, "ti": qti, "lambda": qlam},
             "warnings": warnings_list,
-             "chart": char
+             "chart": chart
         }
  
         # ── ANFIS dataset logging ───────────────────────────────────────
