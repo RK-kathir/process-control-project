@@ -535,15 +535,31 @@ def run_tuning(km, tm, taum, mode, overshoot, robust, metric,
         candidate_rules = fopdt_keys
  
     # Use RF model if available, otherwise pick first valid rule
+   # 1. Try the AI model first
     best_rule = "ziegler_nichols"
     if rf_model:
         try:
             best_rule = rf_model.predict(features)[0]
-            # If RF picks a non-existent or SPECIAL_LOOKUP rule, fallback
-            if best_rule not in rules_db or rules_db[best_rule].get('kc_math') == 'SPECIAL_LOOKUP':
-                best_rule = "ziegler_nichols"
         except: pass
- 
+
+    # 2. THE FIX: If the AI failed or defaulted to Z-N, use a SMART fallback based on process factors!
+    if best_rule == "ziegler_nichols" or best_rule not in rules_db:
+        if robust == 1:
+            # If the process is uncertain, use a robust, safe rule
+            best_rule = "tyreus_luyben" if "tyreus_luyben" in rules_db else "skogestad"
+        elif metric == 2: 
+            # If user wants aggressive speed (ISE)
+            best_rule = "zhuang_atherton_ise" if "zhuang_atherton_ise" in rules_db else "chien_fast"
+        elif metric == 1 or overshoot == 0: 
+            # If user wants smooth, no-overshoot tracking (IAE)
+            best_rule = "rovira_iae" if "rovira_iae" in rules_db else "chien_smooth"
+        else:
+            # Balanced baseline
+            best_rule = "cohen_coon"
+
+    # 3. Final safety net: ensure the rule actually exists in your database
+    if best_rule not in rules_db:
+        best_rule = list(rules_db.keys())[0] if rules_db else "ziegler_nichols"
     # Override for explicit overshoot spec
     if overshoot_answer and overshoot_answer in OVERSHOOT_OVERRIDE:
         ok = OVERSHOOT_OVERRIDE[overshoot_answer]
