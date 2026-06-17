@@ -828,7 +828,7 @@ def handle_tune_request(data):
             _append_anfis_row(row)
             response["anfis_row"]   = row
             response["anfis_total"] = len(anfis_data)
-           socketio.emit('anfis_data_update', {
+            socketio.emit('anfis_data_update', {
                 "row": row, "total_points": len(anfis_data), "reset": False
             })
 
