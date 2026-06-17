@@ -745,31 +745,49 @@ def handle_tune_request(data):
             zeta=zeta_r, order=order
         )
      
-     # 🔥 THE UPGRADE: EXACT POLYNOMIAL SCALING 🔥
+     # 🔥 DISTURBANCE SCALING (CORRECTED DIRECTION + LOG-CLAMPED) 🔥
         disturbance_raw = data.get("disturbance")
-        
+
         if disturbance_raw is not None:
             disturbance_val = float(disturbance_raw)
             if abs(disturbance_val) > 0:
                 D = abs(disturbance_val)
-                
-                # 1. Calculate the exact s^0 coefficient of YOUR plant
+
+                # 1. Exact s^0 coefficient of the plant — this GROWS with D
                 plant_s0 = (0.0190986 * (D**2)) + (0.0381972 * D)
-                plant_s0 = max(plant_s0, 0.001) # Prevent division by zero
-                
-                # 2. Your plant gets weaker as D goes up, so Kc MUST scale inversely
-                polynomial_boost = 1.0 / plant_s0
-                
-                # 3. Apply the exact mathematical boost to Kc
+                plant_s0 = max(plant_s0, 0.001)  # guard against zero
+
+                # 2. Km = 1/plant_s0 shrinks as D grows, so Kc must scale UP
+                #    with plant_s0 (proportional), not its inverse. Below the
+                #    knee we track plant_s0 exactly (full compensation); above
+                #    it we switch to logarithmic growth so the multiplier
+                #    saturates instead of running to ~19,000x at D=1000.
+                KNEE       = 50.0    # plant_s0 value where linear gives way to log
+                LOG_SCALE  = 15.0    # how fast the log tail still grows
+                MAX_BOOST  = 120.0   # hard ceiling on the multiplier itself
+
+                if plant_s0 <= KNEE:
+                    polynomial_boost = 1.0 + plant_s0
+                else:
+                    boost_at_knee = 1.0 + KNEE
+                    polynomial_boost = boost_at_knee + LOG_SCALE * math.log(plant_s0 / KNEE)
+
+                polynomial_boost = min(polynomial_boost, MAX_BOOST)
+
+                # 3. Apply the corrected, clamped boost to Kc
                 kc = kc * polynomial_boost
-                
-                # 4. Integral action needs to be slightly faster to recover the drop
-                ti = ti / max(1.0, (D * 1.5))
-                
-                # 5. Tear off the safety ceilings so it can output 50+ Kp!
-                kc = min(kc, 2500.0)  
-                ti = max(ti, 0.001)   
-                
+
+                # 4. Integral time: tighten with D, but log-damped too, so Ti
+                #    never collapses toward 0 and triggers windup during the
+                #    recovery transient
+                MAX_TI_DIVISOR = 8.0
+                ti_divisor = min(1.0 + 2.0 * math.log1p(D), MAX_TI_DIVISOR)
+                ti = ti / ti_divisor
+
+                # 5. Sane floors/ceilings appropriate to the new bounded boost
+                kc = min(kc, 500.0)
+                ti = max(ti, 0.05)
+
                 rule_name = f"{rule_name} (Plant S0 Boost: {round(polynomial_boost, 1)}x)"
  
         # Quick "first look" PI estimate (advanced feature)
