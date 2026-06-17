@@ -736,17 +736,10 @@ def handle_tune_request(data):
         if tf_text:
             _log_tf_history("websocket", tf_text, tf_result, (km_r, tm_r, taum_r))
  
-        # Autonomous decision
+       # Autonomous decision
         decision = auto_operator.decide(km_r, tm_r, taum_r)
- 
+
         kc, ti, rule_key, rule_name, rule_desc, chart, os_est, settling = run_tuning(
-            km_r, tm_r, taum_r,
-            decision["mode"], decision["overshoot"],
-            decision["robust"], decision["metric"],
-            zeta=zeta_r, order=order
-        )
-     
-   kc, ti, rule_key, rule_name, rule_desc, chart, os_est, settling = run_tuning(
             km_r, tm_r, taum_r,
             decision["mode"], decision["overshoot"],
             decision["robust"], decision["metric"],
