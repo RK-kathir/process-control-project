@@ -811,13 +811,17 @@ def handle_tune_request(data):
             _append_anfis_row(row)
             response["anfis_row"]   = row
             response["anfis_total"] = len(anfis_data)
-            socketio.emit('anfis_data_update', {
+           socketio.emit('anfis_data_update', {
                 "row": row, "total_points": len(anfis_data), "reset": False
             })
- 
-        emit('tune_response', response)
+
+        # THE FIX: Save to memory and use the Megaphone for the success block!
+        global last_valid_tune
+        last_valid_tune = response
+        socketio.emit('tune_response', response)
+        
         print(f"[WS] Tuned: rule={rule_key} Kc={kc:.4f} Ti={ti:.4f} | {decision['reason']}")
- 
+
     except Exception as e:
         error_msg = str(e)
         print(f"CRASH: {error_msg}")
