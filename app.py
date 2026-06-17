@@ -620,9 +620,18 @@ def quick_pi_estimate(km, tm, taum, lam=None):
 # ══════════════════════════════════════════════════════════════════════════
  
 @socketio.on('connect')
+# Add this global variable right above the function
+last_valid_tune = None
+
+@socketio.on('connect')
 def handle_connect():
     print(f"[WS] Connected: {request.sid}")
-    emit('status', {'message': 'TUNING BOT connected. Ready for FOPDT/SOPDT/higher-order telemetry.'})
+    emit('status', {'message': 'TUNING BOT connected. Ready for telemetry.'})
+    
+    # THE FIX: Instantly send the last known tuning data to the newly refreshed browser!
+    global last_valid_tune
+    if last_valid_tune is not None:
+        emit('tune_response', last_valid_tune)
  
  
 @socketio.on('disconnect')
