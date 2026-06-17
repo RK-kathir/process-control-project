@@ -535,27 +535,44 @@ def run_tuning(km, tm, taum, mode, overshoot, robust, metric,
         candidate_rules = fopdt_keys
  
     # Use RF model if available, otherwise pick first valid rule
-   # 1. Try the AI model first
+   # ── THE INTELLIGENT NARROW-DOWN APPROACH ──
     best_rule = "ziegler_nichols"
-    if rf_model:
-        try:
-            best_rule = rf_model.predict(features)[0]
-        except: pass
+    
+    # Factor 1: Determine Process Controllability (Dead-Time Ratio)
+    ratio = taum / max(tm, 1e-6)
+    
+    # Factor 2: Is this a Disturbance Rejection task? (mode == 0)
+    is_disturbance = (mode == 0)
 
-    # 2. THE FIX: If the AI failed or defaulted to Z-N, use a SMART fallback based on process factors!
-    if best_rule == "ziegler_nichols" or best_rule not in rules_db:
-        if robust == 1:
-            # If the process is uncertain, use a robust, safe rule
-            best_rule = "tyreus_luyben" if "tyreus_luyben" in rules_db else "skogestad"
-        elif metric == 2: 
-            # If user wants aggressive speed (ISE)
-            best_rule = "zhuang_atherton_ise" if "zhuang_atherton_ise" in rules_db else "chien_fast"
-        elif metric == 1 or overshoot == 0: 
-            # If user wants smooth, no-overshoot tracking (IAE)
-            best_rule = "rovira_iae" if "rovira_iae" in rules_db else "chien_smooth"
+    if is_disturbance:
+        # INTELLIGENT DISTURBANCE REJECTION (Narrow-down)
+        if ratio > 0.6:
+            # Highly delayed system: requires ultra-robust tuning
+            best_rule = "tyreus_luyben" if order >= 2 else "skogestad"
+        elif metric == 2:
+            # User wants fast speed (ISE) for disturbance
+            best_rule = "zhuang_atherton_ise" 
         else:
-            # Balanced baseline
-            best_rule = "cohen_coon"
+            # Standard fast disturbance rejection (excellent for catching drops)
+            best_rule = "cohen_coon" 
+    else:
+        # SETPOINT TRACKING (Servo)
+        if rf_model:
+            try: best_rule = rf_model.predict(features)[0]
+            except: pass
+            
+        # Smart Fallback if AI fails or picks basic Z-N
+        if best_rule == "ziegler_nichols" or best_rule not in rules_db:
+            if robust == 1: 
+                best_rule = "wang_jones_lopdt_sopdt" if order >= 2 else "chien_smooth"
+            elif metric == 2: 
+                best_rule = "ho_sopdt_iae" if order >= 2 else "chien_fast"
+            else: 
+                best_rule = "rovira_itae"
+
+    # Final safety check
+    if best_rule not in rules_db: 
+        best_rule = "ziegler_nichols"
 
     # 3. Final safety net: ensure the rule actually exists in your database
     if best_rule not in rules_db:
