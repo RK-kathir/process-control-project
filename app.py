@@ -713,16 +713,18 @@ def handle_tune_request(data):
             zeta=zeta_r, order=order, D=D_val
         )
 
-        # 🔥 DISTURBANCE SCALING (ULTRA-FAST RECOVERY) 🔥
-        if D_val > 0:
-            # 1. Proportional Gain: Hit it with a massive hammer
-            empirical_boost = 1.0 + (66.5 * D_val)
-            kc = kc * empirical_boost
+       # 🔥 DISTURBANCE SCALING 🔥
+        if D_val > 0:
+            empirical_boost = 1.0 + (66.5 * D_val)
+            kc = kc * empirical_boost
 
-            # 2. Integral Action: Let it get EXTREMELY fast to eliminate the 800s lag
-            ti_divisor = 1.0 + (D_val * 10.0)
-            ti = ti / ti_divisor
+            # CHANGE THIS DIVISOR to 10.0 (kills the lag)
+            ti_divisor = 1.0 + (D_val * 10.0)
+            ti = ti / ti_divisor
 
+            # CHANGE THESE LIMITS:
+            kc = min(kc, 10000.0)  # Raised from 3500 to 10000
+            ti = max(ti, 0.05)     # Lowered from 0.8 to 0.05
             # 3. Ceilings & Floors
             kc = min(kc, 10000.0) # Raise the roof to fight the drop
             ti = max(ti, 0.05)    # Allow ultra-fast integral recovery
@@ -778,23 +780,7 @@ def handle_tune_request(data):
         global last_valid_tune
         last_valid_tune = response
         socketio.emit('tune_response', response)
-        print(f"[WS] Tuned: rule={rule_key} Kc={kc:.4f} Ti={ti:.4f}")
-
-    except Exception as e:
-        error_msg = str(e)
-        print(f"CRASH: {error_msg}")
-        print(traceback.format_exc())
-        socketio.emit('tune_response', {'status': 'error', 'message': error_msg})
-        global last_valid_tune
-        last_valid_tune = response
-        socketio.emit('tune_response', response)
-        print(f"[WS] Tuned: rule={rule_key} Kc={kc:.4f} Ti={ti:.4f}")
-
-    except Exception as e:
-        error_msg = str(e)
-        print(f"CRASH: {error_msg}")
-        print(traceback.format_exc())
-        socketio.emit('tune_response', {'status': 'error', 'message': error_msg})
+        print(f"[WS] Tuned: rule={rule_key} Kc={kc:.4f} Ti={ti:.4f}"
  
  
 # ══════════════════════════════════════════════════════════════════════════
