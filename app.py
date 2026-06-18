@@ -512,11 +512,9 @@ def simulate_step(kc, ti, km, tm, taum):
 #  CORE TUNING ENGINE  (shared by REST and WebSocket)
 # ══════════════════════════════════════════════════════════════════════════
 def run_tuning(km, tm, taum, mode, overshoot, robust, metric,
-               overshoot_answer=None, zeta=1.0, order=1):
+               overshoot_answer=None, zeta=1.0, order=1, D=0.0):
     """
-    Selects and evaluates a tuning rule.
-    For SOPDT/higher-order: pass reduced FOPDT values (after Half-Rule) and zeta.
-    Returns (kc, ti, rule_key, rule_name, description, chart, os_est, settling).
+    Selects and evaluates a tuning rule based on Disturbance Magnitude.
     """
     OVERSHOOT_OVERRIDE = {
         "os_5": "miluse_5os", "os_10": "miluse_10os",
@@ -526,33 +524,29 @@ def run_tuning(km, tm, taum, mode, overshoot, robust, metric,
     ratio    = taum / max(tm, 1e-6)
     features = np.array([[km, tm, taum, ratio, mode, overshoot, robust, metric]])
 
-    # Filter rules by order compatibility
-    fopdt_keys  = [k for k, v in rules_db.items() if v.get('order', 1) == 1
-                   and v.get('kc_math') != 'SPECIAL_LOOKUP']
-    sopdt_keys  = [k for k, v in rules_db.items() if v.get('order', 1) == 2
-                   and v.get('kc_math') != 'SPECIAL_LOOKUP']
+    fopdt_keys  = [k for k, v in rules_db.items() if v.get('order', 1) == 1 and v.get('kc_math') != 'SPECIAL_LOOKUP']
+    sopdt_keys  = [k for k, v in rules_db.items() if v.get('order', 1) == 2 and v.get('kc_math') != 'SPECIAL_LOOKUP']
 
     if order >= 2 and sopdt_keys:
         candidate_rules = sopdt_keys + fopdt_keys
     else:
         candidate_rules = fopdt_keys
 
-# ── THE INTELLIGENT NARROW-DOWN APPROACH ──
-    # Using the most standard dictionary keys to prevent Z-N fallback
+    # ── DISTURBANCE-DRIVEN SMOOTH RULE SELECTION ──
     best_rule = "ziegler_nichols"
-    
-    ratio = taum / max(tm, 1e-6)
     is_disturbance = (mode == 0)
 
     if is_disturbance:
-        if ratio > 0.5:
-            # High delay regulator
-            best_rule = "tyreus_luyben" if "tyreus_luyben" in rules_db else "cohen_coon"
+        if D >= 1.0:
+            # Severe disturbance: Tyreus-Luyben guarantees smooth, damped recovery with high Ti
+            best_rule = "tyreus_luyben" if "tyreus_luyben" in rules_db else "skogestad"
+        elif D >= 0.2:
+            # Moderate: Chien Smooth (designed specifically for 0% overshoot)
+            best_rule = "chien_smooth" if "chien_smooth" in rules_db else "rovira_iae"
         else:
-            # Fast aggressive regulator
-            best_rule = "cohen_coon" if "cohen_coon" in rules_db else "ziegler_nichols"
+            # Tiny disturbance: Skogestad robust
+            best_rule = "skogestad" if "skogestad" in rules_db else "cohen_coon"
     else:
-        # Servo tracking
         if rf_model:
             try: best_rule = rf_model.predict(features)[0]
             except: pass
@@ -562,33 +556,23 @@ def run_tuning(km, tm, taum, mode, overshoot, robust, metric,
     if best_rule not in rules_db: 
         best_rule = "ziegler_nichols"
 
-    # Override for explicit overshoot spec
     if overshoot_answer and overshoot_answer in OVERSHOOT_OVERRIDE:
         ok = OVERSHOOT_OVERRIDE[overshoot_answer]
-        if ok in rules_db:
-            best_rule = ok
+        if ok in rules_db: best_rule = ok
 
-    # Override for SOPDT/higher-order: prefer SOPDT-specific rules when order >= 2
     if order >= 2 and sopdt_keys:
-        if robust:
-            sopdt_pref = "skogestad_sopdt_reg" if mode == 0 else "skogestad_sopdt_servo"
-        elif metric == 2:   # ISE
-            sopdt_pref = "ho_sopdt_iae"
-        elif metric == 1:   # IAE
-            sopdt_pref = "wang_jones_lopdt_sopdt"
-        else:               # ITAE or default
-            sopdt_pref = "tyreus_luyben_sopdt"
-        if sopdt_pref in rules_db:
-            best_rule = sopdt_pref
+        if robust: sopdt_pref = "skogestad_sopdt_reg" if mode == 0 else "skogestad_sopdt_servo"
+        elif metric == 2: sopdt_pref = "ho_sopdt_iae"
+        elif metric == 1: sopdt_pref = "wang_jones_lopdt_sopdt"
+        else: sopdt_pref = "tyreus_luyben_sopdt"
+        if sopdt_pref in rules_db: best_rule = sopdt_pref
 
     r = rules_db.get(best_rule, rules_db.get("ziegler_nichols", {}))
 
     tau_c_val = max(0.1, taum)
     safe_env = {
-        "km": km, "tm": tm, "taum": taum, "tau_c": tau_c_val,
-        "zeta": max(zeta, 0.1),
-        "min": min, "max": max, "exp": np.exp, "log": np.log,
-        "sqrt": np.sqrt, "np": np, "math": math
+        "km": km, "tm": tm, "taum": taum, "tau_c": tau_c_val, "zeta": max(zeta, 0.1),
+        "min": min, "max": max, "exp": np.exp, "log": np.log, "sqrt": np.sqrt, "np": np, "math": math
     }
 
     try:
@@ -607,8 +591,7 @@ def run_tuning(km, tm, taum, mode, overshoot, robust, metric,
         r  = rules_db.get("ziegler_nichols", {"name": "Ziegler-Nichols"})
 
     chart, os_est, settling = simulate_step(kc, ti, km, tm, taum)
-    return (kc, ti, best_rule, r.get('name', best_rule),
-            r.get('unique_feature', ''), chart, os_est, settling)
+    return (kc, ti, best_rule, r.get('name', best_rule), r.get('unique_feature', ''), chart, os_est, settling)
  
  
 # ══════════════════════════════════════════════════════════════════════════
