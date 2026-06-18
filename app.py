@@ -671,29 +671,12 @@ def handle_telemetry(data):
     except Exception as e:
         emit('error', {'message': str(e)})
  
- 
 @socketio.on('tune_request')
 def handle_tune_request(data):
-    """
-    Autonomous tuning request from MATLAB.
- 
-    FOPDT:   { "order":1, "km":2.0, "tm":10.0, "taum":2.0 }
-    SOPDT:   { "order":2, "km":2.0, "tm1":10.0, "tm2":3.0, "taum":1.0, "zeta":1.0 }
-    3rd ord: { "order":3, "km":2.0, "tm1":10.0, "tm2":3.0, "tm3":1.0, "taum":0.5 }
-    4th+ ord:{ "order":4, "km":2.0, "tm1":10.0, "tm2":3.0, "tm3":1.0, "tm4":0.4, "taum":0.5 }
- 
-    OR — raw transfer function (any order, parsed server-side):
-             { "tf": "5/((10*s+1)*(5*s+1)*(2*s+1)*(1*s+1))*exp(-1*s)" }
- 
-    Optional field "disturbance": <float>
-        If present, the resulting Kc/Ti (== Kp/Ki) pair is logged against
-        this disturbance value into the ANFIS training dataset
-        (anfis_training_data.csv) and broadcast via 'anfis_data_update'.
-    """
     try:
         warnings_list = []
         tf_text = data.get("tf")
- 
+
         if tf_text:
             try:
                 tf_result = parse_transfer_function(tf_text)
@@ -709,69 +692,61 @@ def handle_tune_request(data):
             order = int(data.get("order", 1))
             km    = float(data.get("km",   1.0))
             taum  = float(data.get("taum", 1.0))
- 
+
             if order == 1:
                 tcs = [float(data.get("tm", 10.0))]
             elif order == 2:
                 tcs = [float(data.get("tm1", 10.0)), float(data.get("tm2", 3.0))]
             elif order == 3:
-                tcs = [float(data.get("tm1", 10.0)),
-                       float(data.get("tm2",  3.0)),
-                       float(data.get("tm3",  1.0))]
+                tcs = [float(data.get("tm1", 10.0)), float(data.get("tm2",  3.0)), float(data.get("tm3",  1.0))]
             else:
-                # 4th order and beyond: read tm1..tmN, defaulting sensibly
                 tcs = [float(data.get(f"tm{i}", 10.0 / i)) for i in range(1, order + 1)]
- 
+
         zeta = float(data.get("zeta", 1.0))
- 
-        # Apply Half-Rule reduction for order > 1 (any order)
         km_r, tm_r, taum_r, zeta_r = HalfRuleReducer.reduce(order, km, tcs, taum, zeta)
- 
+
         if order > 1:
             tc_str = ", ".join(f"τ{i+1}={round(t,4)}" for i, t in enumerate(sorted(tcs, reverse=True)))
             note = (f"Order-{order} TF ({tc_str}) reduced via Skogestad Half-Rule → "
                     f"FOPDT: Km={round(km_r,4)}, Tm={round(tm_r,4)}, Tau={round(taum_r,4)}")
         else:
             note = f"FOPDT: Km={km_r}, Tm={tm_r}, Tau={taum_r}"
- 
-        if tf_text:
-            _log_tf_history("websocket", tf_text, tf_result, (km_r, tm_r, taum_r))
- 
-       # Autonomous decision
+
+        if tf_text: _log_tf_history("websocket", tf_text, tf_result, (km_r, tm_r, taum_r))
+
+        # 1. EXACT DISTURBANCE EXTRACTION BEFORE TUNING
+        disturbance_raw = data.get("disturbance")
+        D_val = abs(float(disturbance_raw)) if disturbance_raw is not None else 0.0
+
         decision = auto_operator.decide(km_r, tm_r, taum_r)
 
+        # 2. PASS 'D' INTO RUN_TUNING SO IT CAN PICK THE RIGHT RULE
         kc, ti, rule_key, rule_name, rule_desc, chart, os_est, settling = run_tuning(
             km_r, tm_r, taum_r,
             decision["mode"], decision["overshoot"],
             decision["robust"], decision["metric"],
-            zeta=zeta_r, order=order
+            zeta=zeta_r, order=order, D=D_val
         )
 
-       # 🔥 THE UPGRADE: MASSIVE NON-LINEAR DISTURBANCE SCALING 🔥
-        disturbance_raw = data.get("disturbance")
-        
-        if disturbance_raw is not None:
-            disturbance_val = float(disturbance_raw)
-            if abs(disturbance_val) > 0:
-                
-                # 1. Your plant coefficients scale with D, so our gains must scale exponentially harder!
-                # If D=0.5 needs Kp=50, we need a massive multiplier.
-                non_linear_boost = 1.0 + (abs(disturbance_val) * 25.0) 
-                
-                kc = kc * non_linear_boost
-                
-                # 2. Force significantly faster integral action to pull it out of the drop
-                ti = ti / max(1.0, (1.0 + (abs(disturbance_val) * 2.0)))
-                
-                # 3. Tear off the safety ceilings!
-                kc = min(kc, 2500.0)  # Allow enormous gains to stop the drop
-                ti = max(ti, 0.001)   
-                
-                rule_name = f"{rule_name} (Non-Linear Boost: {round(non_linear_boost, 1)}x)"
+        # 🔥 DISTURBANCE SCALING (SMOOTH ANFIS MATCH) 🔥
+        if D_val > 0:
+            # Apply the massive boost to Kc to match ANFIS
+            empirical_boost = 1.0 + (66.5 * D_val)
+            kc = kc * empirical_boost
 
-        # Quick "first look" PI estimate (advanced feature)
+            # CRITICAL FIX: Stop dividing Ti so aggressively! 
+            # A larger Ti is what stops the violent oscillations.
+            ti_divisor = min(1.0 + (D_val * 0.4), 2.0)
+            ti = ti / ti_divisor
+
+            kc = min(kc, 3500.0)
+            # Hard floor: Ti can NEVER drop below 0.8s. This kills the oscillations permanently.
+            ti = max(ti, 0.8)  
+
+            rule_name = f"{rule_name} (ANFIS-Smooth Boost: {round(empirical_boost, 1)}x)"
+
         qkc, qti, qlam = quick_pi_estimate(km_r, tm_r, taum_r)
- 
+
         response = {
             "status":            "ok",
             "reduction_note":    note,
@@ -782,52 +757,36 @@ def handle_tune_request(data):
             "ti":                round(ti, 6),
             "os_predicted":      os_est,
             "settling_time":     settling,
-            "fopdt": {
-                "km":   round(km_r,  4),
-                "tm":   round(tm_r,  4),
-                "taum": round(taum_r, 4)
-            },
+            "fopdt": { "km": round(km_r, 4), "tm": round(tm_r, 4), "taum": round(taum_r, 4) },
             "quick_estimate": {"kc": qkc, "ti": qti, "lambda": qlam},
             "warnings": warnings_list,
-             "chart": chart
+            "chart": chart
         }
- 
-        # ── ANFIS dataset logging ───────────────────────────────────────
-        disturbance = data.get("disturbance", None)
-        if disturbance is not None:
+
+        if disturbance_raw is not None:
             ki_val = kc / ti if ti else 0.0
             row = {
                 'timestamp':   datetime.now(timezone.utc).isoformat(),
-                'disturbance': round(float(disturbance), 6),
-                'km':   round(km_r,  4),
-                'tm':   round(tm_r,  4),
-                'taum': round(taum_r, 4),
-                'kc':   round(kc, 6),
-                'ti':   round(ti, 6),
-                'kp':   round(kc, 6),       # Kp = Kc
-                'ki':   round(ki_val, 6),   # Ki = Kc / Ti
-                'rule': rule_key,
-                'order': order
+                'disturbance': round(float(disturbance_raw), 6),
+                'km':   round(km_r,  4), 'tm':   round(tm_r,  4), 'taum': round(taum_r, 4),
+                'kc':   round(kc, 6),    'ti':   round(ti, 6),
+                'kp':   round(kc, 6),    'ki':   round(ki_val, 6),
+                'rule': rule_key,        'order': order
             }
             _append_anfis_row(row)
             response["anfis_row"]   = row
             response["anfis_total"] = len(anfis_data)
-            socketio.emit('anfis_data_update', {
-                "row": row, "total_points": len(anfis_data), "reset": False
-            })
+            socketio.emit('anfis_data_update', { "row": row, "total_points": len(anfis_data), "reset": False })
 
-        # THE FIX: Save to memory and use the Megaphone for the success block!
         global last_valid_tune
         last_valid_tune = response
         socketio.emit('tune_response', response)
-        
-        print(f"[WS] Tuned: rule={rule_key} Kc={kc:.4f} Ti={ti:.4f} | {decision['reason']}")
+        print(f"[WS] Tuned: rule={rule_key} Kc={kc:.4f} Ti={ti:.4f}")
 
     except Exception as e:
         error_msg = str(e)
         print(f"CRASH: {error_msg}")
         print(traceback.format_exc())
-        # THE FIX: Broadcast the error to the dashboard so it doesn't freeze!
         socketio.emit('tune_response', {'status': 'error', 'message': error_msg})
  
  
