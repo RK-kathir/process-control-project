@@ -656,6 +656,8 @@ def handle_telemetry(data):
  
 @socketio.on('tune_request')
 def handle_tune_request(data):
+    # DECLARE GLOBAL AT THE VERY TOP TO PREVENT SYNTAX ERRORS
+    global last_valid_tune
     try:
         warnings_list = []
         tf_text = data.get("tf")
@@ -718,7 +720,6 @@ def handle_tune_request(data):
             kc = kc * empirical_boost
 
             # 2. Integral Action: Let it get EXTREMELY fast to eliminate the 800s lag
-            # We remove the 1.2s floor and let it drop to 0.05s for instant recovery
             ti_divisor = 1.0 + (D_val * 10.0)
             ti = ti / ti_divisor
 
@@ -760,10 +761,19 @@ def handle_tune_request(data):
             response["anfis_row"]   = row
             response["anfis_total"] = len(anfis_data)
             
-            # EXACT ALIGNMENT FIX FOR THE RENDER CRASH
             socketio.emit('anfis_data_update', {
                 "row": row, "total_points": len(anfis_data), "reset": False
             })
+
+        last_valid_tune = response
+        socketio.emit('tune_response', response)
+        print(f"[WS] Tuned: rule={rule_key} Kc={kc:.4f} Ti={ti:.4f}")
+
+    except Exception as e:
+        error_msg = str(e)
+        print(f"CRASH: {error_msg}")
+        print(traceback.format_exc())
+        socketio.emit('tune_response', {'status': 'error', 'message': error_msg})
 
         global last_valid_tune
         last_valid_tune = response
