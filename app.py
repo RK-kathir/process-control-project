@@ -636,18 +636,21 @@ def handle_tune_request(data):
             zeta=zeta_r, order=order, D=D_val
         )
 
-        # 🔥 DISTURBANCE SCALING (ULTRA-FAST RECOVERY) 🔥
+        # 🔥 DISTURBANCE SCALING (EXACT ANFIS CURVE MATCHING) 🔥
         if D_val > 0:
-            empirical_boost = 1.0 + (66.5 * D_val)
-            kc = kc * empirical_boost
-
-            ti_divisor = 1.0 + (D_val * 10.0)
-            ti = ti / ti_divisor
-
-            kc = min(kc, 10000.0)
-            ti = max(ti, 0.05)   
-
-            rule_name = f"{rule_name} (Ultra-Fast Boost: {round(empirical_boost, 1)}x)"
+            # 1. Match ANFIS Kp Non-Linear Curve (D=1 -> ~150, D=4.5 -> ~270)
+            # This specific equation matches your ANFIS data but safely caps out at ~400
+            anfis_kp_addition = (200.0 * D_val) / (1.0 + (0.5 * D_val))
+            kc = kc + anfis_kp_addition
+            
+            # 2. Match ANFIS Ti (Integral). ANFIS uses Ti around 1.8s.
+            # We enforce a hard floor of 1.5s to permanently kill the violent oscillations.
+            ti = max(1.5, ti / (1.0 + D_val))
+            
+            # 3. Safe Ceiling
+            kc = min(kc, 500.0)
+            
+            rule_name = f"{rule_name} (ANFIS Curve: Kp={round(kc,1)}, Ti={round(ti,2)})"
 
         qkc, qti, qlam = quick_pi_estimate(km_r, tm_r, taum_r)
 
