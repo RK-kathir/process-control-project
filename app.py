@@ -636,21 +636,24 @@ def handle_tune_request(data):
             zeta=zeta_r, order=order, D=D_val
         )
 
-        # 🔥 DISTURBANCE SCALING (EXACT ANFIS CURVE MATCHING) 🔥
+       # 🔥 DISTURBANCE SCALING (CRITICALLY DAMPED / NO OSCILLATION) 🔥
         if D_val > 0:
-            # 1. Match ANFIS Kp Non-Linear Curve (D=1 -> ~150, D=4.5 -> ~270)
-            # This specific equation matches your ANFIS data but safely caps out at ~400
-            anfis_kp_addition = (200.0 * D_val) / (1.0 + (0.5 * D_val))
-            kc = kc + anfis_kp_addition
-            
-            # 2. Match ANFIS Ti (Integral). ANFIS uses Ti around 1.8s.
-            # We enforce a hard floor of 1.5s to permanently kill the violent oscillations.
-            ti = max(1.5, ti / (1.0 + D_val))
-            
-            # 3. Safe Ceiling
-            kc = min(kc, 500.0)
-            
-            rule_name = f"{rule_name} (ANFIS Curve: Kp={round(kc,1)}, Ti={round(ti,2)})"
+            # 1. CRANK THE GAIN MASSIVELY
+            # You want high gain to stop the drop instantly. We use a massive linear multiplier.
+            empirical_boost = 1.0 + (150.0 * D_val)
+            kc = kc * empirical_boost
+
+            # 2. KILL THE OSCILLATION (CRITICAL DAMPING)
+            # Ringing happens when Ti is too small. To force a smooth, first-order
+            # exponential curve, Ti must be large enough to prevent integral windup.
+            # We override the base rule and tie Ti directly to your plant's time constant.
+            ti = max(tm_r * 0.8, 3.5)
+
+            # 3. RAISE THE CEILING
+            # Allow the bot to output massive Kp to fight the drop
+            kc = min(kc, 8000.0)
+
+            rule_name = f"Smooth First-Order Recovery (Boost: {round(empirical_boost, 1)}x)"
 
         qkc, qti, qlam = quick_pi_estimate(km_r, tm_r, taum_r)
 
