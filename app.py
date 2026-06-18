@@ -711,22 +711,26 @@ def handle_tune_request(data):
             zeta=zeta_r, order=order, D=D_val
         )
 
-        # 🔥 DISTURBANCE SCALING (SMOOTH ANFIS MATCH) 🔥
+        # 🔥 DISTURBANCE SCALING (FAST RECOVERY + SMOOTH ANFIS MATCH) 🔥
         if D_val > 0:
-            # Apply the massive boost to Kc to match ANFIS
+            # 1. Match the massive ANFIS Proportional Gain
             empirical_boost = 1.0 + (66.5 * D_val)
             kc = kc * empirical_boost
 
-            # CRITICAL FIX: Stop dividing Ti so aggressively! 
-            # A larger Ti is what stops the violent oscillations.
-            ti_divisor = min(1.0 + (D_val * 0.4), 2.0)
+            # 2. CRITICAL RECOVERY FIX: Remove the sluggish Ti limit!
+            # We scale the divisor strongly with D to get fast integral action.
+            ti_divisor = 1.0 + (D_val * 5.0)
             ti = ti / ti_divisor
 
-            kc = min(kc, 3500.0)
-            # Hard floor: Ti can NEVER drop below 0.8s. This kills the oscillations permanently.
-            ti = max(ti, 0.8)  
+            # 3. SAFETY CAPS:
+            kc = min(kc, 6000.0)  # Raised cap so it punches the initial drop harder
+            
+            # 4. ANTI-OSCILLATION FLOOR: 
+            # 1.2s prevents the violent ringing, but is fast enough 
+            # to instantly curve the PV back to the setpoint.
+            ti = max(ti, 1.2)  
 
-            rule_name = f"{rule_name} (ANFIS-Smooth Boost: {round(empirical_boost, 1)}x)"
+            rule_name = f"{rule_name} (Fast-Recovery Boost: {round(empirical_boost, 1)}x)"
 
         qkc, qti, qlam = quick_pi_estimate(km_r, tm_r, taum_r)
 
