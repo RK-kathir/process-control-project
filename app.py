@@ -10,12 +10,11 @@ from flask_socketio import SocketIO, emit
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.svm import LinearSVC
 from tf_parser import parse_transfer_function, TFParseError
- 
+
 # 1. Initialize the Flask App FIRST
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'tuningbot-secret')
- 
-# 2. Add CORS so GitHub can talk to Render
+
 # 2. Add CORS so GitHub can talk to Render
 CORS(app)
 # 3. Initialize Socket.IO with aggressive ping timeouts for instant reconnection
