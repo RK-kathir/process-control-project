@@ -711,26 +711,22 @@ def handle_tune_request(data):
             zeta=zeta_r, order=order, D=D_val
         )
 
-        # 🔥 DISTURBANCE SCALING (FAST RECOVERY + SMOOTH ANFIS MATCH) 🔥
+        # 🔥 DISTURBANCE SCALING (ULTRA-FAST RECOVERY) 🔥
         if D_val > 0:
-            # 1. Match the massive ANFIS Proportional Gain
+            # 1. Proportional Gain: Hit it with a massive hammer
             empirical_boost = 1.0 + (66.5 * D_val)
             kc = kc * empirical_boost
 
-            # 2. CRITICAL RECOVERY FIX: Remove the sluggish Ti limit!
-            # We scale the divisor strongly with D to get fast integral action.
-            ti_divisor = 1.0 + (D_val * 5.0)
+            # 2. Integral Action: Let it get EXTREMELY fast to eliminate the 800s lag
+            # We remove the 1.2s floor and let it drop to 0.05s for instant recovery
+            ti_divisor = 1.0 + (D_val * 10.0)
             ti = ti / ti_divisor
 
-            # 3. SAFETY CAPS:
-            kc = min(kc, 6000.0)  # Raised cap so it punches the initial drop harder
-            
-            # 4. ANTI-OSCILLATION FLOOR: 
-            # 1.2s prevents the violent ringing, but is fast enough 
-            # to instantly curve the PV back to the setpoint.
-            ti = max(ti, 1.2)  
+            # 3. Ceilings & Floors
+            kc = min(kc, 10000.0) # Raise the roof to fight the drop
+            ti = max(ti, 0.05)    # Allow ultra-fast integral recovery
 
-            rule_name = f"{rule_name} (Fast-Recovery Boost: {round(empirical_boost, 1)}x)"
+            rule_name = f"{rule_name} (Ultra-Fast Boost: {round(empirical_boost, 1)}x)"
 
         qkc, qti, qlam = quick_pi_estimate(km_r, tm_r, taum_r)
 
@@ -763,8 +759,22 @@ def handle_tune_request(data):
             _append_anfis_row(row)
             response["anfis_row"]   = row
             response["anfis_total"] = len(anfis_data)
-            socketio.emit('anfis_data_update', { "row": row, "total_points": len(anfis_data), "reset": False })
+            
+            # EXACT ALIGNMENT FIX FOR THE RENDER CRASH
+            socketio.emit('anfis_data_update', {
+                "row": row, "total_points": len(anfis_data), "reset": False
+            })
 
+        global last_valid_tune
+        last_valid_tune = response
+        socketio.emit('tune_response', response)
+        print(f"[WS] Tuned: rule={rule_key} Kc={kc:.4f} Ti={ti:.4f}")
+
+    except Exception as e:
+        error_msg = str(e)
+        print(f"CRASH: {error_msg}")
+        print(traceback.format_exc())
+        socketio.emit('tune_response', {'status': 'error', 'message': error_msg})
         global last_valid_tune
         last_valid_tune = response
         socketio.emit('tune_response', response)
