@@ -10,15 +10,14 @@ from flask_socketio import SocketIO, emit
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.svm import LinearSVC
 from tf_parser import parse_transfer_function, TFParseError
- 
+
 # 1. Initialize the Flask App FIRST
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'tuningbot-secret')
- 
-# 2. Add CORS so GitHub can talk to Render
+
 # 2. Add CORS so GitHub can talk to Render
 CORS(app)
-# 3. Initialize Socket.IO with aggressive ping timeouts for instant reconnection
+
 # 3. Initialize Socket.IO with relaxed timeouts to survive MATLAB calculations
 socketio = SocketIO(
     app, 
@@ -28,20 +27,14 @@ socketio = SocketIO(
     ping_interval=25    # Check connection every 25 seconds
 )
 socketio_app = socketio  # alias for gunicorn
- 
+
 # ── Gemini ─────────────────────────────────────────────────────────────────
 genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
 llm_model = genai.GenerativeModel(
     "gemini-2.5-flash",
     generation_config={"response_mime_type": "application/json"}
 )
-# ── Gemini ─────────────────────────────────────────────────────────────────
-genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
-llm_model = genai.GenerativeModel(
-    "gemini-2.5-flash",
-    generation_config={"response_mime_type": "application/json"}
-)
- 
+
 # ── Load assets ────────────────────────────────────────────────────────────
 current_dir = os.path.dirname(os.path.abspath(__file__))
 try:
@@ -56,22 +49,17 @@ except Exception as e:
     print(f"STARTUP ERROR: {e}")
     rf_model = None
     rules_db = {}
- 
- 
+
+
 # ══════════════════════════════════════════════════════════════════════════
 #  ANFIS TRAINING-DATA LOG  (Disturbance → Kp, Ki)
-# ══════════════════════════════════════════════════════════════════════════
-#  Every time MATLAB sends a tune_request that includes a "disturbance"
-#  value, the resulting Kc/Ti pair (== Kp/Ki for a standard PI controller)
-#  is appended here. This builds the dataset used by the user's MATLAB
-#  ANFIS training script (genfis + anfis + writeFIS → Kp_Data.fis / Ki_Data.fis).
 # ══════════════════════════════════════════════════════════════════════════
 ANFIS_DATA_PATH = os.path.join(current_dir, 'anfis_training_data.csv')
 ANFIS_FIELDS = ['timestamp', 'disturbance', 'km', 'tm', 'taum',
                 'kc', 'ti', 'kp', 'ki', 'rule', 'order']
- 
+
 anfis_data = []  # in-memory mirror of the CSV, list of dicts
- 
+
 def _load_anfis_data():
     global anfis_data
     anfis_data = []
@@ -82,7 +70,7 @@ def _load_anfis_data():
                     anfis_data.append(row)
         except Exception as e:
             print(f"ANFIS data load error: {e}")
- 
+
 def _append_anfis_row(row):
     global anfis_data
     anfis_data.append(row)
@@ -95,28 +83,24 @@ def _append_anfis_row(row):
             writer.writerow(row)
     except Exception as e:
         print(f"ANFIS data write error: {e}")
- 
+
 def _reset_anfis_data():
     global anfis_data
     anfis_data = []
     if os.path.exists(ANFIS_DATA_PATH):
         try: os.remove(ANFIS_DATA_PATH)
         except Exception as e: print(f"ANFIS reset error: {e}")
- 
+
 _load_anfis_data()
 print(f"ANFIS dataset: {len(anfis_data)} existing rows loaded.")
- 
- 
+
+
 # ══════════════════════════════════════════════════════════════════════════
 #  TRANSFER-FUNCTION PARSE HISTORY  (advanced feature)
 # ══════════════════════════════════════════════════════════════════════════
-#  Every time a transfer function is successfully parsed (via chat,
-#  Socket.IO tune_request, or /api/parse-tf), a record is kept here so
-#  the user can review how the process model has changed over time.
-# ══════════════════════════════════════════════════════════════════════════
 TF_HISTORY_MAX = 100
 tf_history = []
- 
+
 def _log_tf_history(source, tf_text, result, fopdt):
     tf_history.append({
         "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -131,56 +115,32 @@ def _log_tf_history(source, tf_text, result, fopdt):
     })
     while len(tf_history) > TF_HISTORY_MAX:
         tf_history.pop(0)
- 
- 
+
+
 # ══════════════════════════════════════════════════════════════════════════
 #  HALF-RULE REDUCER  (Skogestad's method — O'Dwyer 3rd Ed, Appendix)
 # ══════════════════════════════════════════════════════════════════════════
 class HalfRuleReducer:
-    """
-    Converts higher-order models to FOPDT using Skogestad's Half-Rule:
-      - Largest neglected time constant: half added to dead time
-      - All smaller neglected constants: added in full to dead time
-    Reference: Skogestad 2003; cited in O'Dwyer 3rd Ed Appendix A.
- 
-    `reduce()` supports ANY order (1, 2, 3, 4, 5, ...). The dominant
-    (largest) time constant is retained as Tm; the next-largest
-    contributes half of itself to the dead time, and all smaller ones
-    contribute fully to the dead time.
-    """
- 
     @staticmethod
     def from_fopdt(km, tm, taum, zeta=1.0):
         return km, tm, taum, zeta
- 
+
     @staticmethod
     def from_sopdt(km, tm1, tm2, taum, zeta=1.0):
-        """G(s) = km / ((tm1*s+1)(tm2*s+1)) * e^(-taum*s), tm1 >= tm2"""
         tcs  = sorted([tm1, tm2], reverse=True)
         tm_r = tcs[0]
         tau_r = taum + tcs[1] / 2.0
         return km, tm_r, tau_r, zeta
- 
+
     @staticmethod
     def from_third_order(km, tm1, tm2, tm3, taum, zeta=1.0):
-        """G(s) = km/((tm1*s+1)(tm2*s+1)(tm3*s+1)) * e^(-taum*s)"""
         tcs  = sorted([tm1, tm2, tm3], reverse=True)
         tm_r = tcs[0]
         tau_r = taum + tcs[1] / 2.0 + tcs[2]
         return km, tm_r, tau_r, zeta
- 
+
     @staticmethod
     def reduce(order, km, time_constants, taum, zeta=1.0):
-        """
-        time_constants: list, any order, any length >= 1.
-        Returns (km, tm_approx, taum_approx, zeta).
- 
-        For len(tcs) == 1 -> already FOPDT, returned as-is.
-        For len(tcs) >= 2 -> Tm = tau1 (largest); Taum = taum + tau2/2 + sum(tau3..tauN).
-        This single formula reproduces from_sopdt for 2 constants and
-        from_third_order for 3 constants, and extends naturally to 4th,
-        5th, ... order models.
-        """
         tcs = sorted(time_constants, reverse=True)
         if not tcs:
             return km, max(taum, 1e-6), taum, zeta
@@ -189,34 +149,30 @@ class HalfRuleReducer:
         tm_r  = tcs[0]
         tau_r = taum + tcs[1] / 2.0 + sum(tcs[2:])
         return km, tm_r, tau_r, zeta
- 
- 
+
+
 # ══════════════════════════════════════════════════════════════════════════
 #  AUTONOMOUS OPERATOR  (MATLAB mode — no human interview)
 # ══════════════════════════════════════════════════════════════════════════
 class AutonomousOperator:
-    """
-    Evaluates process parameters and auto-selects tuning strategy.
-    Mimics a skilled process control engineer response to plant changes.
-    """
     HIGH_RATIO   = 0.5
     SPIKE_RATIO  = 0.7
     GAIN_DRIFT   = 0.30
     RATIO_SPIKE  = 0.20
- 
+
     def __init__(self):
         self.prev_km    = None
         self.prev_ratio = None
- 
+
     def decide(self, km, tm, taum):
         ratio   = taum / max(tm, 1e-6)
         reasons = []
- 
+
         ratio_spiked = (self.prev_ratio is not None and
                         (ratio - self.prev_ratio) > self.RATIO_SPIKE)
         gain_shifted = (self.prev_km is not None and
                         abs(km - self.prev_km) / max(abs(self.prev_km), 1e-6) > self.GAIN_DRIFT)
- 
+
         if ratio >= self.SPIKE_RATIO or ratio_spiked:
             mode, overshoot, robust, metric = 0, 0, 1, 1
             reasons.append(f"HIGH tau/T={ratio:.2f} or spike → ultra-safe robust mode (IAE, no OS)")
@@ -230,13 +186,13 @@ class AutonomousOperator:
         else:
             mode, overshoot, robust, metric = 0, 2, 0, 2
             reasons.append(f"Low tau/T={ratio:.2f} → aggressive ISE regulatory")
- 
+
         self.prev_km    = km
         self.prev_ratio = ratio
         return {"mode": mode, "overshoot": overshoot, "robust": robust,
                 "metric": metric, "reason": " | ".join(reasons)}
- 
- 
+
+
 # ══════════════════════════════════════════════════════════════════════════
 #  NLP INTENT MODEL
 # ══════════════════════════════════════════════════════════════════════════
@@ -278,7 +234,7 @@ intent_vectorizer = TfidfVectorizer(ngram_range=(1,2))
 X_nlp = intent_vectorizer.fit_transform(texts)
 intent_model = LinearSVC()
 intent_model.fit(X_nlp, labels)
- 
+
 KNOWLEDGE_BASE = {
     "identity": (
         "<strong>I am TUNING BOT</strong> — an AI-powered PID controller optimization engine.<br><br>"
@@ -406,7 +362,7 @@ KNOWLEDGE_BASE = {
         "Type <em>matlab help</em> for the full guide."
     ),
 }
- 
+
 # ══════════════════════════════════════════════════════════════════════════
 #  SHARED STATE
 # ══════════════════════════════════════════════════════════════════════════
@@ -414,13 +370,12 @@ bot_memory = {
     "km": None, "tm": None, "taum": None, "tau_c": None,
     "mode": None, "metric": None, "robust": None, "overshoot": None,
     "interview_stage": 0, "allows_overshoot": False, "overshoot_answer": None,
-    # SOPDT / higher-order fields (support up to 6th order)
     "order": 1, "tm2": None, "tm3": None, "tm4": None, "tm5": None, "tm6": None,
     "zeta": 1.0
 }
- 
+
 auto_operator = AutonomousOperator()
- 
+
 def _reset_memory():
     global bot_memory
     bot_memory = {
@@ -430,21 +385,20 @@ def _reset_memory():
         "order": 1, "tm2": None, "tm3": None, "tm4": None, "tm5": None, "tm6": None,
         "zeta": 1.0
     }
- 
- 
+
 # ══════════════════════════════════════════════════════════════════════════
-#  TRANSFER-FUNCTION TEXT DETECTION  (chat: "tf:", "G(s)=", "transfer function")
+#  TRANSFER-FUNCTION TEXT DETECTION
 # ══════════════════════════════════════════════════════════════════════════
 TF_TRIGGER_RE  = re.compile(r'(transfer function|tf\s*[:=]|g\(s\)|gp\(s\))', re.IGNORECASE)
 TF_STRIP_RE    = re.compile(r'(?i)^.*?(transfer function|tf|g\(s\)|gp\(s\))\s*[:=]?\s*')
 ORDER_SUFFIX   = {1: "st", 2: "nd", 3: "rd"}
- 
+
 def _order_suffix(n):
     return ORDER_SUFFIX.get(n, "th")
- 
- 
+
+
 # ══════════════════════════════════════════════════════════════════════════
-#  SIMULATION  (works for both FOPDT and reduced FOPDT from higher-order)
+#  SIMULATION
 # ══════════════════════════════════════════════════════════════════════════
 def simulate_step(kc, ti, km, tm, taum):
     t  = np.linspace(0, (tm + taum) * 8, 600)
@@ -453,7 +407,7 @@ def simulate_step(kc, ti, km, tm, taum):
     err_sum = 0
     d_steps = max(1, int(taum / dt))
     ti_val  = max(ti, 0.001)
- 
+
     for i in range(1, len(t)):
         err      = 1.0 - pv[i-1]
         err_sum += err * dt
@@ -463,19 +417,19 @@ def simulate_step(kc, ti, km, tm, taum):
         d_mv     = mv_hist[d_idx] if d_idx >= 0 else 0
         dpv      = ((km * d_mv) - pv[i-1]) / tm
         pv[i]    = pv[i-1] + dpv * dt
- 
+
     os_val = 0.0
     try:
         os_val = round(max(0, (np.max(pv) - 1.0) * 100), 1)
         if math.isnan(os_val) or math.isinf(os_val): os_val = 0.0
     except: pass
- 
+
     settling_time = round(t[-1], 1)
     for i in range(len(pv)-1, 0, -1):
         if abs(pv[i] - 1.0) > 0.02:
             settling_time = round(t[i], 1)
             break
- 
+
     graph_data = {
         "data": [
             {"x": t.tolist(), "y": pv.tolist(), "type": "scatter", "name": "Process Output",
@@ -503,19 +457,13 @@ def simulate_step(kc, ti, km, tm, taum):
         }
     }
     return json.dumps(graph_data), os_val, settling_time
- 
- 
-# ══════════════════════════════════════════════════════════════════════════
-#  CORE TUNING ENGINE  (shared by REST and WebSocket)
-# ══════════════════════════════════════════════════════════════════════════
+
+
 # ══════════════════════════════════════════════════════════════════════════
 #  CORE TUNING ENGINE  (shared by REST and WebSocket)
 # ══════════════════════════════════════════════════════════════════════════
 def run_tuning(km, tm, taum, mode, overshoot, robust, metric,
                overshoot_answer=None, zeta=1.0, order=1, D=0.0):
-    """
-    Selects and evaluates a tuning rule based on Disturbance Magnitude.
-    """
     OVERSHOOT_OVERRIDE = {
         "os_5": "miluse_5os", "os_10": "miluse_10os",
         "os_20": "miluse_20os", "os_30": "miluse_30os"
@@ -538,13 +486,10 @@ def run_tuning(km, tm, taum, mode, overshoot, robust, metric,
 
     if is_disturbance:
         if D >= 1.0:
-            # Severe disturbance: Tyreus-Luyben guarantees smooth, damped recovery with high Ti
             best_rule = "tyreus_luyben" if "tyreus_luyben" in rules_db else "skogestad"
         elif D >= 0.2:
-            # Moderate: Chien Smooth (designed specifically for 0% overshoot)
             best_rule = "chien_smooth" if "chien_smooth" in rules_db else "rovira_iae"
         else:
-            # Tiny disturbance: Skogestad robust
             best_rule = "skogestad" if "skogestad" in rules_db else "cohen_coon"
     else:
         if rf_model:
@@ -592,20 +537,9 @@ def run_tuning(km, tm, taum, mode, overshoot, robust, metric,
 
     chart, os_est, settling = simulate_step(kc, ti, km, tm, taum)
     return (kc, ti, best_rule, r.get('name', best_rule), r.get('unique_feature', ''), chart, os_est, settling)
- 
- 
-# ══════════════════════════════════════════════════════════════════════════
-#  ADVANCED FEATURE: QUICK PI ESTIMATE  (IMC-style "first look" suggestion)
-# ══════════════════════════════════════════════════════════════════════════
+
+
 def quick_pi_estimate(km, tm, taum, lam=None):
-    """
-    Returns a fast IMC-based (lambda tuning) PI estimate, useful as an
-    immediate "first look" the moment a transfer function is parsed —
-    before running the full AI rule-selection + simulation pipeline.
- 
-    lambda (closed-loop time constant) defaults to max(taum, 0.5*tm),
-    a common robust choice (Skogestad SIMC guideline).
-    """
     km = km if abs(km) > 1e-9 else 1e-9
     if lam is None:
         lam = max(taum, 0.5 * tm)
@@ -613,37 +547,29 @@ def quick_pi_estimate(km, tm, taum, lam=None):
     kc = tm / (km * (lam + taum))
     ti = min(tm, 4 * (lam + taum))
     return round(kc, 4), round(ti, 4), round(lam, 4)
- 
- 
+
+
 # ══════════════════════════════════════════════════════════════════════════
 #  WEBSOCKET EVENTS  (MATLAB/Simulink interface)
 # ══════════════════════════════════════════════════════════════════════════
-
-# Add this global variable right above the function
 last_valid_tune = None
 
 @socketio.on('connect')
 def handle_connect():
     print(f"[WS] Connected: {request.sid}")
     emit('status', {'message': 'TUNING BOT connected. Ready for telemetry.'})
-    
-    # THE FIX: Instantly send the last known tuning data to the newly refreshed browser!
     global last_valid_tune
     if last_valid_tune is not None:
         emit('tune_response', last_valid_tune)
- 
- 
+
+
 @socketio.on('disconnect')
 def handle_disconnect():
     print(f"[WS] Disconnected: {request.sid}")
- 
- 
+
+
 @socketio.on('telemetry')
 def handle_telemetry(data):
-    """
-    Stream live MATLAB simulation data to all dashboard clients.
-    Payload: { "t": [..], "pv": [..], "sp": [..], "mv": [..] }
-    """
     try:
         socketio.emit('telemetry_update', {
             "t":  data.get("t",  []),
@@ -653,10 +579,9 @@ def handle_telemetry(data):
         })
     except Exception as e:
         emit('error', {'message': str(e)})
- 
+
 @socketio.on('tune_request')
 def handle_tune_request(data):
-    # DECLARE GLOBAL AT THE VERY TOP TO PREVENT SYNTAX ERRORS
     global last_valid_tune
     try:
         warnings_list = []
@@ -699,13 +624,11 @@ def handle_tune_request(data):
 
         if tf_text: _log_tf_history("websocket", tf_text, tf_result, (km_r, tm_r, taum_r))
 
-        # 1. EXACT DISTURBANCE EXTRACTION BEFORE TUNING
         disturbance_raw = data.get("disturbance")
         D_val = abs(float(disturbance_raw)) if disturbance_raw is not None else 0.0
 
         decision = auto_operator.decide(km_r, tm_r, taum_r)
 
-        # 2. PASS 'D' INTO RUN_TUNING SO IT CAN PICK THE RIGHT RULE
         kc, ti, rule_key, rule_name, rule_desc, chart, os_est, settling = run_tuning(
             km_r, tm_r, taum_r,
             decision["mode"], decision["overshoot"],
@@ -715,17 +638,14 @@ def handle_tune_request(data):
 
         # 🔥 DISTURBANCE SCALING (ULTRA-FAST RECOVERY) 🔥
         if D_val > 0:
-            # 1. Proportional Gain: Hit it with a massive hammer
             empirical_boost = 1.0 + (66.5 * D_val)
             kc = kc * empirical_boost
 
-            # 2. Integral Action: Let it get EXTREMELY fast to eliminate the 800s lag
             ti_divisor = 1.0 + (D_val * 10.0)
             ti = ti / ti_divisor
 
-            # 3. Ceilings & Floors
-            kc = min(kc, 10000.0) # Raise the roof to fight the drop
-            ti = max(ti, 0.05)    # Allow ultra-fast integral recovery
+            kc = min(kc, 10000.0)
+            ti = max(ti, 0.05)   
 
             rule_name = f"{rule_name} (Ultra-Fast Boost: {round(empirical_boost, 1)}x)"
 
@@ -775,28 +695,7 @@ def handle_tune_request(data):
         print(traceback.format_exc())
         socketio.emit('tune_response', {'status': 'error', 'message': error_msg})
 
-        global last_valid_tune
-        last_valid_tune = response
-        socketio.emit('tune_response', response)
-        print(f"[WS] Tuned: rule={rule_key} Kc={kc:.4f} Ti={ti:.4f}")
 
-    except Exception as e:
-        error_msg = str(e)
-        print(f"CRASH: {error_msg}")
-        print(traceback.format_exc())
-        socketio.emit('tune_response', {'status': 'error', 'message': error_msg})
-        global last_valid_tune
-        last_valid_tune = response
-        socketio.emit('tune_response', response)
-        print(f"[WS] Tuned: rule={rule_key} Kc={kc:.4f} Ti={ti:.4f}")
-
-    except Exception as e:
-        error_msg = str(e)
-        print(f"CRASH: {error_msg}")
-        print(traceback.format_exc())
-        socketio.emit('tune_response', {'status': 'error', 'message': error_msg})
- 
- 
 # ══════════════════════════════════════════════════════════════════════════
 #  REST API — INTERVIEW FLOW  (human chat)
 # ══════════════════════════════════════════════════════════════════════════
@@ -850,7 +749,7 @@ INTERVIEW = {
         }
     }
 }
- 
+
 ANSWER_PATTERNS = {
     1: {"servo":     ["servo","setpoint","track","follow","target","position","profile"],
         "regulator": ["regulator","disturbance","hold","steady","reject","fixed","constant"]},
@@ -865,20 +764,14 @@ ANSWER_PATTERNS = {
         "os_20": ["20","twenty","20%","standard","industrial","typical"],
         "os_30": ["30","thirty","30%","maximum","aggressive","fast"]}
 }
- 
+
 def _parse_answer(stage, msg_lower):
     for ans, keywords in ANSWER_PATTERNS.get(stage, {}).items():
         if any(kw in msg_lower for kw in keywords):
             return ans
     return None
- 
+
 def _extract_params_regex(msg):
-    """
-    Extracts Km, Tm (=T1), Tau, order, zeta, and any number of additional
-    lag time constants Tm2..Tm6 (T2..T6) for higher-order (incl. 4th order+)
-    models entered manually, e.g.:
-        order=4, Km=2, T1=10, T2=4, T3=1.5, T4=0.5, Tau=0.5
-    """
     ext = {"km": None, "tm": None, "taum": None, "order": None, "zeta": None}
     ml  = msg.lower()
     km_m  = re.search(r'(km|gain)\s*(=|:)?\s*([+-]?\d+\.?\d*)', ml)
@@ -891,14 +784,13 @@ def _extract_params_regex(msg):
     if tau_m:  ext["taum"]  = float(tau_m.group(3))
     if ord_m:  ext["order"] = int(ord_m.group(2))
     if zeta_m: ext["zeta"]  = float(zeta_m.group(2))
- 
-    # Extra lag time constants: tm2/t2 .. tm6/t6 (supports 4th, 5th, 6th order)
+
     for n in range(2, 7):
         m = re.search(rf'\b(tm{n}|t{n})\s*(=|:)?\s*([+-]?\d+\.?\d*)', ml)
         if m:
             ext[f"tm{n}"] = float(m.group(3))
     return ext
- 
+
 def _build_rules_response():
     fopdt_reg, fopdt_srv, sopdt_r, sopdt_s = [], [], [], []
     for k, v in rules_db.items():
@@ -909,7 +801,7 @@ def _build_rules_response():
             (fopdt_srv if mode in ('servo', 1) else fopdt_reg).append(nm)
         else:
             (sopdt_s if mode in ('servo', 1) else sopdt_r).append(nm)
- 
+
     reply  = f"<strong>Tuning database: {len(rules_db)} rules</strong> from O'Dwyer's Handbook 3rd Ed.<br><br>"
     n = 1
     for cat, lst in [("FOPDT — Regulatory",fopdt_reg),("FOPDT — Servo",fopdt_srv),
@@ -920,9 +812,8 @@ def _build_rules_response():
             reply += "<br>"
     reply += "<em>AI selects the optimal rule for your process type, objectives and model confidence.</em>"
     return jsonify({"reply": reply, "options": [], "chart": None})
- 
+
 def _build_tcs_from_memory():
-    """Collect [tm, tm2, tm3, tm4, tm5, tm6] (those that are set) up to bot_memory['order']."""
     order = bot_memory.get('order', 1)
     tm    = bot_memory.get('tm')
     tcs   = [tm]
@@ -931,7 +822,7 @@ def _build_tcs_from_memory():
         if val is not None:
             tcs.append(val)
     return tcs
- 
+
 def _run_rest_tuning():
     global bot_memory
     km   = bot_memory['km'];   tm    = bot_memory['tm']
@@ -939,8 +830,7 @@ def _run_rest_tuning():
     os_v = bot_memory.get('overshoot', 0); rob  = bot_memory.get('robust', 0)
     met  = bot_memory.get('metric', 1);    oa   = bot_memory.get('overshoot_answer')
     zeta = bot_memory.get('zeta', 1.0);    order= bot_memory.get('order', 1)
- 
-    # Apply Half-Rule if higher order (any order, including 4th+)
+
     km_r, tm_r, taum_r = km, tm, taum
     reduction_note = ""
     if order >= 2:
@@ -953,18 +843,18 @@ def _run_rest_tuning():
                 f"<strong>Skogestad's Half-Rule</strong> "
                 f"→ FOPDT: Km={round(km_r,4)}, Tm={round(tm_r,4)}, Tau={round(taum_r,4)}<br>"
             )
- 
+
     kc, ti, rule_key, rule_name, rule_desc, chart, os_est, settling = run_tuning(
         km_r, tm_r, taum_r, mode, os_v, rob, met, oa, zeta=zeta, order=order
     )
- 
+
     ratio      = taum_r / max(tm_r, 1e-6)
     mode_str   = "Servo (Setpoint Tracking)" if mode == 1 else "Regulatory (Disturbance Rejection)"
     metric_map = {"1": "IAE — smooth", "2": "ISE — aggressive", "3": "ITAE — balanced long-term"}
     metric_str = metric_map.get(str(met), "IAE")
     robust_str = "Robust (uncertainty-tolerant)" if rob == 1 else "Performance-optimised"
     order_str  = f"Order-{order} input" + (" (Half-Rule reduced)" if order > 1 else "") + "<br>"
- 
+
     final_reply = (
         f"<strong>Optimization Complete</strong><br><br>"
         f"<strong>Process:</strong><br>"
@@ -986,15 +876,15 @@ def _run_rest_tuning():
     )
     _reset_memory()
     return jsonify({"reply": final_reply, "chart": chart, "options": []})
- 
- 
+
+
 @app.route('/api/chat', methods=['POST'])
 def chat():
     global bot_memory
     try:
         user_msg  = request.json.get('message', '')
         ul        = user_msg.lower().strip()
- 
+
         if ul == "reset":
             _reset_memory()
             return jsonify({
@@ -1006,8 +896,7 @@ def chat():
                 ),
                 "options": [], "chart": None
             })
- 
-        # ── Transfer-function text detection (any order, incl. 4th+) ────
+
         tf_note = ""
         tf_parsed = False
         if TF_TRIGGER_RE.search(user_msg):
@@ -1025,7 +914,7 @@ def chat():
                     ),
                     "options": [], "chart": None
                 })
- 
+
             tcs   = tf_result["time_constants"]
             order = max(1, tf_result["order"])
             bot_memory["km"]    = tf_result["km"]
@@ -1034,11 +923,11 @@ def chat():
             bot_memory["tm"]    = tcs[0] if tcs else max(tf_result["taum"], 1.0)
             for i, tau in enumerate(tcs[1:], start=2):
                 bot_memory[f"tm{i}"] = tau
- 
+
             km_r, tm_r, taum_r, _ = HalfRuleReducer.reduce(
                 order, tf_result["km"], tcs or [bot_memory["tm"]], tf_result["taum"])
             _log_tf_history("chat", expr, tf_result, (km_r, tm_r, taum_r))
- 
+
             tc_str    = ", ".join(f"τ{i+1}={round(t,4)}" for i, t in enumerate(tcs)) or "—"
             warn_html = "".join(f"⚠️ {w}<br>" for w in tf_result["warnings"])
             tf_note = (
@@ -1054,18 +943,17 @@ def chat():
                 )
             tf_note += "<br>"
             tf_parsed = True
- 
+
         has_digits = any(ch.isdigit() for ch in ul)
         word_count = len(ul.split())
- 
-        # ── NLP fast-path ───────────────────────────────────────────────
+
         if not tf_parsed and word_count < 14 and not has_digits:
             try:
                 vec   = intent_vectorizer.transform([ul])
                 li    = intent_model.predict(vec)[0]
                 conf  = max(intent_model.decision_function(vec)[0])
             except: li, conf = "none", 0
- 
+
             if li == "greeting" and conf > 0.3:
                 return jsonify({
                     "reply": (
@@ -1081,11 +969,10 @@ def chat():
                 return jsonify({"reply": KNOWLEDGE_BASE[li], "options": [], "chart": None})
             if li == "rules" and conf > 0.2:
                 return _build_rules_response()
- 
+
         if not tf_parsed and any(kw in ul for kw in ["what rules","show rules","list rules","how many rules"]):
             return _build_rules_response()
- 
-        # ── Parameter extraction ────────────────────────────────────────
+
         if not tf_parsed:
             regex_ext = _extract_params_regex(user_msg)
             for k in ["km", "tm", "taum", "zeta", "tm2", "tm3", "tm4", "tm5", "tm6"]:
@@ -1093,8 +980,7 @@ def chat():
                     bot_memory[k] = regex_ext[k]
             if regex_ext["order"] is not None:
                 bot_memory["order"] = regex_ext["order"]
- 
-            # Gemini fallback for harder phrasing
+
             if not all([bot_memory['km'], bot_memory['tm'], bot_memory['taum']]) and has_digits:
                 try:
                     prompt = (
@@ -1112,13 +998,13 @@ def chat():
                         if ext.get(k) is not None: bot_memory[k] = ext[k]
                     if ext.get("order") is not None: bot_memory["order"] = ext["order"]
                 except: pass
- 
+
         km, tm, taum = bot_memory['km'], bot_memory['tm'], bot_memory['taum']
         missing = []
         if not km:   missing.append("<strong>Km</strong> (process gain)")
         if not tm:   missing.append("<strong>Tm</strong> (time constant / T1 for higher-order)")
         if not taum: missing.append("<strong>Tau</strong> (dead time)")
- 
+
         if missing:
             return jsonify({
                 "reply": (
@@ -1132,24 +1018,23 @@ def chat():
                 ),
                 "options": [], "chart": None
             })
- 
-        # ── Interview flow ──────────────────────────────────────────────
+
         stage = bot_memory['interview_stage']
- 
+
         if stage > 0:
             iq     = INTERVIEW[stage]
             answer = None
             for opt in iq["options"]:
                 if ul == opt["val"]: answer = opt["val"]; break
             if not answer: answer = _parse_answer(stage, ul)
- 
+
             if answer:
                 bot_memory.update(iq["map"][answer])
                 if stage == 2: bot_memory['allows_overshoot'] = (answer == "fast")
                 if stage == 4: bot_memory['overshoot_answer'] = answer
                 bot_memory['interview_stage'] += 1
                 stage = bot_memory['interview_stage']
- 
+
                 if stage == 4 and not bot_memory.get('allows_overshoot'):
                     bot_memory['interview_stage'] = 5
                     return _run_rest_tuning()
@@ -1167,7 +1052,7 @@ def chat():
                     "options": [{"label": o["label"], "val": o["val"]} for o in iq["options"]],
                     "chart": None
                 })
- 
+
         if stage == 0:
             bot_memory['interview_stage'] = 1
             ratio = taum / max(tm, 1e-6)
@@ -1186,62 +1071,44 @@ def chat():
                 "options": [{"label": o["label"], "val": o["val"]} for o in q["options"]],
                 "chart": None
             })
- 
+
         return jsonify({"reply": "State error. Please reset.", "options": [], "chart": None})
- 
+
     except Exception as e:
         print(traceback.format_exc())
         return jsonify({"reply": "System error. Please reset.", "options": []})
- 
- 
+
+
 # ══════════════════════════════════════════════════════════════════════════
 #  ANFIS DATASET ENDPOINTS
-#  Used by: live 3D dashboard chart (JSON) and MATLAB webread (CSV)
 # ══════════════════════════════════════════════════════════════════════════
 @app.route('/api/anfis-data', methods=['GET'])
 def get_anfis_data():
-    """Returns the full (disturbance, Kp, Ki, ...) dataset as JSON."""
     return jsonify({"data": anfis_data, "count": len(anfis_data)})
- 
- 
+
+
 @app.route('/api/anfis-data.csv', methods=['GET'])
 def get_anfis_csv():
-    """
-    Returns the raw CSV file — load this directly in MATLAB:
-        T = readtable('https://your-server/api/anfis-data.csv');
-        D_values  = T.disturbance;
-        Kp_values = T.kp;
-        Ki_values = T.ki;
-    """
     if not os.path.exists(ANFIS_DATA_PATH):
-        # Return an empty CSV with headers so MATLAB readtable doesn't error
         empty = ','.join(ANFIS_FIELDS) + '\n'
         return app.response_class(empty, mimetype='text/csv',
                                    headers={"Content-Disposition": "attachment; filename=anfis_training_data.csv"})
     return send_file(ANFIS_DATA_PATH, mimetype='text/csv',
                       as_attachment=True, download_name='anfis_training_data.csv')
- 
- 
+
+
 @app.route('/api/anfis-reset', methods=['POST'])
 def reset_anfis_data():
-    """Clears the ANFIS dataset (e.g. before starting a new disturbance sweep)."""
     _reset_anfis_data()
     socketio.emit('anfis_data_update', {"row": None, "total_points": 0, "reset": True})
     return jsonify({"status": "ok", "count": len(anfis_data)})
- 
- 
+
+
 # ══════════════════════════════════════════════════════════════════════════
-#  TRANSFER-FUNCTION ENDPOINTS  (advanced features)
+#  TRANSFER-FUNCTION ENDPOINTS
 # ══════════════════════════════════════════════════════════════════════════
 @app.route('/api/parse-tf', methods=['POST'])
 def parse_tf_endpoint():
-    """
-    Parse a raw transfer function string (any order, incl. 4th+) and
-    return Km, time constants, dead time, stability warnings, and the
-    Skogestad Half-Rule equivalent FOPDT model plus a quick PI estimate.
- 
-    Body: {"tf": "5/((10*s+1)*(5*s+1)*(2*s+1)*(1*s+1))*exp(-1*s)"}
-    """
     tf_text = (request.json or {}).get('tf', '')
     if not tf_text:
         return jsonify({"status": "error", "message": "Missing 'tf' field."}), 400
@@ -1249,14 +1116,14 @@ def parse_tf_endpoint():
         result = parse_transfer_function(tf_text)
     except TFParseError as e:
         return jsonify({"status": "error", "message": str(e)}), 400
- 
+
     tcs = result["time_constants"] or [1.0]
     km_r, tm_r, taum_r, _ = HalfRuleReducer.reduce(
         max(1, result["order"]), result["km"], tcs, result["taum"])
     qkc, qti, qlam = quick_pi_estimate(km_r, tm_r, taum_r)
- 
+
     _log_tf_history("api/parse-tf", tf_text, result, (km_r, tm_r, taum_r))
- 
+
     return jsonify({
         "status": "ok",
         "order": result["order"],
@@ -1267,17 +1134,15 @@ def parse_tf_endpoint():
         "fopdt_equivalent": {"km": round(km_r, 6), "tm": round(tm_r, 6), "taum": round(taum_r, 6)},
         "quick_pi_estimate": {"kc": qkc, "ti": qti, "lambda": qlam},
     })
- 
- 
+
+
 @app.route('/api/tf-history', methods=['GET'])
 def get_tf_history():
-    """Returns the last N transfer functions parsed (chat, WS, or /api/parse-tf)."""
     return jsonify({"data": tf_history, "count": len(tf_history)})
- 
- 
+
+
 # ══════════════════════════════════════════════════════════════════════════
 #  ENTRY POINT
 # ══════════════════════════════════════════════════════════════════════════
 if __name__ == '__main__':
     socketio.run(app, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
- 
