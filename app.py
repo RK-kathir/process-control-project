@@ -537,10 +537,11 @@ def run_tuning(km, tm, taum, mode, overshoot, robust, metric,
     else:
         candidate_rules = fopdt_keys
 
-    # ── THE INTELLIGENT NARROW-DOWN APPROACH ──
+# ── THE INTELLIGENT NARROW-DOWN APPROACH ──
     # Using the most standard dictionary keys to prevent Z-N fallback
     best_rule = "ziegler_nichols"
     
+    ratio = taum / max(tm, 1e-6)
     is_disturbance = (mode == 0)
 
     if is_disturbance:
@@ -746,32 +747,27 @@ def handle_tune_request(data):
             zeta=zeta_r, order=order
         )
 
-        # 🔥 DISTURBANCE SCALING (ANFIS EXACT-MATCH + CRASH CLAMPING) 🔥
+       # 🔥 THE UPGRADE: MASSIVE NON-LINEAR DISTURBANCE SCALING 🔥
         disturbance_raw = data.get("disturbance")
-
+        
         if disturbance_raw is not None:
             disturbance_val = float(disturbance_raw)
             if abs(disturbance_val) > 0:
-                D = abs(disturbance_val)
-
-                # 1. EMPIRICAL ANFIS MATCH: 
-                # At D=1, ANFIS gives Kp=270. The base Kc is ~4.0.
-                # We need a multiplier of ~67.5x when D=1.
-                empirical_boost = 1.0 + (66.5 * D)
-
-                # 2. Apply the massive boost to Kc to match ANFIS
-                kc = kc * empirical_boost
-
-                # 3. Keep Integral action highly responsive, but cap the divisor
-                # so it doesn't wind up infinitely and cause undershoot
-                ti_divisor = min(max(1.0, D * 2.5), 10.0)
-                ti = ti / ti_divisor
-
-                # 4. HARD CEILINGS TO PREVENT SIMULINK "INFINITE DERIVATIVE" CRASH AT D=1000
-                kc = min(kc, 3500.0)
-                ti = max(ti, 0.005)
-
-                rule_name = f"{rule_name} (ANFIS-Matched Boost: {round(empirical_boost, 1)}x)"
+                
+                # 1. Your plant coefficients scale with D, so our gains must scale exponentially harder!
+                # If D=0.5 needs Kp=50, we need a massive multiplier.
+                non_linear_boost = 1.0 + (abs(disturbance_val) * 25.0) 
+                
+                kc = kc * non_linear_boost
+                
+                # 2. Force significantly faster integral action to pull it out of the drop
+                ti = ti / max(1.0, (1.0 + (abs(disturbance_val) * 2.0)))
+                
+                # 3. Tear off the safety ceilings!
+                kc = min(kc, 2500.0)  # Allow enormous gains to stop the drop
+                ti = max(ti, 0.001)   
+                
+                rule_name = f"{rule_name} (Non-Linear Boost: {round(non_linear_boost, 1)}x)"
 
         # Quick "first look" PI estimate (advanced feature)
         qkc, qti, qlam = quick_pi_estimate(km_r, tm_r, taum_r)
