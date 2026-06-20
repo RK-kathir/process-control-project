@@ -558,9 +558,6 @@ last_valid_tune = None
 def handle_connect():
     print(f"[WS] Connected: {request.sid}")
     emit('status', {'message': 'TUNING BOT connected. Ready for telemetry.'})
-    global last_valid_tune
-    if last_valid_tune is not None:
-        emit('tune_response', last_valid_tune)
 
 
 @socketio.on('disconnect')
