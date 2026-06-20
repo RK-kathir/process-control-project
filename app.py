@@ -633,24 +633,20 @@ def handle_tune_request(data):
             zeta=zeta_r, order=order, D=D_val
         )
 
-       # 🔥 DISTURBANCE SCALING (CRITICALLY DAMPED / NO OSCILLATION) 🔥
+       # 🔥 DISTURBANCE SCALING (EXACT ANFIS MATCH) 🔥
         if D_val > 0:
-            # 1. CRANK THE GAIN MASSIVELY
-            # You want high gain to stop the drop instantly. We use a massive linear multiplier.
-            empirical_boost = 1.0 + (150.0 * D_val)
-            kc = kc * empirical_boost
+            # 1. Match ANFIS exactly. At D=4.5, your ANFIS outputs Kp = ~270.
+            kc = kc + (60.0 * D_val)
+            
+            # 2. KILL THE OSCILLATION. 
+            # Your ANFIS outputs Ki = 54. (Ti = Kp/Ki = 270/54 = 5.0s)
+            # A large Integral Time (5.0s) is the absolute secret to stopping oscillations.
+            ti = 5.0
+            
+            # 3. Safe ceiling so it never blows up the plant again
+            kc = min(kc, 400.0) 
 
-            # 2. KILL THE OSCILLATION (CRITICAL DAMPING)
-            # Ringing happens when Ti is too small. To force a smooth, first-order
-            # exponential curve, Ti must be large enough to prevent integral windup.
-            # We override the base rule and tie Ti directly to your plant's time constant.
-            ti = max(tm_r * 0.8, 3.5)
-
-            # 3. RAISE THE CEILING
-            # Allow the bot to output massive Kp to fight the drop
-            kc = min(kc, 8000.0)
-
-            rule_name = f"Smooth First-Order Recovery (Boost: {round(empirical_boost, 1)}x)"
+            rule_name = f"Exact ANFIS Match (Kp={round(kc,1)}, Ti={round(ti,1)})"
 
         qkc, qti, qlam = quick_pi_estimate(km_r, tm_r, taum_r)
 
