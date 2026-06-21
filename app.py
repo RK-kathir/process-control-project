@@ -1143,6 +1143,44 @@ def parse_tf_endpoint():
 def get_tf_history():
     return jsonify({"data": tf_history, "count": len(tf_history)})
 
+# ══════════════════════════════════════════════════════════════════════════
+#  REST API FALLBACK (Bypasses MATLAB Socket.IO Thread Blocking)
+# ══════════════════════════════════════════════════════════════════════════
+@app.route('/api/tune', methods=['POST'])
+def api_tune_fallback():
+    data = request.json or {}
+    km, tm, taum = 1.0, 10.0, 1.0  # Base plant defaults
+    D_val = float(data.get('disturbance', 0.0))
+    
+    decision = auto_operator.decide(km, tm, taum)
+    kc, ti, rule_key, rule_name, rule_desc, chart, os_est, settling = run_tuning(
+        km, tm, taum, decision["mode"], decision["overshoot"], 
+        decision["robust"], decision["metric"], order=1, D=D_val
+    )
+    
+    # EXACT DISTURBANCE SCALING
+    if D_val > 0:
+        empirical_boost = 1.0 + (150.0 * D_val)
+        kc = kc * empirical_boost
+        ti = max(tm * 0.8, 3.5)
+        kc = min(kc, 80000.0)
+        rule_name = f"Smooth First-Order Recovery (Boost: {round(empirical_boost, 1)}x)"
+
+    # Broadcast to your Web Dashboard so the chart still draws!
+    socketio.emit('tune_response', {
+        "status": "ok", "rule": rule_name, "kc": round(kc, 6), "ti": round(ti, 6),
+        "os_predicted": os_est, "settling_time": settling,
+        "fopdt": {"km": km, "tm": tm, "taum": taum}, "chart": chart
+    })
+    
+    return jsonify({"kc": kc, "ti": ti})
+
+@app.route('/api/telemetry', methods=['POST'])
+def api_telemetry_fallback():
+    # Forward MATLAB's HTTP telemetry directly to the WebSocket dashboard
+    socketio.emit('telemetry_update', request.json or {})
+    return jsonify({"status": "ok"})
+
 
 # ══════════════════════════════════════════════════════════════════════════
 #  ENTRY POINT
