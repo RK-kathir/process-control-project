@@ -648,7 +648,7 @@ def handle_tune_request(data):
 
             # 3. RAISE THE CEILING
             # Allow the bot to output massive Kp to fight the drop
-            kc = min(kc, 8000.0)
+            kc = min(kc, 80000.0)
 
             rule_name = f"Smooth First-Order Recovery (Boost: {round(empirical_boost, 1)}x)"
 
