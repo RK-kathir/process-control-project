@@ -1198,21 +1198,22 @@ def api_tune_fallback():
     )
 
     # 3. Apply Internal Model Control (IMC) Disturbance Rejection Tuning
+   # 3. Apply Internal Model Control (IMC) Disturbance Rejection Tuning
     if D_val > 0 and sysid_success:
-        lambda_factor = max(0.15, 1.0 / (1.0 + 4.0 * D_val))
+        # AGGRESSIVE SPEED: Force the loop to settle much faster 
+        # (Shrinking the multiplier from 1.0 to 0.25 forces a high-speed recovery)
+        lambda_factor = max(0.05, 0.25 / (1.0 + 4.0 * D_val))
         lambda_c = lambda_factor * tm   
+
+        # Analytical IMC formulation
         kc_imc = tm / (km * (lambda_c + max(taum, 0.1)))
-
-        # Step 3: THE SMOOTH BOOST (Reduced from 2.5 to 1.0)
-        # This provides a firm catch without slamming the actuator
-        boost_multiplier = 1.0 + (1.0 * D_val)
-        kc = max(kc, kc_imc) * boost_multiplier
-
-        # Step 4: THE HEAVY INTEGRAL SHIELD (Increased from 2.5 to 4.0)
-        # A larger Ti means a smaller Ki, completely eliminating that sharp ringing hook
-        ti = tm * 4.0 
         
-        rule_name = f"Smooth Hybrid IMC (Boost: {round(boost_multiplier,1)}x)"
+        # Keep the integral time tight so the loop doesn't sluggishly drag out
+        ti_imc = tm * 0.5 
+
+        kc = max(kc, kc_imc)
+        ti = ti_imc
+        rule_name = f"High-Speed Adaptive IMC (lambda_c={round(lambda_c,1)}s)"
 
     elif D_val > 0 and not sysid_success:
         # Robust back-up scaling method if the system identification is unexcited
