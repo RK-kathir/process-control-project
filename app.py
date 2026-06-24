@@ -1154,27 +1154,26 @@ def api_tune_fallback():
     mv_hist = data.get('mv_history', [])
     
     # --- 1. REAL-TIME SYSTEM IDENTIFICATION (SysID) ---
-    km, tm, taum = 1.0, 10.0, 1.0  # Base plant defaults (Fallback)
+    km, tm, taum = 1.482, 12.3, 2.0  # Set these as your healthy, stable plant defaults!
     
-    # If the Python bridge sent the historical buffers, calculate the new plant DNA
     if len(pv_hist) > 10 and len(mv_hist) > 10:
         delta_pv = pv_hist[-1] - pv_hist[0]
         delta_mv = mv_hist[-1] - mv_hist[0]
         
-        # Calculate new Plant Gain (Km)
-        if abs(delta_mv) > 0.01:
+        # SAFETY GATE: Only calculate if there is an actual physical movement in the loop
+        if abs(delta_mv) > 0.05 and abs(delta_pv) > 0.05:
             km = abs(delta_pv / delta_mv)
             
-        # Calculate new Time Constant (Tm) using 63.2% rise time
-        target_pv = pv_hist[0] + (0.632 * delta_pv)
-        tm_index = 0
-        for i, pv in enumerate(pv_hist):
-            if (delta_pv > 0 and pv >= target_pv) or (delta_pv < 0 and pv <= target_pv):
-                tm_index = i
-                break
-                
-        # IMPORTANT: Multiply by your delay block sample time (e.g., 0.1s or 0.3s)
-        tm = max((tm_index * 0.1), 1.0) 
+            # Calculate new Time Constant (Tm) using 63.2% rise time
+            target_pv = pv_hist[0] + (0.632 * delta_pv)
+            tm_index = 0
+            for i, pv in enumerate(pv_hist):
+                if (delta_pv > 0 and pv >= target_pv) or (delta_pv < 0 and pv <= target_pv):
+                    tm_index = i
+                    break
+            tm = max((tm_index * 0.1), 1.0)
+        else:
+            print("⚠️ [SysID Warning] Insufficient signal excitation in buffers. Using baseline plant defaults.")
 
     # --- 2. ADAPTIVE TUNING RULES ---
     decision = auto_operator.decide(km, tm, taum)
@@ -1195,7 +1194,7 @@ def api_tune_fallback():
         # A larger Ti means a SMALLER Ki, which stops the violent undershoot.
         ti = max(tm * 1.5, 10.0) 
         
-        kc = min(kc, 8000.0) # Lowered the safety ceiling
+        kc = min(kc, 80000.0) # Lowered the safety ceiling
         rule_name = f"Adaptive Recovery (Km: {round(km,2)}, Tm: {round(tm,2)}s, Boost: {round(empirical_boost, 1)}x)"
 
     # Broadcast to Web Dashboard so the chart still draws
