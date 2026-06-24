@@ -1199,18 +1199,23 @@ def api_tune_fallback():
 
     # 3. Apply Internal Model Control (IMC) Disturbance Rejection Tuning
     if D_val > 0 and sysid_success:
-        # Tighten loop lambda scaling based on how severely the disturbance hits
+        # Step 1: Base Physical Speed
         lambda_factor = max(0.15, 1.0 / (1.0 + 4.0 * D_val))
         lambda_c = lambda_factor * tm   
 
-        # Analytical IMC formulation: Kc = Tm / (Km * (lambda_c + taum))
+        # Step 2: Base Analytical IMC Formulation
         kc_imc = tm / (km * (lambda_c + max(taum, 0.1)))
-        ti_imc = tm  # IMC rules explicitly force integral time matching to eliminate tracking lag
 
-        # Pick the most robust option to eliminate risk of sluggish recovery
-        kc = max(kc, kc_imc)
-        ti = ti_imc
-        rule_name = f"Adaptive IMC Loop (Km={round(km,4)}, Tm={round(tm,1)}s)"
+        # Step 3: THE HYBRID BOOST (Fixes the Undershoot)
+        # Multiply the base physics gain by the disturbance severity
+        boost_multiplier = 1.0 + (2.5 * D_val)
+        kc = max(kc, kc_imc) * boost_multiplier
+
+        # Step 4: THE INTEGRAL SHIELD (Fixes the Overshoot Ringing)
+        # Multiply Tm by 2.5 to slow down error accumulation and prevent slingshotting
+        ti = tm * 2.5 
+        
+        rule_name = f"Aggressive Hybrid IMC (Boost: {round(boost_multiplier,1)}x)"
 
     elif D_val > 0 and not sysid_success:
         # Robust back-up scaling method if the system identification is unexcited
