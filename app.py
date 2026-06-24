@@ -1198,24 +1198,21 @@ def api_tune_fallback():
     )
 
     # 3. Apply Internal Model Control (IMC) Disturbance Rejection Tuning
-   # 3. Apply Internal Model Control (IMC) Disturbance Rejection Tuning
-    # 3. Apply Internal Model Control (IMC) Disturbance Rejection Tuning
     if D_val > 0 and sysid_success:
-        # AGGRESSIVE SPEED: Force the loop to track much faster.
-        # Changing the numerator from 0.25 to 0.1 forces the analytical math 
-        # to aggressively tighten the tracking envelope.
-        lambda_factor = max(0.02, 0.1 / (1.0 + 2.0 * D_val))
+        # AGGRESSIVE SPEED: Force the loop to settle much faster 
+        # (Shrinking the multiplier from 1.0 to 0.25 forces a high-speed recovery)
+        lambda_factor = max(0.05, 0.25 / (1.0 + 4.0 * D_val))
         lambda_c = lambda_factor * tm   
 
         # Analytical IMC formulation
         kc_imc = tm / (km * (lambda_c + max(taum, 0.1)))
         
-        # Scale the integral action to match the faster tracking without causing overshoot
-        ti_imc = max(tm * 0.3, 2.0) 
+        # Keep the integral time tight so the loop doesn't sluggishly drag out
+        ti_imc = tm * 0.5 
 
         kc = max(kc, kc_imc)
         ti = ti_imc
-        rule_name = f"High-Speed Tracking IMC (lambda_c={round(lambda_c,1)}s)"
+        rule_name = f"High-Speed Adaptive IMC (lambda_c={round(lambda_c,1)}s)"
 
     elif D_val > 0 and not sysid_success:
         # Robust back-up scaling method if the system identification is unexcited
