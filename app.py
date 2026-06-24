@@ -1147,33 +1147,32 @@ def get_tf_history():
 #  REST API FALLBACK (Bypasses MATLAB Socket.IO Thread Blocking)
 # ══════════════════════════════════════════════════════════════════════════
 @app.route('/api/tune', methods=['POST'])
-def api_tune_fallback():
-    data = request.json or {}
-    D_val = float(data.get('disturbance', 0.0))
-    pv_hist = data.get('pv_history', [])
-    mv_hist = data.get('mv_history', [])
-    
-    # --- 1. REAL-TIME SYSTEM IDENTIFICATION (SysID) ---
-    km, tm, taum = 1.482, 12.3, 2.0  # Set these as your healthy, stable plant defaults!
+# --- 1. REAL-TIME SYSTEM IDENTIFICATION (SysID) ---
+    # FIX: Change default Km to match your plant's tiny magnitude! 
+    # If Km is 0.002, 1/Km = 500, which aligns perfectly with your ANFIS 880 baseline.
+    km, tm, taum = 0.002, 12.3, 2.0  
     
     if len(pv_hist) > 10 and len(mv_hist) > 10:
         delta_pv = pv_hist[-1] - pv_hist[0]
         delta_mv = mv_hist[-1] - mv_hist[0]
         
-        # SAFETY GATE: Only calculate if there is an actual physical movement in the loop
-        if abs(delta_mv) > 0.05 and abs(delta_pv) > 0.05:
+        # FIX: Lowered the threshold to 0.001 to catch tiny plant movements
+        if abs(delta_mv) > 0.001 and abs(delta_pv) > 0.001:
             km = abs(delta_pv / delta_mv)
             
-            # Calculate new Time Constant (Tm) using 63.2% rise time
+            # Prevent Km from hitting exact zero, which would cause infinite Kc
+            if km < 0.0001:
+                km = 0.002 
+            
             target_pv = pv_hist[0] + (0.632 * delta_pv)
             tm_index = 0
             for i, pv in enumerate(pv_hist):
                 if (delta_pv > 0 and pv >= target_pv) or (delta_pv < 0 and pv <= target_pv):
                     tm_index = i
                     break
-            tm = max((tm_index * 0.1), 1.0)
+            tm = max((tm_index * 0.3), 1.0) # Assuming delay block is set to 0.3s
         else:
-            print("⚠️ [SysID Warning] Insufficient signal excitation in buffers. Using baseline plant defaults.")
+            print("⚠️ [SysID] Array wave too small. Using scaled fallback plant defaults.")
 
     # --- 2. ADAPTIVE TUNING RULES ---
     decision = auto_operator.decide(km, tm, taum)
