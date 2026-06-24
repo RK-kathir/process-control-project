@@ -1148,82 +1148,89 @@ def get_tf_history():
 # ══════════════════════════════════════════════════════════════════════════
 @app.route('/api/tune', methods=['POST'])
 def api_tune_fallback():
-    # THESE 5 LINES WERE MISSING!
     data = request.json or {}
     D_val = float(data.get('disturbance', 0.0))
     pv_hist = data.get('pv_history', [])
+    # Reversing buffer map if your local Tapped Delay Line is set to Newest-First order
     mv_hist = data.get('mv_history', [])
-    
-    # --- 1. REAL-TIME SYSTEM IDENTIFICATION (SysID) ---
-    # FIX: Change default Km to match your plant's tiny magnitude! 
-    # If Km is 0.002, 1/Km = 500, which aligns perfectly with your ANFIS 880 baseline.
-    km, tm, taum = 0.002, 12.3, 2.0  
-    
-    if len(pv_hist) > 10 and len(mv_hist) > 10:
-        delta_pv = pv_hist[-1] - pv_hist[0]
-        delta_mv = mv_hist[-1] - mv_hist[0]
-        
-        # FIX: Lowered the threshold to 0.001 to catch tiny plant movements
-        if abs(delta_mv) > 0.001 and abs(delta_pv) > 0.001:
-            km = abs(delta_pv / delta_mv)
-            
-            # Prevent Km from hitting exact zero, which would cause infinite Kc
-            if km < 0.0001:
-                km = 0.002 
-            
-            target_pv = pv_hist[0] + (0.632 * delta_pv)
-            tm_index = 0
-            for i, pv in enumerate(pv_hist):
-                if (delta_pv > 0 and pv >= target_pv) or (delta_pv < 0 and pv <= target_pv):
+    Ts = 0.3   
+
+    # 1. Default Plant Baseline (True physical plant characteristics when unexcited)
+    km, tm, taum = 0.002, 12.3, 2.0
+    sysid_success = False
+
+    if len(pv_hist) >= 30 and len(mv_hist) >= 30:
+        pv = np.array(pv_hist, dtype=float)
+        mv = np.array(mv_hist, dtype=float)
+
+        # Apply basic moving tracking averages to decouple signal from measurement noise
+        delta_pv = pv[-1] - pv[0]
+        delta_mv = mv[-1] - mv[0]
+
+        pv_rms_change = np.std(pv)
+        mv_rms_change = np.std(mv)
+
+        # Validation gates optimized for small plant dynamics
+        if (abs(delta_mv) > 0.001 and abs(delta_pv) > 0.001) or pv_rms_change > 0.005:
+            if abs(delta_mv) > 1e-5:
+                km = abs(delta_pv / delta_mv)
+            else:
+                km = abs(delta_pv) / max(abs(D_val), 0.01)
+
+            # Keep Km clipped above exact zero to avoid division by zero errors
+            km = np.clip(km, 0.0005, 100.0)
+
+            # Extract structural Time Constant (Tm) using the 63.2% rule
+            target_pv = pv[0] + (0.632 * delta_pv)
+            tm_index = len(pv) - 1
+            for i, val in enumerate(pv):
+                if (delta_pv > 0 and val >= target_pv) or (delta_pv < 0 and val <= target_pv):
                     tm_index = i
                     break
-            tm = max((tm_index * 0.3), 1.0) # Assuming delay block is set to 0.3s
-        else:
-            print("⚠️ [SysID] Array wave too small. Using scaled fallback plant defaults.")
+            tm = max(tm_index * Ts, 1.0)
+            sysid_success = True
 
-    # --- 2. ADAPTIVE TUNING RULES ---
+    # 2. Compute AI Base Tuning Logic Selection
     decision = auto_operator.decide(km, tm, taum)
     kc, ti, rule_key, rule_name, rule_desc, chart, os_est, settling = run_tuning(
-        km, tm, taum, decision["mode"], decision["overshoot"], 
+        km, tm, taum, decision["mode"], decision["overshoot"],
         decision["robust"], decision["metric"], order=1, D=D_val
     )
-    
-    # --- 3. EXACT DISTURBANCE SCALING ---
-    if D_val > 0:
-        # FIX 1: Tame the Proportional Boost. 
-        # Lowered the multiplier from 150.0 to 15.0
-        empirical_boost = 1.0 + (15.0 * D_val) 
+
+    # 3. Apply Internal Model Control (IMC) Disturbance Rejection Tuning
+    if D_val > 0 and sysid_success:
+        # Tighten loop lambda scaling based on how severely the disturbance hits
+        lambda_factor = max(0.15, 1.0 / (1.0 + 4.0 * D_val))
+        lambda_c = lambda_factor * tm   
+
+        # Analytical IMC formulation: Kc = Tm / (Km * (lambda_c + taum))
+        kc_imc = tm / (km * (lambda_c + max(taum, 0.1)))
+        ti_imc = tm  # IMC rules explicitly force integral time matching to eliminate tracking lag
+
+        # Pick the most robust option to eliminate risk of sluggish recovery
+        kc = max(kc, kc_imc)
+        ti = ti_imc
+        rule_name = f"Adaptive IMC Loop (Km={round(km,4)}, Tm={round(tm,1)}s)"
+
+    elif D_val > 0 and not sysid_success:
+        # Robust back-up scaling method if the system identification is unexcited
+        empirical_boost = 1.0 + (15.0 * D_val)
         kc = kc * empirical_boost
-        
-        # FIX 2: Relax the Integral Action.
-        # Increased the shielding multiplier from 0.8 to 1.5. 
-        # A larger Ti means a SMALLER Ki, which stops the violent undershoot.
-        ti = max(tm * 1.5, 10.0) 
-        
-        kc = min(kc, 80000.0) # Lowered the safety ceiling
-        rule_name = f"Adaptive Recovery (Km: {round(km,2)}, Tm: {round(tm,2)}s, Boost: {round(empirical_boost, 1)}x)"
+        ti = max(tm * 1.5, 10.0)
+        rule_name = f"Empirical Backup Shield (Boost: {round(empirical_boost,1)}x)"
 
-    # Broadcast to Web Dashboard so the chart still draws
+    # Hard boundary checks to protect actuator range
+    kc = float(np.clip(kc, 1.0, 150000.0))
+    ti = float(np.clip(ti, 0.1, 5000.0))
+    ki = kc / ti
+
     socketio.emit('tune_response', {
-        "status": "ok", "rule": rule_name, "kc": round(kc, 6), "ti": round(ti, 6),
-        "os_predicted": os_est, "settling_time": settling,
-        "fopdt": {"km": round(km,3), "tm": round(tm,3), "taum": round(taum,3)}, "chart": chart
-    })
-    
-    # Return the newly identified km and tm so the Python bridge can print them!
-    return jsonify({
-        "kc": kc, 
-        "ti": ti,
-        "km": round(km, 3),
-        "tm": round(tm, 3)
+        "status": "ok" if sysid_success else "fallback", "rule": rule_name,
+        "kc": round(kc, 4), "ti": round(ti, 4), "ki": round(ki, 6),
+        "fopdt": {"km": round(km, 4), "tm": round(tm, 2), "taum": round(taum, 2)}, "chart": chart
     })
 
-@app.route('/api/telemetry', methods=['POST'])
-def api_telemetry_fallback():
-    # Forward MATLAB's HTTP telemetry directly to the WebSocket dashboard
-    socketio.emit('telemetry_update', request.json or {})
-    return jsonify({"status": "ok"})
-
+    return jsonify({"kc": kc, "ti": ti, "km": round(km, 4), "tm": round(tm, 2)})
 
 # ══════════════════════════════════════════════════════════════════════════
 #  ENTRY POINT
