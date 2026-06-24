@@ -1147,7 +1147,14 @@ def get_tf_history():
 #  REST API FALLBACK (Bypasses MATLAB Socket.IO Thread Blocking)
 # ══════════════════════════════════════════════════════════════════════════
 @app.route('/api/tune', methods=['POST'])
-# --- 1. REAL-TIME SYSTEM IDENTIFICATION (SysID) ---
+def api_tune_fallback():
+    # THESE 5 LINES WERE MISSING!
+    data = request.json or {}
+    D_val = float(data.get('disturbance', 0.0))
+    pv_hist = data.get('pv_history', [])
+    mv_hist = data.get('mv_history', [])
+    
+    # --- 1. REAL-TIME SYSTEM IDENTIFICATION (SysID) ---
     # FIX: Change default Km to match your plant's tiny magnitude! 
     # If Km is 0.002, 1/Km = 500, which aligns perfectly with your ANFIS 880 baseline.
     km, tm, taum = 0.002, 12.3, 2.0  
@@ -1181,7 +1188,7 @@ def get_tf_history():
         decision["robust"], decision["metric"], order=1, D=D_val
     )
     
-  # --- 3. EXACT DISTURBANCE SCALING ---
+    # --- 3. EXACT DISTURBANCE SCALING ---
     if D_val > 0:
         # FIX 1: Tame the Proportional Boost. 
         # Lowered the multiplier from 150.0 to 15.0
