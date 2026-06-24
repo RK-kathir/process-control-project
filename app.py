@@ -1149,31 +1149,62 @@ def get_tf_history():
 @app.route('/api/tune', methods=['POST'])
 def api_tune_fallback():
     data = request.json or {}
-    km, tm, taum = 1.0, 10.0, 1.0  # Base plant defaults
     D_val = float(data.get('disturbance', 0.0))
+    pv_hist = data.get('pv_history', [])
+    mv_hist = data.get('mv_history', [])
     
+    # --- 1. REAL-TIME SYSTEM IDENTIFICATION (SysID) ---
+    km, tm, taum = 1.0, 10.0, 1.0  # Base plant defaults (Fallback)
+    
+    # If the Python bridge sent the historical buffers, calculate the new plant DNA
+    if len(pv_hist) > 10 and len(mv_hist) > 10:
+        delta_pv = pv_hist[-1] - pv_hist[0]
+        delta_mv = mv_hist[-1] - mv_hist[0]
+        
+        # Calculate new Plant Gain (Km)
+        if abs(delta_mv) > 0.01:
+            km = abs(delta_pv / delta_mv)
+            
+        # Calculate new Time Constant (Tm) using 63.2% rise time
+        target_pv = pv_hist[0] + (0.632 * delta_pv)
+        tm_index = 0
+        for i, pv in enumerate(pv_hist):
+            if (delta_pv > 0 and pv >= target_pv) or (delta_pv < 0 and pv <= target_pv):
+                tm_index = i
+                break
+                
+        # IMPORTANT: Multiply by your delay block sample time (e.g., 0.1s or 0.3s)
+        tm = max((tm_index * 0.1), 1.0) 
+
+    # --- 2. ADAPTIVE TUNING RULES ---
     decision = auto_operator.decide(km, tm, taum)
     kc, ti, rule_key, rule_name, rule_desc, chart, os_est, settling = run_tuning(
         km, tm, taum, decision["mode"], decision["overshoot"], 
         decision["robust"], decision["metric"], order=1, D=D_val
     )
     
-    # EXACT DISTURBANCE SCALING
+    # --- 3. EXACT DISTURBANCE SCALING ---
     if D_val > 0:
         empirical_boost = 1.0 + (150.0 * D_val)
         kc = kc * empirical_boost
-        ti = max(tm * 0.8, 3.5)
+        ti = max(tm * 0.8, 3.5) # Shielding rule now automatically uses the NEW Tm
         kc = min(kc, 80000.0)
-        rule_name = f"Smooth First-Order Recovery (Boost: {round(empirical_boost, 1)}x)"
+        rule_name = f"Adaptive Recovery (Km: {round(km,2)}, Tm: {round(tm,2)}s, Boost: {round(empirical_boost, 1)}x)"
 
-    # Broadcast to your Web Dashboard so the chart still draws!
+    # Broadcast to Web Dashboard so the chart still draws
     socketio.emit('tune_response', {
         "status": "ok", "rule": rule_name, "kc": round(kc, 6), "ti": round(ti, 6),
         "os_predicted": os_est, "settling_time": settling,
-        "fopdt": {"km": km, "tm": tm, "taum": taum}, "chart": chart
+        "fopdt": {"km": round(km,3), "tm": round(tm,3), "taum": round(taum,3)}, "chart": chart
     })
     
-    return jsonify({"kc": kc, "ti": ti})
+    # Return the newly identified km and tm so the Python bridge can print them!
+    return jsonify({
+        "kc": kc, 
+        "ti": ti,
+        "km": round(km, 3),
+        "tm": round(tm, 3)
+    })
 
 @app.route('/api/telemetry', methods=['POST'])
 def api_telemetry_fallback():
