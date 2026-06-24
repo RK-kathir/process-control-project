@@ -1183,12 +1183,19 @@ def api_tune_fallback():
         decision["robust"], decision["metric"], order=1, D=D_val
     )
     
-    # --- 3. EXACT DISTURBANCE SCALING ---
+  # --- 3. EXACT DISTURBANCE SCALING ---
     if D_val > 0:
-        empirical_boost = 1.0 + (150.0 * D_val)
+        # FIX 1: Tame the Proportional Boost. 
+        # Lowered the multiplier from 150.0 to 15.0
+        empirical_boost = 1.0 + (15.0 * D_val) 
         kc = kc * empirical_boost
-        ti = max(tm * 0.8, 3.5) # Shielding rule now automatically uses the NEW Tm
-        kc = min(kc, 80000.0)
+        
+        # FIX 2: Relax the Integral Action.
+        # Increased the shielding multiplier from 0.8 to 1.5. 
+        # A larger Ti means a SMALLER Ki, which stops the violent undershoot.
+        ti = max(tm * 1.5, 10.0) 
+        
+        kc = min(kc, 8000.0) # Lowered the safety ceiling
         rule_name = f"Adaptive Recovery (Km: {round(km,2)}, Tm: {round(tm,2)}s, Boost: {round(empirical_boost, 1)}x)"
 
     # Broadcast to Web Dashboard so the chart still draws
